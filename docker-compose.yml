@@ -1,0 +1,14 @@
+services:
+  app:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: pt-app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+    environment:
+      - PORT=3000
+      - DB_PATH=/data/ptdownload.db
+    restart: unless-stopped

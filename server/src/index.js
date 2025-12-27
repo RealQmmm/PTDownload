@@ -1,0 +1,46 @@
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const { initDB } = require('./db');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(cors());
+app.use(express.json());
+
+// Initialize Database
+initDB();
+
+// Initialize Scheduler
+const schedulerService = require('./services/schedulerService');
+schedulerService.init();
+
+// Basic Route
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date() });
+});
+
+// Import Routes
+app.use('/api/sites', require('./routes/sites'));
+app.use('/api/clients', require('./routes/clients'));
+app.use('/api/tasks', require('./routes/tasks'));
+app.use('/api/search', require('./routes/search'));
+app.use('/api/download', require('./routes/download'));
+app.use('/api/stats', require('./routes/stats'));
+
+// Serve static files from React app
+const clientDistPath = path.join(__dirname, '../../client/dist');
+app.use(express.static(clientDistPath));
+
+// API Routes should be above this
+// ...
+
+// Handle client-side routing (catch-all)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(clientDistPath, 'index.html'));
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
