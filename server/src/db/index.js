@@ -7,23 +7,23 @@ const dbPath = process.env.DB_PATH || path.join(__dirname, '../../data/ptdownloa
 // Ensure directory exists
 const deployDir = path.dirname(dbPath);
 if (!fs.existsSync(deployDir)) {
-    fs.mkdirSync(deployDir, { recursive: true });
+  fs.mkdirSync(deployDir, { recursive: true });
 }
 
 let db;
 
 function initDB() {
-    try {
-        db = new Database(dbPath, { verbose: console.log });
-        console.log(`Connected to SQLite database at ${dbPath}`);
-        createTables();
-    } catch (err) {
-        console.error('Error connecting to database:', err);
-    }
+  try {
+    db = new Database(dbPath, { verbose: console.log });
+    console.log(`Connected to SQLite database at ${dbPath}`);
+    createTables();
+  } catch (err) {
+    console.error('Error connecting to database:', err);
+  }
 }
 
 function createTables() {
-    const schema = `
+  const schema = `
     CREATE TABLE IF NOT EXISTS sites (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
@@ -52,17 +52,25 @@ function createTables() {
       enabled INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+
+    -- Insert default site name
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('site_name', 'PT Manager');
   `;
 
-    db.exec(schema);
-    console.log('Database tables initialized');
+  db.exec(schema);
+  console.log('Database tables initialized');
 }
 
 function getDB() {
-    if (!db) {
-        throw new Error('Database not initialized');
-    }
-    return db;
+  if (!db) {
+    throw new Error('Database not initialized');
+  }
+  return db;
 }
 
 module.exports = { initDB, getDB };

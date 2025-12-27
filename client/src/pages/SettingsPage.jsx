@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
 
 const SettingsPage = () => {
-    const { darkMode, toggleDarkMode } = useTheme();
+    const { darkMode, toggleDarkMode, siteName, setSiteName } = useTheme();
     const [subTab, setSubTab] = useState('general');
+    const [tempSiteName, setTempSiteName] = useState(siteName);
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState(null);
+
+    useEffect(() => {
+        setTempSiteName(siteName);
+    }, [siteName]);
 
     // Theme-aware classes
     const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
@@ -12,11 +19,65 @@ const SettingsPage = () => {
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
     const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
 
+    const handleSaveGeneral = async () => {
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ site_name: tempSiteName })
+            });
+            if (res.ok) {
+                setSiteName(tempSiteName);
+                setMessage({ type: 'success', text: '设置已保存' });
+            } else {
+                setMessage({ type: 'error', text: '保存失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
     const renderContent = () => {
         switch (subTab) {
             case 'general':
                 return (
                     <div className="space-y-6">
+                        {message && (
+                            <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {message.text}
+                            </div>
+                        )}
+                        <div>
+                            <h3 className={`text-lg font-medium ${textPrimary} mb-4`}>站点设置</h3>
+                            <div className={`${bgSecondary} p-4 rounded-lg border ${borderColor} space-y-4`}>
+                                <div>
+                                    <label className={`block text-sm ${textSecondary} mb-1`}>站点名称</label>
+                                    <div className="flex space-x-2">
+                                        <input
+                                            type="text"
+                                            value={tempSiteName}
+                                            onChange={(e) => setTempSiteName(e.target.value)}
+                                            className={`flex-1 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded px-3 py-2 ${textPrimary} focus:border-blue-500 outline-none`}
+                                            placeholder="PT Manager"
+                                        />
+                                        <button
+                                            onClick={handleSaveGeneral}
+                                            disabled={saving}
+                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50"
+                                        >
+                                            {saving ? '保存中...' : '保存'}
+                                        </button>
+                                    </div>
+                                    <p className={`text-xs ${textSecondary} mt-1`}>显示在侧边栏顶部的名称</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <div>
                             <h3 className={`text-lg font-medium ${textPrimary} mb-4`}>界面设置</h3>
                             <div className={`flex items-center justify-between p-4 ${bgSecondary} rounded-lg border ${borderColor}`}>

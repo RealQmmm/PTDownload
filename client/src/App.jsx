@@ -28,6 +28,9 @@ function App() {
         return saved !== null ? JSON.parse(saved) : true // Default to dark mode
     })
 
+    // Site Name state
+    const [siteName, setSiteName] = useState('PT Manager')
+
     // Save theme preference to localStorage
     useEffect(() => {
         localStorage.setItem('darkMode', JSON.stringify(darkMode))
@@ -40,6 +43,22 @@ function App() {
             document.documentElement.classList.remove('dark')
         }
     }, [darkMode])
+
+    // Fetch settings on mount
+    useEffect(() => {
+        const fetchSettings = async () => {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                if (data.site_name) {
+                    setSiteName(data.site_name);
+                }
+            } catch (err) {
+                console.error('Failed to fetch settings:', err);
+            }
+        };
+        fetchSettings();
+    }, []);
 
     const toggleDarkMode = () => {
         setDarkMode(!darkMode)
@@ -69,7 +88,7 @@ function App() {
         : 'bg-gray-100 text-gray-900'
 
     return (
-        <ThemeContext.Provider value={{ darkMode, toggleDarkMode }}>
+        <ThemeContext.Provider value={{ darkMode, toggleDarkMode, siteName, setSiteName }}>
             <div className={`flex h-screen overflow-hidden font-sans ${themeClasses}`}>
                 <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
                 <main className={`flex-1 overflow-y-auto ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>

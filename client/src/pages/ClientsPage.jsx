@@ -111,7 +111,7 @@ const ClientsPage = () => {
         <div className="p-8">
             <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h1 className={`text-3xl font-bold ${textPrimary}`}>下载客户</h1>
+                    <h1 className={`text-3xl font-bold ${textPrimary}`}>下载客户端</h1>
                     <p className={`${textSecondary} mt-1`}>配置您的下载器（qBittorrent, Transmission 等）</p>
                 </div>
                 <button

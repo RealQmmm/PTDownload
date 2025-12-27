@@ -1,31 +1,34 @@
 # Build Stage
-FROM node:22-alpine AS build
+FROM node:22-slim AS build
 
 WORKDIR /app
-COPY client/package.json client/package-lock.json ./
+COPY client/package*.json ./
 RUN npm install
 
 COPY client ./
 RUN npm run build
 
 # Production Stage
-FROM node:22-alpine
+FROM node:22-slim
 
 WORKDIR /app
 
-# Install build dependencies with retry logic
-COPY server/package.json server/package-lock.json ./
-RUN apk update && \
-    apk add --no-cache python3 make g++ || \
-    (sleep 5 && apk update && apk add --no-cache python3 make g++) || \
-    (sleep 10 && apk update && apk add --no-cache python3 make g++)
+# Install build dependencies for better-sqlite3
+RUN apt-get update && \
+    apt-get install -y python3 make g++ && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY server/package*.json ./
 RUN npm install --production
 
 # Copy server code
 COPY server ./
 
 # Copy built frontend assets
-COPY --from=build /app/dist ../client/dist
+# The server expects ../../client/dist relative to server/src/index.js
+# Since server/ is at /app, index.js is at /app/src/index.js
+# ../../client/dist becomes /client/dist
+COPY --from=build /app/dist /client/dist
 
 # Expose port
 EXPOSE 3000

@@ -2,13 +2,13 @@ import React from 'react';
 import { useTheme } from '../App';
 
 const Sidebar = ({ activeTab, setActiveTab }) => {
-    const { darkMode } = useTheme();
+    const { darkMode, siteName } = useTheme();
 
     const menus = [
         { id: 'dashboard', name: '仪表盘', icon: '📊' },
         { id: 'search', name: '资源搜索', icon: '🔍' },
         { id: 'sites', name: '站点管理', icon: '🌐' },
-        { id: 'clients', name: '下载客户', icon: '📥' },
+        { id: 'clients', name: '下载客户端', icon: '📥' },
         { id: 'tasks', name: '自动任务', icon: '⏰' },
         { id: 'settings', name: '系统设置', icon: '⚙️' },
     ];
@@ -21,7 +21,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
     return (
         <div className={`w-64 ${bgColor} h-screen flex flex-col border-r ${borderColor}`}>
             <div className="p-6">
-                <h1 className="text-2xl font-bold text-blue-400">PT Manager</h1>
+                <h1 className="text-2xl font-bold text-blue-400">{siteName}</h1>
             </div>
             <nav className="flex-1 px-4 space-y-2 mt-4">
                 {menus.map((menu) => (

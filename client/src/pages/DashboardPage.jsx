@@ -207,7 +207,7 @@ const DashboardPage = ({ setActiveTab }) => {
 
                     {/* Active Tasks */}
                     <div className={`${bgMain} rounded-xl border ${borderColor} p-6 shadow-sm mb-8`}>
-                        <h2 className={`text-xl font-bold ${textPrimary} mb-4`}>🚀 当前下载任务</h2>
+                        <h2 className={`text-xl font-bold ${textPrimary} mb-4`}>🚀 当前活动任务</h2>
                         {activeTasks.length === 0 ? (
                             <p className={`${textSecondary} text-center py-8`}>暂无活跃的下载任务</p>
                         ) : (
