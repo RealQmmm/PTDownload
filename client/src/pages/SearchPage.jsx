@@ -107,10 +107,10 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const inputBg = darkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900';
 
     return (
-        <div className="p-8 h-full flex flex-col">
-            <div className="mb-8">
-                <h1 className={`text-3xl font-bold mb-6 ${textPrimary}`}>资源搜索</h1>
-                <form onSubmit={handleSearch} className="flex gap-4">
+        <div className="p-4 md:p-8 h-full flex flex-col">
+            <div className="mb-6 md:mb-8">
+                <h1 className={`text-2xl md:text-3xl font-bold mb-4 md:mb-6 ${textPrimary}`}>资源搜索</h1>
+                <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3 md:gap-4">
                     <div className="relative flex-1">
                         <span className={`absolute left-4 top-3 ${textSecondary}`}>🔍</span>
                         <input
@@ -118,13 +118,13 @@ const SearchPage = ({ searchState, setSearchState }) => {
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
                             placeholder="输入关键词，例如: Avatar..."
-                            className={`w-full border rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-lg ${inputBg}`}
+                            className={`w-full border rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-base md:text-lg ${inputBg}`}
                         />
                     </div>
                     <button
                         type="submit"
                         disabled={loading}
-                        className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/30"
+                        className="w-full sm:w-auto bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-900/30"
                     >
                         {loading ? '搜索中...' : '搜索'}
                     </button>
@@ -140,96 +140,109 @@ const SearchPage = ({ searchState, setSearchState }) => {
                         </div>
                     </div>
                 ) : results.length > 0 ? (
-                    <div className={`${bgMain} rounded-xl border ${borderColor} overflow-hidden flex flex-col flex-1`}>
-                        <div className="overflow-x-auto overflow-y-auto flex-1">
-                            <table className="w-full text-left border-collapse">
-                                <thead className={`${bgSecondary} ${textSecondary} sticky top-0`}>
-                                    <tr>
-                                        <th className={`p-4 font-medium border-b ${borderColor}`}>站点</th>
-                                        <th className={`p-4 font-medium border-b ${borderColor} w-1/2`}>标题</th>
-                                        <th className={`p-4 font-medium border-b ${borderColor}`}>大小</th>
-                                        <th className={`p-4 font-medium border-b ${borderColor} text-center`}>做种</th>
-                                        <th className={`p-4 font-medium border-b ${borderColor} text-center`}>下载</th>
-                                        <th className={`p-4 font-medium border-b ${borderColor}`}>发布时间</th>
-                                        <th className={`p-4 font-medium border-b ${borderColor}`}>操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
-                                    {results.map((item, index) => (
-                                        <tr key={index} className={`${darkMode ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'} transition-colors`}>
-                                            <td className="p-4">
-                                                <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-2 py-1 rounded text-xs font-bold`}>
-                                                    {item.siteName}
-                                                </span>
-                                            </td>
-                                            <td className="p-4">
-                                                <div className="flex flex-col">
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <a
-                                                            href={item.link}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className={`${textPrimary} hover:text-blue-400 font-medium line-clamp-1`}
-                                                        >
-                                                            {item.name}
-                                                        </a>
-                                                        {/* Status badges */}
-                                                        <div className="flex gap-1 flex-shrink-0">
-                                                            {item.isHot && (
-                                                                <span className="px-1.5 py-0.5 text-xs rounded bg-orange-500/20 text-orange-400 font-medium">
-                                                                    🔥热门
-                                                                </span>
-                                                            )}
-                                                            {item.isNew && (
-                                                                <span className="px-1.5 py-0.5 text-xs rounded bg-green-500/20 text-green-400 font-medium">
-                                                                    ✨新
-                                                                </span>
-                                                            )}
-                                                            {item.isFree && (
-                                                                <span className="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400 font-medium">
-                                                                    🎁{item.freeType || '免费'}
-                                                                </span>
-                                                            )}
+                    <div className="flex-1 overflow-hidden flex flex-col">
+                        {/* Desktop Table View */}
+                        <div className={`hidden lg:block ${bgMain} rounded-xl border ${borderColor} overflow-hidden flex flex-col flex-1`}>
+                            <div className="overflow-x-auto overflow-y-auto flex-1">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className={`${bgSecondary} ${textSecondary} sticky top-0 z-10`}>
+                                        <tr>
+                                            <th className={`p-4 font-medium border-b ${borderColor}`}>站点</th>
+                                            <th className={`p-4 font-medium border-b ${borderColor} w-1/2`}>标题</th>
+                                            <th className={`p-4 font-medium border-b ${borderColor}`}>大小</th>
+                                            <th className={`p-4 font-medium border-b ${borderColor} text-center`}>做种</th>
+                                            <th className={`p-4 font-medium border-b ${borderColor} text-center`}>下载</th>
+                                            <th className={`p-4 font-medium border-b ${borderColor}`}>发布时间</th>
+                                            <th className={`p-4 font-medium border-b ${borderColor}`}>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
+                                        {results.map((item, index) => (
+                                            <tr key={index} className={`${darkMode ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'} transition-colors`}>
+                                                <td className="p-4">
+                                                    <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-2 py-1 rounded text-xs font-bold`}>
+                                                        {item.siteName}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} hover:text-blue-400 font-medium line-clamp-1`}>
+                                                                {item.name}
+                                                            </a>
+                                                            <div className="flex gap-1 flex-shrink-0">
+                                                                {item.isHot && <span className="px-1.5 py-0.5 text-xs rounded bg-orange-500/20 text-orange-400 font-medium">🔥热门</span>}
+                                                                {item.isNew && <span className="px-1.5 py-0.5 text-xs rounded bg-green-500/20 text-green-400 font-medium">✨新</span>}
+                                                                {item.isFree && <span className="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400 font-medium">🎁{item.freeType || '免费'}</span>}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            {item.subtitle && <span className={`${textSecondary} text-xs line-clamp-1`}>{item.subtitle}</span>}
+                                                            {item.freeUntil && <span className="text-xs text-yellow-500 flex-shrink-0">⏱️剩余 {item.freeUntil}</span>}
                                                         </div>
                                                     </div>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        {item.subtitle && (
-                                                            <span className={`${textSecondary} text-xs line-clamp-1`}>
-                                                                {item.subtitle}
-                                                            </span>
-                                                        )}
-                                                        {item.freeUntil && (
-                                                            <span className="text-xs text-yellow-500 flex-shrink-0">
-                                                                ⏱️剩余 {item.freeUntil}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className={`p-4 ${textSecondary} whitespace-nowrap`}>{item.size}</td>
-                                            <td className="p-4 text-green-400 font-bold text-center">{item.seeders}</td>
-                                            <td className="p-4 text-red-400 text-center">{item.leechers}</td>
-                                            <td className={`p-4 ${textSecondary} text-sm whitespace-nowrap`}>{item.date}</td>
-                                            <td className="p-4">
-                                                <button
-                                                    onClick={() => handleDownloadClick(item)}
-                                                    disabled={downloading === item.link || !item.torrentUrl}
-                                                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${!item.torrentUrl
-                                                        ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                                                        : downloading === item.link
-                                                            ? 'bg-yellow-600/50 text-yellow-200 cursor-wait'
-                                                            : 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/40'
-                                                        }`}
-                                                >
-                                                    {downloading === item.link ? '添加中...' : '下载'}
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                                </td>
+                                                <td className={`p-4 ${textSecondary} whitespace-nowrap`}>{item.size}</td>
+                                                <td className="p-4 text-green-400 font-bold text-center">{item.seeders}</td>
+                                                <td className="p-4 text-red-400 text-center">{item.leechers}</td>
+                                                <td className={`p-4 ${textSecondary} text-sm whitespace-nowrap`}>{item.date}</td>
+                                                <td className="p-4">
+                                                    <button
+                                                        onClick={() => handleDownloadClick(item)}
+                                                        disabled={downloading === item.link || !item.torrentUrl}
+                                                        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${!item.torrentUrl ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : downloading === item.link ? 'bg-yellow-600/50 text-yellow-200 cursor-wait' : 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/40'}`}
+                                                    >
+                                                        {downloading === item.link ? '添加中...' : '下载'}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                        <div className={`p-4 ${bgSecondary} border-t ${borderColor} ${textSecondary} text-sm text-right`}>
+
+                        {/* Mobile Card View */}
+                        <div className="lg:hidden flex-1 overflow-y-auto space-y-4 pb-4">
+                            {results.map((item, index) => (
+                                <div key={index} className={`${bgMain} rounded-xl border ${borderColor} p-4 shadow-sm`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-2 py-1 rounded text-xs font-bold`}>
+                                            {item.siteName}
+                                        </span>
+                                        <div className="flex gap-1">
+                                            {item.isHot && <span className="p-1 px-1.5 rounded bg-orange-500/20 text-orange-400 text-[10px] font-medium">🔥热门</span>}
+                                            {item.isNew && <span className="p-1 px-1.5 rounded bg-green-500/20 text-green-400 text-[10px] font-medium">✨新</span>}
+                                            {item.isFree && <span className="p-1 px-1.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-medium">🎁{item.freeType || '免费'}</span>}
+                                        </div>
+                                    </div>
+                                    <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} font-bold text-sm line-clamp-2 mb-2 leading-tight`}>
+                                        {item.name}
+                                    </a>
+                                    {item.subtitle && <p className={`${textSecondary} text-xs line-clamp-1 mb-3`}>{item.subtitle}</p>}
+
+                                    <div className="grid grid-cols-2 gap-y-3 mb-4 text-xs">
+                                        <div className="text-gray-500">大小: <span className={textPrimary}>{item.size}</span></div>
+                                        <div className="text-gray-500">时间: <span className={textPrimary}>{item.date}</span></div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="text-green-500 font-bold">↑ {item.seeders}</div>
+                                            <div className="text-red-400">↓ {item.leechers}</div>
+                                        </div>
+                                        {item.freeUntil && <div className="text-yellow-500 text-[10px]">⏱️ {item.freeUntil}</div>}
+                                    </div>
+
+                                    <button
+                                        onClick={() => handleDownloadClick(item)}
+                                        disabled={downloading === item.link || !item.torrentUrl}
+                                        className={`w-full py-2.5 rounded-lg text-sm font-bold transition-all ${!item.torrentUrl ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : downloading === item.link ? 'bg-yellow-600/50 text-yellow-200 cursor-wait' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                    >
+                                        {downloading === item.link ? '⏳ 添加下载中...' : '📥 立即下载'}
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className={`mt-4 p-3 ${bgSecondary} rounded-lg border ${borderColor} ${textSecondary} text-xs text-center lg:text-right`}>
                             共找到 {results.length} 个结果
                         </div>
                     </div>

@@ -72,6 +72,12 @@ const SitesPage = () => {
         }
     };
 
+    const handleAdd = () => {
+        setEditingSite(null);
+        setFormData({ name: '', url: '', cookies: '', type: 'NexusPHP', enabled: 1 });
+        setShowModal(true);
+    };
+
     const openEdit = (site) => {
         setEditingSite(site);
         setFormData({
@@ -98,21 +104,17 @@ const SitesPage = () => {
     };
 
     return (
-        <div className="p-8">
-            <div className="flex justify-between items-center mb-8">
+        <div className="p-4 md:p-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 space-y-4 sm:space-y-0">
                 <div>
-                    <h1 className={`text-3xl font-bold ${textPrimary}`}>站点管理</h1>
-                    <p className={`${textSecondary} mt-1`}>配置和更新您的 PT 站点信息</p>
+                    <h1 className={`text-2xl md:text-3xl font-bold ${textPrimary}`}>站点管理</h1>
+                    <p className={`${textSecondary} mt-1 text-sm`}>配置您已加入的 PT 站点</p>
                 </div>
                 <button
-                    onClick={() => {
-                        setEditingSite(null);
-                        setFormData({ name: '', url: '', cookies: '', type: 'NexusPHP', enabled: 1 });
-                        setShowModal(true);
-                    }}
-                    className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-lg font-medium transition-colors shadow-lg shadow-blue-900/20"
+                    onClick={handleAdd}
+                    className="w-full sm:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-600/20"
                 >
-                    + 添加站点
+                    + 添加新站点
                 </button>
             </div>
 

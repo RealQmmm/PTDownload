@@ -125,82 +125,115 @@ const DashboardPage = ({ setActiveTab }) => {
     );
 
     return (
-        <div className="p-8">
-            <div className="mb-8">
-                <h1 className={`text-3xl font-bold ${textPrimary}`}>仪表盘</h1>
-                <p className={`${textSecondary} mt-1`}>欢迎回来，这里是系统的运行概览</p>
+        <div className="p-4 md:p-8">
+            <div className="mb-6 md:mb-8">
+                <h1 className={`text-2xl md:text-3xl font-bold ${textPrimary}`}>仪表盘</h1>
+                <p className={`${textSecondary} mt-1 text-sm md:base`}>欢迎回来，这里是系统的运行概览</p>
             </div>
 
             {loading ? (
                 <div className={`flex justify-center items-center h-40 ${textSecondary}`}>加载数据中...</div>
             ) : (
                 <>
-                    {/* System Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                        <StatCard
-                            title="已配置站点"
-                            value={stats.sites}
-                            icon="🌐"
-                            color="bg-blue-500"
-                            onClick={() => setActiveTab('sites')}
-                        />
-                        <StatCard
-                            title="下载客户端"
-                            value={stats.clients}
-                            icon="📥"
-                            color="bg-green-500"
-                            onClick={() => setActiveTab('clients')}
-                        />
-                        <StatCard
-                            title="运行中任务"
-                            value={stats.activeTasks}
-                            icon="⏰"
-                            color="bg-purple-500"
-                            onClick={() => setActiveTab('tasks')}
-                        />
-                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+                        {/* System Stats - Vertical stack on desktop */}
+                        <div className="lg:col-span-1 space-y-4">
+                            <div
+                                onClick={() => setActiveTab('sites')}
+                                className={`${bgMain} rounded-xl p-4 border ${borderColor} cursor-pointer hover:border-blue-500/50 transition-all shadow-sm flex items-center justify-between group`}
+                            >
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 rounded-lg bg-blue-500 text-white text-lg">🌐</div>
+                                    <div>
+                                        <p className={`${textSecondary} text-xs font-medium`}>已配置站点</p>
+                                        <h3 className={`text-xl font-bold ${textPrimary}`}>{stats.sites}</h3>
+                                    </div>
+                                </div>
+                                <span className="text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+                            </div>
 
-                    {/* Download Statistics */}
-                    <div className={`${bgMain} rounded-xl border ${borderColor} p-6 shadow-sm mb-8`}>
-                        <h2 className={`text-xl font-bold ${textPrimary} mb-6`}>📊 下载统计</h2>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                            <div>
-                                <p className={`${textSecondary} text-sm mb-1`}>下载速度</p>
-                                <p className={`text-2xl font-bold ${textPrimary}`}>
-                                    {formatSpeed(downloadStats.totalDownloadSpeed)}
-                                </p>
+                            <div
+                                onClick={() => setActiveTab('clients')}
+                                className={`${bgMain} rounded-xl p-4 border ${borderColor} cursor-pointer hover:border-blue-500/50 transition-all shadow-sm flex items-center justify-between group`}
+                            >
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 rounded-lg bg-green-500 text-white text-lg">📥</div>
+                                    <div>
+                                        <p className={`${textSecondary} text-xs font-medium`}>下载客户端</p>
+                                        <h3 className={`text-xl font-bold ${textPrimary}`}>{stats.clients}</h3>
+                                    </div>
+                                </div>
+                                <span className="text-green-400 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
                             </div>
-                            <div>
-                                <p className={`${textSecondary} text-sm mb-1`}>上传速度</p>
-                                <p className={`text-2xl font-bold ${textPrimary}`}>
-                                    {formatSpeed(downloadStats.totalUploadSpeed)}
-                                </p>
-                            </div>
-                            <div>
-                                <p className={`${textSecondary} text-sm mb-1`}>总下载量</p>
-                                <p className={`text-2xl font-bold ${textPrimary}`}>
-                                    {formatBytes(downloadStats.totalDownloaded)}
-                                </p>
-                            </div>
-                            <div>
-                                <p className={`${textSecondary} text-sm mb-1`}>总上传量</p>
-                                <p className={`text-2xl font-bold ${textPrimary}`}>
-                                    {formatBytes(downloadStats.totalUploaded)}
-                                </p>
+
+                            <div
+                                onClick={() => setActiveTab('tasks')}
+                                className={`${bgMain} rounded-xl p-4 border ${borderColor} cursor-pointer hover:border-blue-500/50 transition-all shadow-sm flex items-center justify-between group`}
+                            >
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 rounded-lg bg-purple-500 text-white text-lg">⏰</div>
+                                    <div>
+                                        <p className={`${textSecondary} text-xs font-medium`}>运行中任务</p>
+                                        <h3 className={`text-xl font-bold ${textPrimary}`}>{stats.activeTasks}</h3>
+                                    </div>
+                                </div>
+                                <span className="text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
                             </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-6 mt-6">
+
+                        {/* Download Statistics - Main area on desktop */}
+                        <div className={`lg:col-span-3 ${bgMain} rounded-xl border ${borderColor} p-6 shadow-sm flex flex-col justify-between`}>
                             <div>
-                                <p className={`${textSecondary} text-sm mb-1`}>活跃种子</p>
-                                <p className={`text-2xl font-bold text-green-500`}>
-                                    {downloadStats.activeTorrents}
-                                </p>
+                                <h2 className={`text-xl font-bold ${textPrimary} mb-6 flex items-center`}>
+                                    <span className="mr-2">📊</span> 下载统计
+                                </h2>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                    <div>
+                                        <p className={`${textSecondary} text-xs mb-1 uppercase tracking-wider`}>下载速度</p>
+                                        <p className={`text-xl md:text-2xl font-bold text-green-500`}>
+                                            {formatSpeed(downloadStats.totalDownloadSpeed)}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className={`${textSecondary} text-xs mb-1 uppercase tracking-wider`}>上传速度</p>
+                                        <p className={`text-xl md:text-2xl font-bold text-blue-500`}>
+                                            {formatSpeed(downloadStats.totalUploadSpeed)}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className={`${textSecondary} text-xs mb-1 uppercase tracking-wider`}>总下载量</p>
+                                        <p className={`text-xl md:text-2xl font-bold ${textPrimary}`}>
+                                            {formatBytes(downloadStats.totalDownloaded)}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className={`${textSecondary} text-xs mb-1 uppercase tracking-wider`}>总上传量</p>
+                                        <p className={`text-xl md:text-2xl font-bold ${textPrimary}`}>
+                                            {formatBytes(downloadStats.totalUploaded)}
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                <p className={`${textSecondary} text-sm mb-1`}>总种子数</p>
-                                <p className={`text-2xl font-bold ${textPrimary}`}>
-                                    {downloadStats.totalTorrents}
-                                </p>
+
+                            <div className={`mt-6 pt-6 border-t ${borderColor} grid grid-cols-2 gap-6`}>
+                                <div className="flex items-center space-x-4">
+                                    <div className={`w-10 h-10 rounded-full ${darkMode ? 'bg-green-900/20' : 'bg-green-50'} flex items-center justify-center text-green-500`}>
+                                        ↑
+                                    </div>
+                                    <div>
+                                        <p className={`${textSecondary} text-xs`}>活跃种子</p>
+                                        <p className={`text-lg font-bold text-green-500`}>{downloadStats.activeTorrents}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                    <div className={`w-10 h-10 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-100'} flex items-center justify-center ${textSecondary}`}>
+                                        📑
+                                    </div>
+                                    <div>
+                                        <p className={`${textSecondary} text-xs`}>总种子数</p>
+                                        <p className={`text-lg font-bold ${textPrimary}`}>{downloadStats.totalTorrents}</p>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

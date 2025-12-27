@@ -14,6 +14,7 @@ export const useTheme = () => useContext(ThemeContext);
 
 function App() {
     const [activeTab, setActiveTab] = useState('dashboard')
+    const [sidebarOpen, setSidebarOpen] = useState(false)
 
     // Search state - preserved across tab switches
     const [searchState, setSearchState] = useState({
@@ -89,11 +90,49 @@ function App() {
 
     return (
         <ThemeContext.Provider value={{ darkMode, toggleDarkMode, siteName, setSiteName }}>
-            <div className={`flex h-screen overflow-hidden font-sans ${themeClasses}`}>
-                <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-                <main className={`flex-1 overflow-y-auto ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
-                    {renderContent()}
-                </main>
+            <div className={`flex h-screen overflow-hidden font-sans ${themeClasses} max-w-[100vw]`}>
+                {/* Mobile Backdrop */}
+                {sidebarOpen && (
+                    <div
+                        className="fixed inset-0 z-20 bg-black/50 lg:hidden"
+                        onClick={() => setSidebarOpen(false)}
+                    />
+                )}
+
+                {/* Sidebar */}
+                <div className={`
+                    fixed inset-y-0 left-0 z-30 transform lg:relative lg:translate-x-0 transition-transform duration-300 ease-in-out
+                    ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+                `}>
+                    <Sidebar
+                        activeTab={activeTab}
+                        setActiveTab={(tab) => {
+                            setActiveTab(tab);
+                            setSidebarOpen(false);
+                        }}
+                    />
+                </div>
+
+                {/* Main Content */}
+                <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+                    {/* Mobile Header */}
+                    <header className={`lg:hidden flex items-center justify-between p-4 border-b shrink-0 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                        <button
+                            onClick={() => setSidebarOpen(true)}
+                            className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition-colors`}
+                        >
+                            <span className="text-2xl">☰</span>
+                        </button>
+                        <h1 className="text-xl font-bold text-blue-400 truncate px-4">{siteName}</h1>
+                        <div className="w-10"></div> {/* Spacer for symmetry */}
+                    </header>
+
+                    <main className={`flex-1 overflow-y-auto overflow-x-hidden ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+                        <div className="max-w-full">
+                            {renderContent()}
+                        </div>
+                    </main>
+                </div>
             </div>
         </ThemeContext.Provider>
     )

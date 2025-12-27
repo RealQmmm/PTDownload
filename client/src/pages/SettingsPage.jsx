@@ -146,27 +146,27 @@ const SettingsPage = () => {
     };
 
     return (
-        <div className="p-8 h-full flex flex-col">
-            <h1 className={`text-3xl font-bold ${textPrimary} mb-8`}>系统设置</h1>
+        <div className="p-4 md:p-8 h-full flex flex-col">
+            <h1 className={`text-2xl md:text-3xl font-bold ${textPrimary} mb-6 md:mb-8`}>系统设置</h1>
 
-            <div className={`flex-1 flex ${bgMain} rounded-xl border ${borderColor} overflow-hidden`}>
-                {/* Settings Sidebar */}
-                <div className={`w-48 ${bgMain} border-r ${borderColor} p-4`}>
-                    <nav className="space-y-1">
+            <div className={`flex-1 flex flex-col lg:flex-row ${bgMain} rounded-xl border ${borderColor} overflow-hidden`}>
+                {/* Settings Navigation */}
+                <div className={`w-full lg:w-48 ${bgMain} border-b lg:border-b-0 lg:border-r ${borderColor} p-2 md:p-4`}>
+                    <nav className="flex lg:flex-col space-x-1 lg:space-x-0 lg:space-y-1 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0">
                         {[
-                            { id: 'general', name: '通用设置', icon: '⚙️' },
-                            { id: 'network', name: '网络连接', icon: '🌐' },
+                            { id: 'general', name: '通用', icon: '⚙️' },
+                            { id: 'network', name: '网络', icon: '🌐' },
                             { id: 'about', name: '关于', icon: 'ℹ️' }
                         ].map(item => (
                             <button
                                 key={item.id}
                                 onClick={() => setSubTab(item.id)}
-                                className={`w-full flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${subTab === item.id
-                                    ? 'bg-blue-600/20 text-blue-400'
+                                className={`flex-shrink-0 lg:flex-none flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${subTab === item.id
+                                    ? 'bg-blue-600 text-white lg:bg-blue-600/20 lg:text-blue-400'
                                     : `${textSecondary} ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} hover:${textPrimary}`
                                     }`}
                             >
-                                <span className="mr-3">{item.icon}</span>
+                                <span className="mr-2 lg:mr-3">{item.icon}</span>
                                 {item.name}
                             </button>
                         ))}
@@ -174,7 +174,7 @@ const SettingsPage = () => {
                 </div>
 
                 {/* Settings Content */}
-                <div className="flex-1 p-8 overflow-y-auto">
+                <div className="flex-1 p-4 md:p-8 overflow-y-auto">
                     {renderContent()}
                 </div>
             </div>
