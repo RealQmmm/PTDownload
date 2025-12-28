@@ -34,6 +34,15 @@ function createTables() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS rss_sources (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      site_id INTEGER,
+      name TEXT NOT NULL,
+      url TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(site_id) REFERENCES sites(id)
+    );
+
     CREATE TABLE IF NOT EXISTS clients (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       type TEXT NOT NULL,
