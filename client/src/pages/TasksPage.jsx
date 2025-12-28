@@ -273,7 +273,7 @@ const TasksPage = () => {
                                         <div className="flex items-center space-x-3">
                                             <span className={`w-2 h-2 rounded-full ${task.enabled ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></span>
                                             <h3 className={`text-xl font-bold ${textPrimary}`}>{task.name}</h3>
-                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-500 border border-blue-500/20">RSS 订阅</span>
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${darkMode ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 text-blue-600 border-blue-200'} border`}>RSS 订阅</span>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-y-2 text-sm text-gray-500 space-x-4">
                                             <div className="flex items-center">
@@ -282,7 +282,7 @@ const TasksPage = () => {
                                             <div className="flex items-center">
                                                 <span className="mr-1">📥</span> {client?.type || '默认客户端'}
                                             </div>
-                                            <div className="flex items-center font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                                            <div className={`flex items-center font-mono text-[10px] ${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded`}>
                                                 <span className="mr-1">⏰</span> {cronToHuman(task.cron)}
                                             </div>
                                         </div>
@@ -325,13 +325,13 @@ const TasksPage = () => {
                                 </div>
 
                                 {task.last_run && (
-                                    <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 text-xs text-gray-500 flex justify-between items-center">
+                                    <div className={`mt-4 pt-4 border-t ${borderColor} text-[10px] ${textSecondary} flex justify-between items-center`}>
                                         <span>上次运行: {new Date(task.last_run).toLocaleString()}</span>
                                         <div className="flex items-center max-w-[50%]">
                                             {matchingSource ? (
-                                                <div className="flex items-center bg-blue-500/5 px-2 py-0.5 rounded border border-blue-500/10">
-                                                    <span className="mr-1">📑</span>
-                                                    <span className="text-blue-500 font-bold truncate">{matchingSource.name}</span>
+                                                <div className={`flex items-center ${darkMode ? 'bg-blue-500/10 border-blue-500/20' : 'bg-blue-50 border-blue-100'} px-2 py-0.5 rounded border`}>
+                                                    <span className="mr-1 text-[10px]">📑</span>
+                                                    <span className="text-blue-500 font-bold truncate text-[10px]">{matchingSource.name}</span>
                                                 </div>
                                             ) : (
                                                 <span className="truncate opacity-50 font-mono">{task.rss_url}</span>

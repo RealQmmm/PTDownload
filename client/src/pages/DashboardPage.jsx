@@ -214,16 +214,16 @@ const DashboardPage = ({ setActiveTab }) => {
                             <h2 className={`text-xl font-bold ${textPrimary} flex items-center`}>
                                 <span className="mr-2 text-blue-500">⚡</span> 活动任务
                             </h2>
-                            <div className="ml-4 flex items-center bg-gray-100 dark:bg-gray-700/50 p-1 rounded-lg">
+                            <div className={`ml-4 flex items-center ${darkMode ? 'bg-gray-700/50' : 'bg-gray-200/50'} p-1 rounded-lg`}>
                                 <button
                                     onClick={() => setTaskFilter('active')}
-                                    className={`px-3 py-1 text-xs rounded-md transition-all ${taskFilter === 'active' ? 'bg-white dark:bg-gray-600 text-blue-500 shadow-sm font-bold' : 'text-gray-500'}`}
+                                    className={`px-3 py-1 text-xs rounded-md transition-all ${taskFilter === 'active' ? 'bg-blue-500 text-white shadow-sm font-bold' : `${textSecondary} hover:${textPrimary} hover:bg-gray-200/60 dark:hover:bg-gray-600/40`}`}
                                 >
                                     进行中
                                 </button>
                                 <button
                                     onClick={() => setTaskFilter('all')}
-                                    className={`px-3 py-1 text-xs rounded-md transition-all ${taskFilter === 'all' ? 'bg-white dark:bg-gray-600 text-blue-500 shadow-sm font-bold' : 'text-gray-500'}`}
+                                    className={`px-3 py-1 text-xs rounded-md transition-all ${taskFilter === 'all' ? 'bg-blue-500 text-white shadow-sm font-bold' : `${textSecondary} hover:${textPrimary} hover:bg-gray-200/60 dark:hover:bg-gray-600/40`}`}
                                 >
                                     全部
                                 </button>
@@ -381,7 +381,7 @@ const DashboardPage = ({ setActiveTab }) => {
                     <h2 className={`text-lg font-bold ${textPrimary} mb-4 flex items-center`}>
                         <span className="mr-2">📁</span> 今日已下载
                         {todayDownloads.length > 0 && (
-                            <span className="ml-2 text-[10px] font-normal text-gray-500 bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
+                            <span className={`ml-2 text-[10px] font-normal ${textSecondary} ${darkMode ? 'bg-gray-700/50' : 'bg-gray-100'} px-1.5 py-0.5 rounded`}>
                                 {todayDownloads.length}
                             </span>
                         )}
