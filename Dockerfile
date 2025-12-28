@@ -1,41 +1,46 @@
-# Build Stage
-FROM node:22-slim AS build
-
+# Stage 1: Build Frontend
+FROM node:22-slim AS frontend-builder
 WORKDIR /app
 COPY client/package*.json ./
 RUN npm install
-
 COPY client ./
 RUN npm run build
 
-# Production Stage
-FROM node:22-slim
+# Stage 2: Build Backend (including native modules)
+FROM node:22-slim AS backend-builder
+WORKDIR /app
+# Install build dependencies ONLY for building native modules
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+COPY server/package*.json ./
+RUN npm install --production
 
+# Stage 3: Final Production Image
+FROM node:22-slim
 WORKDIR /app
 
-# Install build dependencies and tzdata
+# Install only essential runtime dependencies (tzdata)
 RUN apt-get update && \
-    apt-get install -y python3 make g++ tzdata && \
+    apt-get install -y tzdata && \
     ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     dpkg-reconfigure -f noninteractive tzdata && \
     rm -rf /var/lib/apt/lists/*
 
+ENV NODE_ENV=production
 ENV TZ=Asia/Shanghai
 
-COPY server/package*.json ./
-RUN npm install --production
-
+# Copy backend dependencies
+COPY --from=backend-builder /app/node_modules ./node_modules
 # Copy server code
 COPY server ./
 
-# Copy built frontend assets
-# The server expects ../../client/dist relative to server/src/index.js
-# Since server/ is at /app, index.js is at /app/src/index.js
-# ../../client/dist becomes /client/dist
-COPY --from=build /app/dist /client/dist
+# Copy built frontend assets to the location expected by the server
+# Original server logic expects ../../client/dist relative to server/src
+# In this container:
+# Server is at /app, index.js at /app/src/index.js
+# ../../client/dist points to /client/dist
+COPY --from=frontend-builder /app/dist /client/dist
 
-# Expose port
 EXPOSE 3000
 
-# Start server
-CMD ["npm", "start"]
+# Use tini or a simple node command
+CMD ["node", "src/index.js"]

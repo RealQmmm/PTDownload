@@ -48,6 +48,8 @@ const SettingsPage = () => {
     const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
     const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
+    const hoverBg = darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100';
+    const inputBg = darkMode ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900';
 
     const handleSaveGeneral = async () => {
         setSaving(true);
@@ -95,6 +97,49 @@ const SettingsPage = () => {
             setSaving(false);
             setTimeout(() => setMessage(null), 3000);
         }
+    };
+
+    const handleExport = () => {
+        window.location.href = '/api/settings/export';
+    };
+
+    const handleImport = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (!confirm('导入备份将覆盖当前所有数据（站点、任务、统计等）！确定要继续吗？')) {
+            e.target.value = '';
+            return;
+        }
+
+        setSaving(true);
+        setMessage(null);
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                const res = await fetch('/api/settings/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await res.json();
+                if (res.ok) {
+                    setMessage({ type: 'success', text: result.message || '导入成功' });
+                    setTimeout(() => window.location.reload(), 2000);
+                } else {
+                    setMessage({ type: 'error', text: result.error || '导入失败' });
+                }
+            } catch (err) {
+                setMessage({ type: 'error', text: '文件解析失败，请确保是有效的 JSON 备份文件' });
+            } finally {
+                setSaving(false);
+                e.target.value = '';
+            }
+        };
+        reader.readAsText(file);
     };
 
     const renderContent = () => {
@@ -268,6 +313,68 @@ const SettingsPage = () => {
                         </div>
                     </div>
                 );
+            case 'backup':
+                return (
+                    <div className="space-y-4">
+                        {message && (
+                            <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {message.text}
+                            </div>
+                        )}
+
+                        <div className={`${bgSecondary} p-6 rounded-xl border ${borderColor} space-y-8`}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="space-y-4">
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider`}>导出数据</h3>
+                                    <p className={`text-xs ${textSecondary}`}>
+                                        点击下方按钮将下载一个包含所有配置、站点、任务、客户端及历史统计数据的 JSON 文件。
+                                    </p>
+                                    <button
+                                        onClick={handleExport}
+                                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-all shadow-lg shadow-blue-600/20"
+                                    >
+                                        立即导出备份
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider`}>导入数据</h3>
+                                    <p className={`text-xs ${textSecondary}`}>
+                                        警告：导入操作将清除并替换掉当前系统中所有的现有数据。请谨慎操作。
+                                    </p>
+                                    <div className="relative">
+                                        <input
+                                            type="file"
+                                            accept=".json"
+                                            onChange={handleImport}
+                                            disabled={saving}
+                                            className="hidden"
+                                            id="import-backup"
+                                        />
+                                        <label
+                                            htmlFor="import-backup"
+                                            className={`flex items-center justify-center w-full py-3 border-2 border-dashed ${borderColor} rounded-lg cursor-pointer ${hoverBg} transition-all font-bold text-sm ${textPrimary}`}
+                                        >
+                                            {saving ? '正在导入...' : '选择备份文件并导入'}
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className={`p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-start space-x-3`}>
+                                <span className="text-xl">⚠️</span>
+                                <div className="text-xs text-amber-500">
+                                    <p className="font-bold mb-1">提示事项：</p>
+                                    <ul className="list-disc list-inside space-y-1">
+                                        <li>导入成功后应用会自动刷新页面。</li>
+                                        <li>如果导入的是在不同环境下生成的备份，请确保站点 Cookies 与客户端地址仍然有效。</li>
+                                        <li>建议在执行重大更新或迁移服务器前先手动导出一份备份。</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
             case 'network':
                 return (
                     <div className="space-y-6">
@@ -316,6 +423,7 @@ const SettingsPage = () => {
                         {[
                             { id: 'general', name: '通用', icon: '⚙️' },
                             { id: 'notifications', name: '通知', icon: '🔔' },
+                            { id: 'backup', name: '备份', icon: '💾' },
                             { id: 'network', name: '网络', icon: '🌐' },
                             { id: 'about', name: '关于', icon: 'ℹ️' }
                         ].map(item => (
@@ -324,7 +432,7 @@ const SettingsPage = () => {
                                 onClick={() => setSubTab(item.id)}
                                 className={`flex-shrink-0 lg:flex-none flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${subTab === item.id
                                     ? 'bg-blue-600 text-white lg:bg-blue-600/20 lg:text-blue-400'
-                                    : `${textSecondary} ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} hover:${textPrimary}`
+                                    : `${textSecondary} ${hoverBg} hover:${textPrimary}`
                                     }`}
                             >
                                 <span className="mr-2 lg:mr-3">{item.icon}</span>
