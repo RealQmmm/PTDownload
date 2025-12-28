@@ -3,6 +3,14 @@ const clientService = require('./clientService');
 const downloaderService = require('./downloaderService');
 
 class StatsService {
+    // Helper to get local date string YYYY-MM-DD
+    getLocalDateString(date = new Date()) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
     async updateDailyStats() {
         await this.checkCompletion();
         try {
@@ -36,9 +44,8 @@ class StatsService {
             // Get checkpoint
             const checkpoint = db.prepare('SELECT * FROM stats_checkpoint WHERE id = 1').get();
 
-            // Use local date string instead of ISO to respect user's timezone
-            const now = new Date();
-            const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            // Use local date string
+            const today = this.getLocalDateString();
 
             if (checkpoint && (checkpoint.last_total_downloaded > 0 || checkpoint.last_total_uploaded > 0)) {
                 let diffDownloaded = currentTotalDownloaded - checkpoint.last_total_downloaded;
@@ -149,19 +156,23 @@ class StatsService {
 
     getHistory(days = 7) {
         const db = getDB();
+        const now = new Date();
+        const today = this.getLocalDateString(now);
+
         // Get last N days including today
+        // We use the calculated local date as the baseline to avoid UTC issues in SQLite date()
         const history = db.prepare(`
             SELECT * FROM daily_stats 
-            WHERE date >= date('now', '-' || ? || ' days')
+            WHERE date >= date(?, '-' || ? || ' days')
             ORDER BY date ASC
-        `).all(days - 1);
+        `).all(today, days - 1);
 
         // Fill in missing days with zeros if necessary
         const result = [];
         for (let i = days - 1; i >= 0; i--) {
-            const d = new Date();
+            const d = new Date(now);
             d.setDate(d.getDate() - i);
-            const dateStr = d.toISOString().split('T')[0];
+            const dateStr = this.getLocalDateString(d);
             const existing = history.find(h => h.date === dateStr);
             if (existing) {
                 result.push(existing);

@@ -79,8 +79,7 @@ router.get('/', async (req, res) => {
 
         // Fetch today's actual traffic delta from DB
         const db = require('../db').getDB();
-        const now = new Date();
-        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const todayStr = statsService.getLocalDateString();
         const todayTraffic = db.prepare('SELECT * FROM daily_stats WHERE date = ?').get(todayStr) || { downloaded_bytes: 0, uploaded_bytes: 0 };
 
         // Also calculate from task_history as a fallback/hybrid
@@ -125,8 +124,7 @@ router.get('/history', async (req, res) => {
 router.get('/today-downloads', (req, res) => {
     try {
         const db = require('../db').getDB();
-        const now = new Date();
-        const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const today = statsService.getLocalDateString();
 
         const downloads = db.prepare(`
             SELECT th.*, IFNULL(t.name, '手动下载') as task_name 
@@ -151,8 +149,7 @@ router.get('/dashboard', async (req, res) => {
         // 2. Fetch all required data in parallel
         const clients = clientService.getAllClients();
         const db = require('../db').getDB();
-        const now = new Date();
-        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const todayStr = statsService.getLocalDateString();
 
         // Fetch clients stats
         const clientStats = await Promise.all(
