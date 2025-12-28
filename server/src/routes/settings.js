@@ -79,14 +79,22 @@ router.post('/import', (req, res) => {
                     db.prepare(`DELETE FROM ${table}`).run();
 
                     if (backupContent[table].length > 0) {
-                        const columns = Object.keys(backupContent[table][0]);
-                        const placeholders = columns.map(() => '?').join(',');
-                        const insertStmt = db.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${placeholders})`);
+                        // 获取数据库中表真实的列名，防止因版本更迭导致的字段不匹配（如 rules 字段等）
+                        const tableInfo = db.prepare(`PRAGMA table_info(${table})`).all();
+                        const dbColumns = tableInfo.map(info => info.name);
 
-                        backupContent[table].forEach(row => {
-                            const values = columns.map(col => row[col]);
-                            insertStmt.run(...values);
-                        });
+                        const backupColumns = Object.keys(backupContent[table][0]);
+                        const validColumns = backupColumns.filter(col => dbColumns.includes(col));
+
+                        if (validColumns.length > 0) {
+                            const placeholders = validColumns.map(() => '?').join(',');
+                            const insertStmt = db.prepare(`INSERT INTO ${table} (${validColumns.join(',')}) VALUES (${placeholders})`);
+
+                            backupContent[table].forEach(row => {
+                                const values = validColumns.map(col => row[col]);
+                                insertStmt.run(...values);
+                            });
+                        }
                     }
                 }
             });
