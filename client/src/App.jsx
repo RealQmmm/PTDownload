@@ -24,26 +24,55 @@ function App() {
     })
 
     // Theme state - load from localStorage
-    const [darkMode, setDarkMode] = useState(() => {
-        const saved = localStorage.getItem('darkMode')
-        return saved !== null ? JSON.parse(saved) : true // Default to dark mode
+    const [themeMode, setThemeMode] = useState(() => {
+        const saved = localStorage.getItem('themeMode')
+        if (saved) return saved;
+        // Migration from old darkMode boolean
+        const oldDarkMode = localStorage.getItem('darkMode');
+        if (oldDarkMode !== null) {
+            return JSON.parse(oldDarkMode) ? 'dark' : 'light';
+        }
+        return 'system' // Default to system
     })
+
+    const [computedDarkMode, setComputedDarkMode] = useState(false);
 
     // Site Name state
     const [siteName, setSiteName] = useState('PT Manager')
 
-    // Save theme preference to localStorage
+    // Handle theme changes and system preference synchronization
     useEffect(() => {
-        localStorage.setItem('darkMode', JSON.stringify(darkMode))
-        // Apply theme to document
-        if (darkMode) {
-            document.documentElement.classList.add('dark')
-            document.documentElement.classList.remove('light')
-        } else {
-            document.documentElement.classList.add('light')
-            document.documentElement.classList.remove('dark')
+        localStorage.setItem('themeMode', themeMode)
+
+        const applyTheme = () => {
+            let isDark = false;
+            if (themeMode === 'system') {
+                isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            } else {
+                isDark = themeMode === 'dark';
+            }
+
+            setComputedDarkMode(isDark);
+
+            if (isDark) {
+                document.documentElement.classList.add('dark')
+                document.documentElement.classList.remove('light')
+            } else {
+                document.documentElement.classList.add('light')
+                document.documentElement.classList.remove('dark')
+            }
+        };
+
+        applyTheme();
+
+        // Listen for system theme changes if in system mode
+        if (themeMode === 'system') {
+            const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+            const listener = () => applyTheme();
+            mediaQuery.addEventListener('change', listener);
+            return () => mediaQuery.removeEventListener('change', listener);
         }
-    }, [darkMode])
+    }, [themeMode])
 
     // Fetch settings on mount
     useEffect(() => {
@@ -62,7 +91,13 @@ function App() {
     }, []);
 
     const toggleDarkMode = () => {
-        setDarkMode(!darkMode)
+        if (themeMode === 'system') {
+            setThemeMode('dark');
+        } else if (themeMode === 'dark') {
+            setThemeMode('light');
+        } else {
+            setThemeMode('system');
+        }
     }
 
     const renderContent = () => {
@@ -84,12 +119,12 @@ function App() {
         }
     }
 
-    const themeClasses = darkMode
+    const themeClasses = computedDarkMode
         ? 'bg-gray-900 text-gray-100'
         : 'bg-gray-100 text-gray-900'
 
     return (
-        <ThemeContext.Provider value={{ darkMode, toggleDarkMode, siteName, setSiteName }}>
+        <ThemeContext.Provider value={{ darkMode: computedDarkMode, themeMode, setThemeMode, toggleDarkMode, siteName, setSiteName }}>
             <div className={`flex h-screen overflow-hidden font-sans ${themeClasses} max-w-[100vw]`}>
                 {/* Mobile Backdrop */}
                 {sidebarOpen && (
@@ -116,10 +151,10 @@ function App() {
                 {/* Main Content */}
                 <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
                     {/* Mobile Header */}
-                    <header className={`lg:hidden flex items-center justify-between p-4 border-b shrink-0 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                    <header className={`lg:hidden flex items-center justify-between p-4 border-b shrink-0 ${computedDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
                         <button
                             onClick={() => setSidebarOpen(true)}
-                            className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition-colors`}
+                            className={`p-2 rounded-lg ${computedDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition-colors`}
                         >
                             <span className="text-2xl">☰</span>
                         </button>
@@ -127,7 +162,7 @@ function App() {
                         <div className="w-10"></div> {/* Spacer for symmetry */}
                     </header>
 
-                    <main className={`flex-1 overflow-y-auto overflow-x-hidden ${darkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
+                    <main className={`flex-1 overflow-y-auto overflow-x-hidden ${computedDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
                         <div className="max-w-full">
                             {renderContent()}
                         </div>

@@ -41,31 +41,34 @@ class StatsService {
             const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
             if (checkpoint && (checkpoint.last_total_downloaded > 0 || checkpoint.last_total_uploaded > 0)) {
+                let diffDownloaded = currentTotalDownloaded - checkpoint.last_total_downloaded;
                 let diffUploaded = currentTotalUploaded - checkpoint.last_total_uploaded;
 
-                // Handle reset for upload
-                if (diffUploaded < 0) diffUploaded = currentTotalUploaded;
+                // Handle reset for download/upload
+                if (diffDownloaded < 0) {
+                    console.log(`[Stats] Download counter reset detected. New session starts at: ${currentTotalDownloaded}`);
+                    diffDownloaded = currentTotalDownloaded;
+                }
+                if (diffUploaded < 0) {
+                    console.log(`[Stats] Upload counter reset detected. New session starts at: ${currentTotalUploaded}`);
+                    diffUploaded = currentTotalUploaded;
+                }
 
-                // 1. Calculate today's completed downloads size for history chart
-                const completedToday = db.prepare(`
-                    SELECT SUM(item_size) as total_size 
-                    FROM task_history 
-                    WHERE is_finished = 1 AND date(finish_time, 'localtime') = date(?)
-                `).get(today);
-                const totalCompletedSize = completedToday ? (completedToday.total_size || 0) : 0;
+                if (diffDownloaded > 0 || diffUploaded > 0) {
+                    console.log(`[Stats] Recorded new traffic: DL +${diffDownloaded}, UP +${diffUploaded}`);
+                }
 
-                // 2. Update today's stats record
+                // Update today's stats record (incremental for both)
                 const existingToday = db.prepare('SELECT * FROM daily_stats WHERE date = ?').get(today);
                 if (existingToday) {
-                    db.prepare('UPDATE daily_stats SET downloaded_bytes = ?, uploaded_bytes = uploaded_bytes + ? WHERE date = ?')
-                        .run(totalCompletedSize, diffUploaded, today);
+                    db.prepare('UPDATE daily_stats SET downloaded_bytes = downloaded_bytes + ?, uploaded_bytes = uploaded_bytes + ? WHERE date = ?')
+                        .run(diffDownloaded, diffUploaded, today);
                 } else {
                     db.prepare('INSERT INTO daily_stats (date, downloaded_bytes, uploaded_bytes) VALUES (?, ?, ?)')
-                        .run(today, totalCompletedSize, diffUploaded);
+                        .run(today, diffDownloaded, diffUploaded);
                 }
             } else {
-                // First run or all zeros: just initialize the checkpoint without recording a massive delta for "today"
-                console.log('Initializing stats baseline...');
+                console.log(`[Stats] Initializing stats checkpoint with DL:${currentTotalDownloaded}, UP:${currentTotalUploaded}`);
             }
 
             // Update checkpoint
@@ -87,6 +90,8 @@ class StatsService {
             const unfinished = db.prepare('SELECT * FROM task_history WHERE is_finished = 0').all();
             if (unfinished.length === 0) return;
 
+            console.log(`[Stats] Checking completion for ${unfinished.length} unfinished items...`);
+
             // 2. Map of all torrents from all active clients
             const allTorrents = [];
             for (const client of clients) {
@@ -99,7 +104,9 @@ class StatsService {
             if (allTorrents.length === 0) return;
 
             // Helper to normalize names for better matching
-            const normalize = (name) => (name || '').toLowerCase().replace(/[\s\._\-\[\]\(\)]/g, '');
+            const normalize = (name) => (name || '').toLowerCase()
+                .replace(/[\s\._\-\[\]\(\)\{\}\+]/g, '')
+                .replace(/第[一二三四五六七八九十\d]+[季集期]/g, ''); // Remove common Chinese episode/season tags which clients might strip
 
             // 3. Check each unfinished item
             for (const item of unfinished) {
@@ -114,6 +121,7 @@ class StatsService {
                 });
 
                 if (torrent) {
+                    console.log(`[Stats] Found match for "${item.item_title}" -> "${torrent.name}" (State: ${torrent.state}, Progress: ${torrent.progress})`);
                     // Update size if it was 0 or incorrect
                     if ((!item.item_size || item.item_size === 0) && torrent.size > 0) {
                         db.prepare('UPDATE task_history SET item_size = ? WHERE id = ?').run(torrent.size, item.id);
@@ -122,9 +130,7 @@ class StatsService {
 
                     // Check if finished (progress is 1 or 100%)
                     const isFinished = torrent.progress >= 1 ||
-                        torrent.state === 'seeding' ||
-                        torrent.state === 'complete' ||
-                        torrent.state === 'uploading'; // Seeding is finished downloading
+                        ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished'].includes(torrent.state);
 
                     if (isFinished) {
                         const now = new Date().toISOString();
@@ -132,6 +138,8 @@ class StatsService {
                             .run(now, item.id);
                         console.log(`[Stats] Marked item as finished: "${item.item_title}" (Size: ${torrent.size})`);
                     }
+                } else {
+                    // console.log(`[Stats] No active torrent match found for: "${item.item_title}"`);
                 }
             }
         } catch (err) {

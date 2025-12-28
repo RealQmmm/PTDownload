@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDB } = require('../db');
+const notificationService = require('../services/notificationService');
 
 // Get all settings or a specific setting
 router.get('/', (req, res) => {
@@ -106,6 +107,30 @@ router.post('/import', (req, res) => {
         res.json({ success: true, message: '数据导入成功，建议重启应用以确保配置生效。' });
     } catch (err) {
         console.error('Import failed:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Test notification
+router.post('/test-notify', async (req, res) => {
+    try {
+        const { title, message, config } = req.body;
+        // Test with provided config (unsaved) or existing one
+        const result = await notificationService.send(
+            title || '🔔 PT Manager 测试通知',
+            message || '如果您收到了这条消息，说明您的通知配置（Bark/Webhook）工作正常。',
+            config // Pass config if present
+        );
+
+        if (result.success) {
+            res.json({ success: true, message: '测试通知已成功发送', results: result.results });
+        } else if (result.partial) {
+            res.json({ success: true, message: '测试通知部分发送成功，请检查错误详情', results: result.results });
+        } else {
+            res.status(400).json({ error: result.error || '测试通知发送失败', results: result.results });
+        }
+    } catch (err) {
+        console.error('Test notification failed:', err);
         res.status(500).json({ error: err.message });
     }
 });

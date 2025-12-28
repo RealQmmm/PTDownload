@@ -11,6 +11,7 @@ const TasksPage = () => {
     const [showModal, setShowModal] = useState(false);
     const [showRSSModal, setShowRSSModal] = useState(false);
     const [editingTask, setEditingTask] = useState(null);
+    const [editingRSSSource, setEditingRSSSource] = useState(null);
     const [showLogsModal, setShowLogsModal] = useState(false);
     const [selectedTaskLogs, setSelectedTaskLogs] = useState([]);
     const [logLoading, setLogLoading] = useState(false);
@@ -202,19 +203,37 @@ const TasksPage = () => {
 
     const handleRSSSubmit = async (e) => {
         e.preventDefault();
+        const method = editingRSSSource ? 'PUT' : 'POST';
+        const url = editingRSSSource ? `/api/rss-sources/${editingRSSSource.id}` : '/api/rss-sources';
+
         try {
-            const res = await fetch('/api/rss-sources', {
-                method: 'POST',
+            const res = await fetch(url, {
+                method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(rssFormData)
             });
             if (res.ok) {
                 setRSSFormData({ site_id: sites[0]?.id || '', name: '', url: '' });
+                setEditingRSSSource(null);
                 fetchData();
             }
         } catch (err) {
             alert('保存失败');
         }
+    };
+
+    const openRSSEdit = (source) => {
+        setEditingRSSSource(source);
+        setRSSFormData({
+            site_id: source.site_id,
+            name: source.name,
+            url: source.url
+        });
+    };
+
+    const cancelRSSEdit = () => {
+        setEditingRSSSource(null);
+        setRSSFormData({ site_id: sites[0]?.id || '', name: '', url: '' });
     };
 
     const deleteRSSSource = async (id) => {
@@ -230,6 +249,8 @@ const TasksPage = () => {
             site_id: source.site_id,
             rss_url: source.url
         });
+        setEditingRSSSource(null);
+        setRSSFormData({ site_id: sites[0]?.id || '', name: '', url: '' });
         setShowRSSModal(false);
         setShowModal(true);
     };
@@ -565,11 +586,25 @@ const TasksPage = () => {
                     <div className={`${bgMain} rounded-2xl w-full max-w-3xl border ${borderColor} shadow-2xl overflow-hidden max-h-[85vh] flex flex-col`}>
                         <div className={`p-6 border-b ${borderColor} flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50`}>
                             <h2 className={`text-xl font-bold ${textPrimary}`}>RSS 订阅源维护</h2>
-                            <button onClick={() => setShowRSSModal(false)} className={`${textSecondary} hover:${textPrimary}`}>✕</button>
+                            <button onClick={() => { setShowRSSModal(false); cancelRSSEdit(); }} className={`${textSecondary} hover:${textPrimary}`}>✕</button>
                         </div>
 
                         <div className="p-6 overflow-y-auto flex-1">
-                            <form onSubmit={handleRSSSubmit} className={`p-4 rounded-xl border-2 border-dashed ${borderColor} mb-6 space-y-4`}>
+                            <form onSubmit={handleRSSSubmit} className={`p-4 rounded-xl border-2 ${editingRSSSource ? 'border-blue-500/50 bg-blue-500/5' : `border-dashed ${borderColor}`} mb-6 space-y-4`}>
+                                <div className="flex justify-between items-center mb-1">
+                                    <h4 className={`text-xs font-bold ${editingRSSSource ? 'text-blue-500' : textSecondary} uppercase`}>
+                                        {editingRSSSource ? '编辑现有订阅源' : '添加新订阅源'}
+                                    </h4>
+                                    {editingRSSSource && (
+                                        <button
+                                            type="button"
+                                            onClick={cancelRSSEdit}
+                                            className="text-[10px] text-blue-500 hover:underline font-bold"
+                                        >
+                                            取消编辑
+                                        </button>
+                                    )}
+                                </div>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div>
                                         <label className={`block text-xs font-bold ${textSecondary} mb-1 uppercase`}>关联站点</label>
@@ -584,14 +619,14 @@ const TasksPage = () => {
                                         </select>
                                     </div>
                                     <div className="md:col-span-2">
-                                        <label className={`block text-xs font-bold ${textSecondary} mb-1 uppercase`}>用途描述 (如: 剧集、热门种)</label>
+                                        <label className={`block text-xs font-bold ${textSecondary} mb-1 uppercase`}>用途描述</label>
                                         <input
                                             required
                                             type="text"
                                             value={rssFormData.name}
                                             onChange={(e) => setRSSFormData({ ...rssFormData, name: e.target.value })}
                                             className={`w-full ${inputBg} border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500`}
-                                            placeholder="输入此订阅源的用途"
+                                            placeholder="输入如：剧集、热门种"
                                         />
                                     </div>
                                     <div className="md:col-span-3">
@@ -605,8 +640,8 @@ const TasksPage = () => {
                                                 className={`flex-1 ${inputBg} border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500`}
                                                 placeholder="https://..."
                                             />
-                                            <button type="submit" className="px-6 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold transition-colors">
-                                                添加
+                                            <button type="submit" className={`px-6 py-1.5 ${editingRSSSource ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-lg text-sm font-bold transition-colors shadow-sm`}>
+                                                {editingRSSSource ? '更新' : '添加'}
                                             </button>
                                         </div>
                                     </div>
@@ -637,8 +672,16 @@ const TasksPage = () => {
                                                     选用
                                                 </button>
                                                 <button
+                                                    onClick={() => openRSSEdit(source)}
+                                                    className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"
+                                                    title="编辑"
+                                                >
+                                                    ✏️
+                                                </button>
+                                                <button
                                                     onClick={() => deleteRSSSource(source.id)}
                                                     className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                                                    title="删除"
                                                 >
                                                     🗑️
                                                 </button>
@@ -650,77 +693,79 @@ const TasksPage = () => {
                         </div>
 
                         <div className={`p-4 border-t ${borderColor} bg-gray-50/50 dark:bg-gray-900/50 flex justify-end`}>
-                            <button onClick={() => setShowRSSModal(false)} className={`px-6 py-2 rounded-lg ${textSecondary} hover:${textPrimary} font-bold`}>关闭</button>
+                            <button onClick={() => { setShowRSSModal(false); cancelRSSEdit(); }} className={`px-6 py-2 rounded-lg ${textSecondary} hover:${textPrimary} font-bold`}>关闭</button>
                         </div>
                     </div>
-                </div>
+                </div >
             )}
 
             {/* Task Logs Modal */}
-            {showLogsModal && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div className={`${bgMain} rounded-2xl w-full max-w-4xl border ${borderColor} shadow-2xl overflow-hidden max-h-[85vh] flex flex-col`}>
-                        <div className={`p-6 border-b ${borderColor} flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50`}>
-                            <h2 className={`text-xl font-bold ${textPrimary}`}>任务执行日志: {editingTask?.name}</h2>
-                            <button onClick={() => setShowLogsModal(false)} className={`${textSecondary} hover:${textPrimary}`}>✕</button>
-                        </div>
+            {
+                showLogsModal && (
+                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                        <div className={`${bgMain} rounded-2xl w-full max-w-4xl border ${borderColor} shadow-2xl overflow-hidden max-h-[85vh] flex flex-col`}>
+                            <div className={`p-6 border-b ${borderColor} flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50`}>
+                                <h2 className={`text-xl font-bold ${textPrimary}`}>任务执行日志: {editingTask?.name}</h2>
+                                <button onClick={() => setShowLogsModal(false)} className={`${textSecondary} hover:${textPrimary}`}>✕</button>
+                            </div>
 
-                        <div className="p-0 overflow-y-auto flex-1">
-                            {logLoading ? (
-                                <div className="flex justify-center items-center h-64">
-                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                                </div>
-                            ) : (
-                                <table className="w-full text-left border-collapse">
-                                    <thead className={`sticky top-0 ${bgSecondary} z-10 border-b ${borderColor}`}>
-                                        <tr className="text-[10px] uppercase tracking-widest text-gray-500">
-                                            <th className="py-3 px-6 font-bold">时间</th>
-                                            <th className="py-3 px-4 font-bold">状态</th>
-                                            <th className="py-3 px-4 font-bold text-center">抓取/匹配</th>
-                                            <th className="py-3 px-4 font-bold">消息</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
-                                        {selectedTaskLogs.map((log) => (
-                                            <tr key={log.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
-                                                <td className="py-3 px-6 text-xs font-mono text-gray-400">
-                                                    {new Date(log.run_time).toLocaleString()}
-                                                </td>
-                                                <td className="py-3 px-4">
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${log.status === 'success'
-                                                        ? 'bg-green-500/10 text-green-500'
-                                                        : 'bg-red-500/10 text-red-500'
-                                                        }`}>
-                                                        {log.status === 'success' ? '成功' : '失败'}
-                                                    </span>
-                                                </td>
-                                                <td className="py-3 px-4 text-center font-mono text-xs text-gray-500">
-                                                    {log.items_found} / {log.items_matched}
-                                                </td>
-                                                <td className={`py-3 px-4 text-sm ${log.status === 'error' ? 'text-red-400' : textSecondary} italic`}>
-                                                    {log.message}
-                                                </td>
+                            <div className="p-0 overflow-y-auto flex-1">
+                                {logLoading ? (
+                                    <div className="flex justify-center items-center h-64">
+                                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                                    </div>
+                                ) : (
+                                    <table className="w-full text-left border-collapse">
+                                        <thead className={`sticky top-0 ${bgSecondary} z-10 border-b ${borderColor}`}>
+                                            <tr className="text-[10px] uppercase tracking-widest text-gray-500">
+                                                <th className="py-3 px-6 font-bold">时间</th>
+                                                <th className="py-3 px-4 font-bold">状态</th>
+                                                <th className="py-3 px-4 font-bold text-center">抓取/匹配</th>
+                                                <th className="py-3 px-4 font-bold">消息</th>
                                             </tr>
-                                        ))}
-                                        {selectedTaskLogs.length === 0 && (
-                                            <tr>
-                                                <td colSpan="4" className="py-20 text-center text-gray-500 italic">
-                                                    暂无执行日志记录
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                                            {selectedTaskLogs.map((log) => (
+                                                <tr key={log.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
+                                                    <td className="py-3 px-6 text-xs font-mono text-gray-400">
+                                                        {new Date(log.run_time).toLocaleString()}
+                                                    </td>
+                                                    <td className="py-3 px-4">
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${log.status === 'success'
+                                                            ? 'bg-green-500/10 text-green-500'
+                                                            : 'bg-red-500/10 text-red-500'
+                                                            }`}>
+                                                            {log.status === 'success' ? '成功' : '失败'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-3 px-4 text-center font-mono text-xs text-gray-500">
+                                                        {log.items_found} / {log.items_matched}
+                                                    </td>
+                                                    <td className={`py-3 px-4 text-sm ${log.status === 'error' ? 'text-red-400' : textSecondary} italic`}>
+                                                        {log.message}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                            {selectedTaskLogs.length === 0 && (
+                                                <tr>
+                                                    <td colSpan="4" className="py-20 text-center text-gray-500 italic">
+                                                        暂无执行日志记录
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
 
-                        <div className={`p-4 border-t ${borderColor} bg-gray-50/50 dark:bg-gray-900/50 flex justify-end`}>
-                            <button onClick={() => setShowLogsModal(false)} className={`px-6 py-2 rounded-lg ${textSecondary} hover:${textPrimary} font-bold`}>关闭</button>
+                            <div className={`p-4 border-t ${borderColor} bg-gray-50/50 dark:bg-gray-900/50 flex justify-end`}>
+                                <button onClick={() => setShowLogsModal(false)} className={`px-6 py-2 rounded-lg ${textSecondary} hover:${textPrimary} font-bold`}>关闭</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

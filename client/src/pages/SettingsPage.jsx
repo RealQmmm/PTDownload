@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
 
 const SettingsPage = () => {
-    const { darkMode, toggleDarkMode, siteName, setSiteName } = useTheme();
+    const { darkMode, themeMode, setThemeMode, siteName, setSiteName } = useTheme();
     const [subTab, setSubTab] = useState('general');
     const [tempSiteName, setTempSiteName] = useState(siteName);
     const [logSettings, setLogSettings] = useState({
@@ -93,6 +93,38 @@ const SettingsPage = () => {
             }
         } catch (err) {
             setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const handleTestNotify = async () => {
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/settings/test-notify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: '🔔 PT Manager 测试通知',
+                    message: '如果您收到了这条消息，说明您的通知配置工作正常。',
+                    config: {
+                        enabled: notifySettings.notify_enabled,
+                        barkUrl: notifySettings.notify_bark_url,
+                        webhookUrl: notifySettings.notify_webhook_url,
+                        webhookMethod: notifySettings.notify_webhook_method
+                    }
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: data.message || '测试通知已发送' });
+            } else {
+                setMessage({ type: 'error', text: data.error || '发送失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求失败' });
         } finally {
             setSaving(false);
             setTimeout(() => setMessage(null), 3000);
@@ -214,17 +246,29 @@ const SettingsPage = () => {
                             <hr className={borderColor} />
 
                             {/* Section 3: Interface */}
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-3 sm:space-y-0">
                                 <div>
-                                    <p className={`text-sm font-medium ${textPrimary}`}>深色模式</p>
-                                    <p className={`text-[10px] ${textSecondary}`}>切换系统的视觉主题</p>
+                                    <p className={`text-sm font-medium ${textPrimary}`}>视觉主题</p>
+                                    <p className={`text-[10px] ${textSecondary}`}>选择您偏好的界面显示模式</p>
                                 </div>
-                                <button
-                                    onClick={toggleDarkMode}
-                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${darkMode ? 'bg-blue-600' : 'bg-gray-300'}`}
-                                >
-                                    <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${darkMode ? 'left-6.5' : 'left-0.5'}`} />
-                                </button>
+                                <div className={`flex items-center ${darkMode ? 'bg-gray-700/50' : 'bg-gray-100'} p-1 rounded-lg border ${borderColor}`}>
+                                    {[
+                                        { id: 'light', name: '浅色', icon: '☀️' },
+                                        { id: 'dark', name: '深色', icon: '🌙' },
+                                        { id: 'system', name: '系统', icon: '🖥️' }
+                                    ].map((mode) => (
+                                        <button
+                                            key={mode.id}
+                                            onClick={() => setThemeMode(mode.id)}
+                                            className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center space-x-1.5 ${themeMode === mode.id
+                                                ? 'bg-blue-600 text-white shadow-sm font-bold'
+                                                : `${textSecondary} hover:${textPrimary} hover:bg-gray-200/50 dark:hover:bg-gray-600/30`}`}
+                                        >
+                                            <span>{mode.icon}</span>
+                                            <span>{mode.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
 
                             {/* Save Button Row */}
@@ -301,7 +345,14 @@ const SettingsPage = () => {
                                 </div>
                             </div>
 
-                            <div className="pt-4 flex justify-end">
+                            <div className="pt-4 flex justify-end space-x-3">
+                                <button
+                                    onClick={handleTestNotify}
+                                    disabled={saving || !notifySettings.notify_enabled}
+                                    className={`px-6 py-2 border ${borderColor} ${textSecondary} hover:${textPrimary} rounded-lg transition-all font-bold text-sm disabled:opacity-30`}
+                                >
+                                    发送测试通知
+                                </button>
                                 <button
                                     onClick={handleSaveNotify}
                                     disabled={saving}

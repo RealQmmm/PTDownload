@@ -8,8 +8,8 @@ const statsService = require('../services/statsService');
 // Get download statistics from all clients
 router.get('/', async (req, res) => {
     try {
-        // Trigger a quick check for completed items to keep dashboard stats fresh
-        await statsService.checkCompletion();
+        // Trigger a fresh stats update to keep the dashboard current
+        await statsService.updateDailyStats();
 
         const clients = clientService.getAllClients();
 
@@ -44,7 +44,8 @@ router.get('/', async (req, res) => {
                                 t.state === 'downloading' ||
                                 t.state === 'uploading' ||
                                 t.state === 'stalledDL' ||
-                                t.state === 'stalledUP'
+                                t.state === 'stalledUP' ||
+                                t.state === 'pausedDL'
                             ).length,
                             totalTorrents: result.torrents.length
                         };
@@ -76,26 +77,28 @@ router.get('/', async (req, res) => {
             }
         );
 
-        // Fetch today's actual traffic delta from DB for Upload stats
+        // Fetch today's actual traffic delta from DB
         const db = require('../db').getDB();
         const now = new Date();
         const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         const todayTraffic = db.prepare('SELECT * FROM daily_stats WHERE date = ?').get(todayStr) || { downloaded_bytes: 0, uploaded_bytes: 0 };
 
-        // Calculate today's COMPLETED downloads size
+        // Also calculate from task_history as a fallback/hybrid
         const completedToday = db.prepare(`
             SELECT SUM(item_size) as total_size 
             FROM task_history 
             WHERE is_finished = 1 AND date(finish_time, 'localtime') = date(?)
         `).get(todayStr);
-
         const totalCompletedSize = completedToday ? (completedToday.total_size || 0) : 0;
+
+        // Use the maximum of delta traffic and completed items to be most accurate
+        const displayedDownload = Math.max(todayTraffic.downloaded_bytes, totalCompletedSize);
 
         res.json({
             success: true,
             stats: {
                 ...aggregatedStats,
-                totalDownloaded: totalCompletedSize,
+                totalDownloaded: displayedDownload,
                 totalUploaded: todayTraffic.uploaded_bytes
             },
             clients: validClientStats

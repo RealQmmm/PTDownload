@@ -1,5 +1,65 @@
 const cheerio = require('cheerio');
 
+const parseDate = (dateStr) => {
+    if (!dateStr || dateStr === 'Unknown') return new Date().toISOString();
+
+    dateStr = dateStr.trim();
+
+    // If it looks like a standard absolute date (YYYY-MM-DD...), return it
+    if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(dateStr)) {
+        return dateStr.replace(/\//g, '-');
+    }
+
+    const date = new Date(); // Start from current time
+    let matched = false;
+
+    // Handle HH:mm:ss or HH:mm survival duration (e.g., 05:30:10 or 05:30)
+    const hmsMatch = dateStr.match(/^(\d{1,3}):(\d{2})(:(\d{2}))?$/);
+    if (hmsMatch) {
+        matched = true;
+        date.setHours(date.getHours() - parseInt(hmsMatch[1]));
+        date.setMinutes(date.getMinutes() - parseInt(hmsMatch[2]));
+        if (hmsMatch[4]) {
+            date.setSeconds(date.getSeconds() - parseInt(hmsMatch[4]));
+        }
+    } else {
+        // Parse parts like "1年2月", "3月5天", "5天2小时", "5小时30分", "10分钟"
+        const unitMap = [
+            { regex: /(\d+)\s*(年|y|years?)/i, unit: 'year' },
+            { regex: /(\d+)\s*(月|month|mo)/i, unit: 'month' },
+            { regex: /(\d+)\s*(周|w|weeks?)/i, unit: 'week' },
+            { regex: /(\d+)\s*(天|d|days?)/i, unit: 'day' },
+            { regex: /(\d+)\s*(小时|时|h|hours?)/i, unit: 'hour' },
+            { regex: /(\d+)\s*(分钟|分|m|mins?|minutes?)/i, unit: 'minute' },
+            { regex: /(\d+)\s*(秒|s|secs?|seconds?)/i, unit: 'second' }
+        ];
+
+        // Find all matches in the string
+        unitMap.forEach(({ regex, unit }) => {
+            const matches = dateStr.match(new RegExp(regex.source, 'gi'));
+            if (matches) {
+                matches.forEach(m => {
+                    const value = parseInt(m.match(/\d+/)[0]);
+                    matched = true;
+                    if (unit === 'year') date.setFullYear(date.getFullYear() - value);
+                    else if (unit === 'month') date.setMonth(date.getMonth() - value);
+                    else if (unit === 'week') date.setDate(date.getDate() - value * 7);
+                    else if (unit === 'day') date.setDate(date.getDate() - value);
+                    else if (unit === 'hour') date.setHours(date.getHours() - value);
+                    else if (unit === 'minute') date.setMinutes(date.getMinutes() - value);
+                    else if (unit === 'second') date.setSeconds(date.getSeconds() - value);
+                });
+            }
+        });
+    }
+
+    if (matched) {
+        return date.toISOString().replace('T', ' ').substring(0, 19);
+    }
+
+    return dateStr;
+};
+
 const parseSize = (sizeStr) => {
     // Basic helper to convert 1.2 GB to string or bytes if needed
     // For now returning raw string is fine
@@ -157,7 +217,57 @@ const parsers = {
                     }
                 }
 
-                const date = $(el).find('span[title]').attr('title') || $(el).find('td.rowfollow:nth-child(4)').text().trim() || 'Unknown';
+                // Find date/time intelligently instead of just nth-child(4)
+                let dateRaw = 'Unknown';
+                const dateCells = $(el).find('td');
+
+                // First pass: look for ANY title that looks like a full date
+                for (let j = 0; j < dateCells.length; j++) {
+                    const cell = $(dateCells[j]);
+                    const title = cell.find('span[title], time[title], a[title]').attr('title') || cell.attr('title');
+                    if (title && /^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/.test(title)) {
+                        dateRaw = title;
+                        break;
+                    }
+                }
+
+                if (dateRaw === 'Unknown') {
+                    // Second pass: look for relative time or survival time
+                    for (let j = 1; j < dateCells.length; j++) { // Skip cat column
+                        const cell = $(dateCells[j]);
+                        const text = cell.text().trim();
+
+                        // If it matches HH:mm:ss survival pattern exactly
+                        if (/^\d{1,3}:\d{2}:\d{2}$/.test(text)) {
+                            // Verify it's not a seeder count cell (usually seeder cells have specific classes or links)
+                            if (cell.find('a[href*="viewpeerlist"]').length === 0) {
+                                dateRaw = text;
+                                break;
+                            }
+                        }
+
+                        // Absolute date in text
+                        if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+                            dateRaw = text;
+                            break;
+                        }
+
+                        // Relative time keywords
+                        if (/(分|小时|时|天|周|月|年|ago|min|hour|day|week|month|year)/i.test(text) && /\d+/.test(text)) {
+                            // Avoid taking the name column if it happens to have keywords
+                            if (j > 1 && text.length < 50) {
+                                dateRaw = text;
+                            }
+                        }
+                    }
+                }
+
+                // Final fallback
+                if (dateRaw === 'Unknown' && dateCells.length >= 4) {
+                    dateRaw = $(dateCells[3]).text().trim();
+                }
+
+                const date = parseDate(dateRaw);
 
                 // Extract promotion/free status
                 let isFree = false;

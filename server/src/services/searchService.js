@@ -3,7 +3,7 @@ const siteService = require('./siteService');
 const siteParsers = require('../utils/siteParsers');
 
 class SearchService {
-    async search(query) {
+    async search(query, days = null) {
         const sites = siteService.getAllSites();
         const enabledSites = sites.filter(s => s.enabled);
 
@@ -11,24 +11,26 @@ class SearchService {
             return [];
         }
 
-        console.log(`Starting search for "${query}" across ${enabledSites.length} sites...`);
+        const isRecentSearch = !query || query.trim() === '';
+        console.log(`Starting ${isRecentSearch ? 'recent' : 'keyword'} search ${!isRecentSearch ? `for "${query}"` : ''} across ${enabledSites.length} sites...`);
 
         const searchPromises = enabledSites.map(async (site) => {
             try {
                 if (site.type === 'Mock') {
-                    // Start with a small delay for mock to simulate network
                     await new Promise(r => setTimeout(r, 500));
-                    const results = siteParsers.parse('', 'Mock', site.url);
-                    // Filter mock results by query
-                    return results.filter(r => r.name.toLowerCase().includes(query.toLowerCase()))
-                        .map(r => ({ ...r, siteName: site.name }));
+                    let results = siteParsers.parse('', 'Mock', site.url);
+                    if (!isRecentSearch) {
+                        results = results.filter(r => r.name.toLowerCase().includes(query.toLowerCase()));
+                    }
+                    return results.map(r => ({ ...r, siteName: site.name }));
                 }
 
                 // Construct search URL
-                // NexusPHP standard: torrents.php?search=QUERY&notsticky=1
                 const searchUrl = new URL('/torrents.php', site.url);
-                searchUrl.searchParams.append('search', query);
-                searchUrl.searchParams.append('notsticky', '1'); // Exclude sticky torrents if possible
+                if (!isRecentSearch) {
+                    searchUrl.searchParams.append('search', query);
+                }
+                searchUrl.searchParams.append('notsticky', '1');
 
                 const headers = {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -37,10 +39,21 @@ class SearchService {
 
                 const response = await axios.get(searchUrl.toString(), {
                     headers,
-                    timeout: 10000 // 10s timeout
+                    timeout: 10000
                 });
 
-                const results = siteParsers.parse(response.data, site.type, site.url);
+                let results = siteParsers.parse(response.data, site.type, site.url);
+
+                // Filter by days if specified
+                if (days !== null) {
+                    const cutoff = new Date();
+                    cutoff.setDate(cutoff.getDate() - parseInt(days));
+                    results = results.filter(item => {
+                        const itemDate = new Date(item.date);
+                        return !isNaN(itemDate.getTime()) && itemDate >= cutoff;
+                    });
+                }
+
                 return results.map(r => ({ ...r, siteName: site.name }));
 
             } catch (err) {
@@ -52,8 +65,13 @@ class SearchService {
         const resultsArrays = await Promise.all(searchPromises);
         const allResults = resultsArrays.flat();
 
-        // Sort by seeders desc by default
-        return allResults.sort((a, b) => b.seeders - a.seeders);
+        if (isRecentSearch) {
+            // Sort by date desc for recent search
+            return allResults.sort((a, b) => new Date(b.date) - new Date(a.date));
+        } else {
+            // Sort by seeders desc for keyword search
+            return allResults.sort((a, b) => b.seeders - a.seeders);
+        }
     }
 }
 

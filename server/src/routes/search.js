@@ -5,12 +5,9 @@ const searchService = require('../services/searchService');
 // Search torrents
 router.get('/', async (req, res) => {
     try {
-        const { q } = req.query;
-        if (!q) {
-            return res.status(400).json({ error: 'Query parameter "q" is required' });
-        }
-
-        const results = await searchService.search(q);
+        const { q, days } = req.query;
+        // q is not strictly required anymore if we want recent results
+        const results = await searchService.search(q || '', days);
         res.json(results);
     } catch (err) {
         console.error('Search error:', err);
