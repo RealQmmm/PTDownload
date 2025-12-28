@@ -4,6 +4,7 @@ const { getDB } = require('../db');
 const downloaderService = require('./downloaderService');
 const siteService = require('./siteService');
 const clientService = require('./clientService');
+const notificationService = require('./notificationService');
 
 class RSSService {
     async executeTask(task) {
@@ -76,6 +77,20 @@ class RSSService {
                             db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size) VALUES (?, ?, ?, ?)')
                                 .run(task.id, item.guid, item.title, item.size);
                             console.log(`[RSS] Successfully added: ${item.title}`);
+
+                            // Send notification
+                            try {
+                                const formatBytes = (bytes) => {
+                                    if (!bytes) return '0 B';
+                                    const k = 1024;
+                                    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                                };
+                                await notificationService.notifyNewTorrent(task.name, item.title, formatBytes(item.size));
+                            } catch (notifyErr) {
+                                console.error('[RSS] Notification failed:', notifyErr.message);
+                            }
                         } else {
                             console.error(`[RSS] Failed to add ${item.title}: ${result.message}`);
                         }

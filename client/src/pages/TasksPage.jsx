@@ -15,6 +15,29 @@ const TasksPage = () => {
     const [selectedTaskLogs, setSelectedTaskLogs] = useState([]);
     const [logLoading, setLogLoading] = useState(false);
 
+    // Helpers for Human-readable CRON
+    const cronToHuman = (cron) => {
+        if (!cron) return '未设置';
+        if (cron.startsWith('*/') && cron.endsWith(' * * * *')) {
+            return `每 ${cron.split(' ')[0].replace('*/', '')} 分钟`;
+        }
+        if (cron.startsWith('0 */') && cron.endsWith(' * * *')) {
+            return `每 ${cron.split(' ')[1].replace('*/', '')} 小时`;
+        }
+        if (cron.startsWith('0 0 */') && cron.endsWith(' * *')) {
+            return `每 ${cron.split(' ')[2].replace('*/', '')} 天`;
+        }
+        return cron; // Fallback to raw cron if complex
+    };
+
+    const parseCron = (cron) => {
+        if (!cron) return { value: 15, unit: 'm' };
+        if (cron.startsWith('*/') && cron.endsWith(' * * * *')) return { value: cron.split(' ')[0].replace('*/', ''), unit: 'm' };
+        if (cron.startsWith('0 */') && cron.endsWith(' * * *')) return { value: cron.split(' ')[1].replace('*/', ''), unit: 'h' };
+        if (cron.startsWith('0 0 */') && cron.endsWith(' * *')) return { value: cron.split(' ')[2].replace('*/', ''), unit: 'd' };
+        return { value: 15, unit: 'm', isComplex: true };
+    };
+
     // Theme-aware classes
     const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
     const bgSecondary = darkMode ? 'bg-gray-900 border-gray-700' : 'bg-gray-50 border-gray-200';
@@ -260,7 +283,7 @@ const TasksPage = () => {
                                                 <span className="mr-1">📥</span> {client?.type || '默认客户端'}
                                             </div>
                                             <div className="flex items-center font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
-                                                <span className="mr-1">⏰</span> {task.cron}
+                                                <span className="mr-1">⏰</span> {cronToHuman(task.cron)}
                                             </div>
                                         </div>
                                     </div>
@@ -364,15 +387,45 @@ const TasksPage = () => {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className={`block text-xs font-bold ${textSecondary} mb-1 uppercase tracking-wider`}>执行周期 (Cron)</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        value={formData.cron}
-                                        onChange={(e) => setFormData({ ...formData, cron: e.target.value })}
-                                        className={`w-full ${inputBg} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 font-mono`}
-                                        placeholder="*/15 * * * *"
-                                    />
+                                    <label className={`block text-xs font-bold ${textSecondary} mb-1 uppercase tracking-wider`}>执行周期</label>
+                                    <div className="flex space-x-2">
+                                        <input
+                                            required
+                                            type="number"
+                                            min="1"
+                                            value={parseCron(formData.cron).value}
+                                            onChange={(e) => {
+                                                const current = parseCron(formData.cron);
+                                                const val = e.target.value;
+                                                let newCron = '';
+                                                if (current.unit === 'm') newCron = `*/${val} * * * *`;
+                                                else if (current.unit === 'h') newCron = `0 */${val} * * *`;
+                                                else if (current.unit === 'd') newCron = `0 0 */${val} * *`;
+                                                setFormData({ ...formData, cron: newCron });
+                                            }}
+                                            className={`w-20 ${inputBg} border rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 text-center`}
+                                        />
+                                        <select
+                                            value={parseCron(formData.cron).unit}
+                                            onChange={(e) => {
+                                                const current = parseCron(formData.cron);
+                                                const unit = e.target.value;
+                                                let newCron = '';
+                                                if (unit === 'm') newCron = `*/${current.value} * * * *`;
+                                                else if (unit === 'h') newCron = `0 */${current.value} * * *`;
+                                                else if (unit === 'd') newCron = `0 0 */${current.value} * *`;
+                                                setFormData({ ...formData, cron: newCron });
+                                            }}
+                                            className={`flex-1 ${inputBg} border rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500`}
+                                        >
+                                            <option value="m">分钟</option>
+                                            <option value="h">小时</option>
+                                            <option value="d">天</option>
+                                        </select>
+                                    </div>
+                                    {parseCron(formData.cron).isComplex && (
+                                        <p className="text-[10px] text-amber-500 mt-1">检测到复杂 Cron 表达式，已重置为简单模式</p>
+                                    )}
                                 </div>
                                 <div className="md:col-span-2">
                                     <div className="flex justify-between items-center mb-1">

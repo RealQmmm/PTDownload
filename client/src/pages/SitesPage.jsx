@@ -141,7 +141,10 @@ const SitesPage = () => {
                             </div>
                             <p className={`${textSecondary} text-sm truncate mb-4`}>{site.url}</p>
                             <div className={`flex justify-between items-center pt-4 border-t ${borderColor}`}>
-                                <span className={`text-xs px-2 py-1 rounded-full ${site.enabled ? 'bg-green-900/30 text-green-400' : 'bg-red-900/30 text-red-400'}`}>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${site.enabled
+                                        ? (darkMode ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-green-50 text-green-600 border-green-100')
+                                        : (darkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-600 border-red-100')
+                                    }`}>
                                     {site.enabled ? '已启用' : '已禁用'}
                                 </span>
                                 <button

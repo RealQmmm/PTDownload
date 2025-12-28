@@ -9,6 +9,12 @@ const SettingsPage = () => {
         log_retention_days: '7',
         log_max_count: '100'
     });
+    const [notifySettings, setNotifySettings] = useState({
+        notify_enabled: false,
+        notify_bark_url: '',
+        notify_webhook_url: '',
+        notify_webhook_method: 'GET'
+    });
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
 
@@ -24,6 +30,12 @@ const SettingsPage = () => {
             setLogSettings({
                 log_retention_days: data.log_retention_days || '7',
                 log_max_count: data.log_max_count || '100'
+            });
+            setNotifySettings({
+                notify_enabled: data.notify_enabled === 'true',
+                notify_bark_url: data.notify_bark_url || '',
+                notify_webhook_url: data.notify_webhook_url || '',
+                notify_webhook_method: data.notify_webhook_method || 'GET'
             });
         } catch (err) {
             console.error('Fetch settings failed:', err);
@@ -52,6 +64,28 @@ const SettingsPage = () => {
             if (res.ok) {
                 setSiteName(tempSiteName);
                 setMessage({ type: 'success', text: '设置已保存' });
+            } else {
+                setMessage({ type: 'error', text: '保存失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const handleSaveNotify = async () => {
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(notifySettings)
+            });
+            if (res.ok) {
+                setMessage({ type: 'success', text: '通知设置已保存' });
             } else {
                 setMessage({ type: 'error', text: '保存失败' });
             }
@@ -161,6 +195,79 @@ const SettingsPage = () => {
                         </div>
                     </div>
                 );
+            case 'notifications':
+                return (
+                    <div className="space-y-4">
+                        {message && (
+                            <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {message.text}
+                            </div>
+                        )}
+
+                        <div className={`${bgSecondary} p-6 rounded-xl border ${borderColor} space-y-8`}>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className={`text-sm font-bold ${textPrimary}`}>推送通知</h3>
+                                    <p className={`text-[10px] ${textSecondary}`}>在 RSS 匹配到合适资源并成功下种时发送通知</p>
+                                </div>
+                                <button
+                                    onClick={() => setNotifySettings({ ...notifySettings, notify_enabled: !notifySettings.notify_enabled })}
+                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${notifySettings.notify_enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+                                >
+                                    <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${notifySettings.notify_enabled ? 'left-6.5' : 'left-0.5'}`} />
+                                </button>
+                            </div>
+
+                            <hr className={borderColor} />
+
+                            <div className={`space-y-6 ${notifySettings.notify_enabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                                <div>
+                                    <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>Bark 通知 (iOS 专用)</label>
+                                    <input
+                                        type="text"
+                                        value={notifySettings.notify_bark_url}
+                                        onChange={(e) => setNotifySettings({ ...notifySettings, notify_bark_url: e.target.value })}
+                                        className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-4 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
+                                        placeholder="例如: https://api.day.app/YourKey"
+                                    />
+                                    <p className={`text-[10px] ${textSecondary} mt-2`}>留空则不使用。推送内容将自动追加到 URL 后方。</p>
+                                </div>
+
+                                <div>
+                                    <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>自定义 Webhook</label>
+                                    <div className="flex space-x-2 mb-2">
+                                        <select
+                                            value={notifySettings.notify_webhook_method}
+                                            onChange={(e) => setNotifySettings({ ...notifySettings, notify_webhook_method: e.target.value })}
+                                            className={`w-24 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-2 text-sm ${textPrimary} outline-none focus:border-blue-500`}
+                                        >
+                                            <option value="GET">GET</option>
+                                            <option value="POST">POST</option>
+                                        </select>
+                                        <input
+                                            type="text"
+                                            value={notifySettings.notify_webhook_url}
+                                            onChange={(e) => setNotifySettings({ ...notifySettings, notify_webhook_url: e.target.value })}
+                                            className={`flex-1 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-4 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
+                                            placeholder="https://example.com/api/notify"
+                                        />
+                                    </div>
+                                    <p className={`text-[10px] ${textSecondary}`}>GET 方式将通过 Query 参数提交 title 和 message；POST 方式将发送 JSON Body。</p>
+                                </div>
+                            </div>
+
+                            <div className="pt-4 flex justify-end">
+                                <button
+                                    onClick={handleSaveNotify}
+                                    disabled={saving}
+                                    className="px-10 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-bold text-sm disabled:opacity-50 shadow-lg shadow-blue-600/20"
+                                >
+                                    {saving ? '保存中...' : '保存通知设置'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
             case 'network':
                 return (
                     <div className="space-y-6">
@@ -208,6 +315,7 @@ const SettingsPage = () => {
                     <nav className="flex lg:flex-col space-x-1 lg:space-x-0 lg:space-y-1 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0">
                         {[
                             { id: 'general', name: '通用', icon: '⚙️' },
+                            { id: 'notifications', name: '通知', icon: '🔔' },
                             { id: 'network', name: '网络', icon: '🌐' },
                             { id: 'about', name: '关于', icon: 'ℹ️' }
                         ].map(item => (
