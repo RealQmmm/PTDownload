@@ -21,18 +21,18 @@ class TaskService {
     }
 
     createTask(task) {
-        const { name, cron, rules, enabled = 1 } = task;
+        const { name, type = 'rss', cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled = 1 } = task;
         const info = this._getDB().prepare(
-            'INSERT INTO tasks (name, cron, rules, enabled) VALUES (?, ?, ?, ?)'
-        ).run(name, cron, rules, enabled);
+            'INSERT INTO tasks (name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled);
         return info.lastInsertRowid;
     }
 
     updateTask(id, task) {
-        const { name, cron, rules, enabled } = task;
+        const { name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled } = task;
         return this._getDB().prepare(
-            'UPDATE tasks SET name = ?, cron = ?, rules = ?, enabled = ? WHERE id = ?'
-        ).run(name, cron, rules, enabled, id);
+            'UPDATE tasks SET name = ?, type = ?, cron = ?, site_id = ?, rss_url = ?, filter_config = ?, client_id = ?, save_path = ?, category = ?, enabled = ? WHERE id = ?'
+        ).run(name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled, id);
     }
 
     deleteTask(id) {

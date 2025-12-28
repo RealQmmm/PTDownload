@@ -75,4 +75,30 @@ router.patch('/:id/toggle', (req, res) => {
     }
 });
 
+// Get task logs
+router.get('/:id/logs', (req, res) => {
+    try {
+        const db = require('../db').getDB();
+        const logs = db.prepare('SELECT * FROM task_logs WHERE task_id = ? ORDER BY run_time DESC LIMIT 50').all(req.params.id);
+        res.json(logs);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Execute task manually
+router.post('/:id/execute', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        const task = taskService.getTaskById(id);
+        if (!task) return res.status(404).json({ error: 'Task not found' });
+
+        // Execute asynchronously
+        schedulerService.executeTask(task);
+        res.json({ message: 'Task execution started' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

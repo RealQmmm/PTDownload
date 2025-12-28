@@ -14,6 +14,54 @@ class SchedulerService {
                 this.scheduleTask(task);
             }
         });
+
+        // Start daily cleanup job at 3:00 AM
+        this.startCleanupJob();
+    }
+
+    startCleanupJob() {
+        console.log('Starting daily log cleanup job (3 AM)...');
+        schedule.scheduleJob('0 3 * * *', () => {
+            this.cleanOldLogs();
+        });
+    }
+
+    async cleanOldLogs() {
+        console.log('Executing log cleanup...');
+        const { getDB } = require('../db');
+        const db = getDB();
+
+        try {
+            const settings = {};
+            db.prepare('SELECT * FROM settings').all().forEach(s => settings[s.key] = s.value);
+
+            const days = parseInt(settings.log_retention_days) || 7;
+            const maxCount = parseInt(settings.log_max_count) || 100;
+
+            // 1. Delete logs older than X days
+            const dateThreshold = new Date();
+            dateThreshold.setDate(dateThreshold.getDate() - days);
+            const dateStr = dateThreshold.toISOString().split('T')[0];
+
+            const delDate = db.prepare('DELETE FROM task_logs WHERE run_time < ?').run(dateStr);
+            console.log(`[Cleanup] Deleted ${delDate.changes} logs older than ${dateStr}`);
+
+            // 2. Keep only latest X logs per task
+            const tasks = taskService.getAllTasks();
+            let totalKeepDeleted = 0;
+            for (const task of tasks) {
+                const logs = db.prepare('SELECT id FROM task_logs WHERE task_id = ? ORDER BY run_time DESC').all(task.id);
+                if (logs.length > maxCount) {
+                    const toDelete = logs.slice(maxCount).map(l => l.id);
+                    const delCount = db.prepare(`DELETE FROM task_logs WHERE id IN (${toDelete.join(',')})`).run();
+                    totalKeepDeleted += delCount.changes;
+                }
+            }
+            console.log(`[Cleanup] Deleted ${totalKeepDeleted} extra logs to maintain max count per task`);
+
+        } catch (err) {
+            console.error('[Cleanup] Failed to clean logs:', err.message);
+        }
     }
 
     scheduleTask(task) {
@@ -46,12 +94,14 @@ class SchedulerService {
     }
 
     async executeTask(task) {
-        console.log(`[${new Date().toLocaleString()}] Executing task: ${task.name}`);
-        // TODO: Implement actual scraping logic
-        // 1. Get sites
-        // 2. Search for torrents based on rules
-        // 3. Add to download clients
-        console.log(`Task ${task.name} executed (placeholder logic)`);
+        console.log(`[${new Date().toLocaleString()}] Executing task: ${task.name} (Type: ${task.type})`);
+
+        if (task.type === 'rss') {
+            const rssService = require('./rssService');
+            await rssService.executeTask(task);
+        } else {
+            console.log(`Task type ${task.type} not yet implemented`);
+        }
     }
 }
 

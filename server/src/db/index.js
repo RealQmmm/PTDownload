@@ -47,10 +47,32 @@ function createTables() {
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
+      type TEXT DEFAULT 'rss', -- rss, search, etc.
       cron TEXT NOT NULL,
-      rules TEXT,
+      site_id INTEGER,
+      rss_url TEXT,
+      filter_config TEXT, -- JSON: keywords, exclude, size_min, size_max
+      client_id INTEGER,
+      save_path TEXT,
+      category TEXT,
       enabled INTEGER DEFAULT 1,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      last_run DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(site_id) REFERENCES sites(id),
+      FOREIGN KEY(client_id) REFERENCES clients(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS task_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER,
+      item_guid TEXT,
+      item_title TEXT,
+      item_size INTEGER DEFAULT 0,
+      is_finished INTEGER DEFAULT 0,
+      download_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+      finish_time DATETIME,
+      UNIQUE(task_id, item_guid),
+      FOREIGN KEY(task_id) REFERENCES tasks(id)
     );
 
     CREATE TABLE IF NOT EXISTS settings (
@@ -58,11 +80,45 @@ function createTables() {
       value TEXT
     );
 
-    -- Insert default site name
+    CREATE TABLE IF NOT EXISTS daily_stats (
+      date TEXT PRIMARY KEY,
+      downloaded_bytes INTEGER DEFAULT 0,
+      uploaded_bytes INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS task_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER,
+      run_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+      status TEXT, -- 'success', 'error'
+      message TEXT,
+      items_found INTEGER DEFAULT 0,
+      items_matched INTEGER DEFAULT 0,
+      FOREIGN KEY(task_id) REFERENCES tasks(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS stats_checkpoint (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      last_total_downloaded INTEGER DEFAULT 0,
+      last_total_uploaded INTEGER DEFAULT 0,
+      last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    INSERT OR IGNORE INTO stats_checkpoint (id, last_total_downloaded, last_total_uploaded) VALUES (1, 0, 0);
+
+    -- Insert default settings
     INSERT OR IGNORE INTO settings (key, value) VALUES ('site_name', 'PT Manager');
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('log_retention_days', '7');
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('log_max_count', '100');
   `;
 
   db.exec(schema);
+
+  // Migrations for existing tables
+  try { db.exec('ALTER TABLE task_history ADD COLUMN item_size INTEGER DEFAULT 0'); } catch (e) { }
+  try { db.exec('ALTER TABLE task_history ADD COLUMN is_finished INTEGER DEFAULT 0'); } catch (e) { }
+  try { db.exec('ALTER TABLE task_history ADD COLUMN finish_time DATETIME'); } catch (e) { }
+
   console.log('Database tables initialized');
 }
 

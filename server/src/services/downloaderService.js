@@ -75,6 +75,7 @@ class DownloaderService {
                 });
 
                 const torrents = torrentsRes.data.map(t => ({
+                    hash: t.hash,
                     name: t.name,
                     size: t.size,
                     progress: t.progress,
@@ -124,7 +125,7 @@ class DownloaderService {
                     {
                         method: 'torrent-get',
                         arguments: {
-                            fields: ['name', 'totalSize', 'percentDone', 'status', 'rateDownload', 'rateUpload', 'downloadedEver', 'uploadedEver', 'uploadRatio', 'eta']
+                            fields: ['hashString', 'name', 'totalSize', 'percentDone', 'status', 'rateDownload', 'rateUpload', 'downloadedEver', 'uploadedEver', 'uploadRatio', 'eta']
                         }
                     },
                     {
@@ -150,6 +151,7 @@ class DownloaderService {
                 );
 
                 const torrents = (torrentsRes.data.arguments.torrents || []).map(t => ({
+                    hash: t.hashString,
                     name: t.name,
                     size: t.totalSize,
                     progress: t.percentDone,
@@ -185,9 +187,9 @@ class DownloaderService {
                     clientType: 'Mock',
                     clientName: `${host}:${port}`,
                     torrents: [
-                        { name: '[Mock] Ubuntu 24.04 LTS', size: 4500000000, progress: 1, state: 'seeding', dlspeed: 0, upspeed: 1500000, downloaded: 4500000000, uploaded: 9800000000, ratio: 2.17, eta: -1 },
-                        { name: '[Mock] Avatar 2160p HDR', size: 25600000000, progress: 0.75, state: 'downloading', dlspeed: 12500000, upspeed: 500000, downloaded: 19200000000, uploaded: 2500000000, ratio: 0.13, eta: 512 },
-                        { name: '[Mock] Oppenheimer 1080p', size: 15200000000, progress: 0.32, state: 'downloading', dlspeed: 8700000, upspeed: 200000, downloaded: 4864000000, uploaded: 800000000, ratio: 0.16, eta: 1190 }
+                        { hash: '8f7d9a1c2e3b4f5a6b7c8d9e0f1a2b3c4d5e6f7g', name: '[Mock] Ubuntu 24.04 LTS', size: 4500000000, progress: 1, state: 'seeding', dlspeed: 0, upspeed: 1500000, downloaded: 4500000000, uploaded: 9800000000, ratio: 2.17, eta: -1 },
+                        { hash: '1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t', name: '[Mock] Avatar 2160p HDR', size: 25600000000, progress: 0.75, state: 'downloading', dlspeed: 12500000, upspeed: 500000, downloaded: 19200000000, uploaded: 2500000000, ratio: 0.13, eta: 512 },
+                        { hash: 'z1x2c3v4b5n6m7l8k9j0h1g2f3d4s5a6p7o8i9u0', name: '[Mock] Oppenheimer 1080p', size: 15200000000, progress: 0.32, state: 'downloading', dlspeed: 8700000, upspeed: 200000, downloaded: 4864000000, uploaded: 800000000, ratio: 0.16, eta: 1190 }
                     ],
                     stats: {
                         dlSpeed: 21200000,
@@ -238,10 +240,14 @@ class DownloaderService {
 
                 const cookie = loginRes.headers['set-cookie'];
 
-                // 2. Add Torrent
+                // 2. Add Torrent with options
+                let body = `urls=${encodeURIComponent(torrentUrl)}`;
+                if (options.savePath) body += `&savepath=${encodeURIComponent(options.savePath)}`;
+                if (options.category) body += `&category=${encodeURIComponent(options.category)}`;
+
                 await axios.post(
                     `${baseUrl}/api/v2/torrents/add`,
-                    `urls=${encodeURIComponent(torrentUrl)}`,
+                    body,
                     {
                         headers: {
                             'Content-Type': 'application/x-www-form-urlencoded',
@@ -270,11 +276,14 @@ class DownloaderService {
                 }
 
                 // 2. Add Torrent
+                const args = { filename: torrentUrl };
+                if (options.savePath) args['download-dir'] = options.savePath;
+
                 await axios.post(
                     rpcUrl,
                     {
                         method: 'torrent-add',
-                        arguments: { filename: torrentUrl }
+                        arguments: args
                     },
                     {
                         headers: {

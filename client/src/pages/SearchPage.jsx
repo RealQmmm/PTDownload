@@ -81,7 +81,9 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     torrentUrl: item.torrentUrl,
-                    clientId: clientId
+                    clientId: clientId,
+                    title: item.name,
+                    size: item.size
                 })
             });
             const data = await res.json();
@@ -147,50 +149,57 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                 <table className="w-full text-left border-collapse">
                                     <thead className={`${bgSecondary} ${textSecondary} sticky top-0 z-10`}>
                                         <tr>
-                                            <th className={`p-4 font-medium border-b ${borderColor}`}>站点</th>
-                                            <th className={`p-4 font-medium border-b ${borderColor} w-1/2`}>标题</th>
-                                            <th className={`p-4 font-medium border-b ${borderColor}`}>大小</th>
-                                            <th className={`p-4 font-medium border-b ${borderColor} text-center`}>做种</th>
-                                            <th className={`p-4 font-medium border-b ${borderColor} text-center`}>下载</th>
-                                            <th className={`p-4 font-medium border-b ${borderColor}`}>发布时间</th>
-                                            <th className={`p-4 font-medium border-b ${borderColor}`}>操作</th>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-[11px] uppercase tracking-wider`}>站点</th>
+                                            <th className={`p-4 font-bold border-b ${borderColor}`}>资源标题</th>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-right`}>大小</th>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-right`}>做种/下载</th>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-center`}>发布时间</th>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-right pr-6`}>操作</th>
                                         </tr>
                                     </thead>
-                                    <tbody className={`divide-y ${darkMode ? 'divide-gray-700' : 'divide-gray-200'}`}>
+                                    <tbody className={`divide-y ${darkMode ? 'divide-gray-700/50' : 'divide-gray-100'}`}>
                                         {results.map((item, index) => (
-                                            <tr key={index} className={`${darkMode ? 'hover:bg-gray-700/50' : 'hover:bg-gray-50'} transition-colors`}>
+                                            <tr key={index} className={`${darkMode ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50/50'} transition-colors group`}>
                                                 <td className="p-4">
-                                                    <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-2 py-1 rounded text-xs font-bold`}>
+                                                    <span className={`${darkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100'} border px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight`}>
                                                         {item.siteName}
                                                     </span>
                                                 </td>
-                                                <td className="p-4">
-                                                    <div className="flex flex-col">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} hover:text-blue-400 font-medium line-clamp-1`}>
+                                                <td className="p-4 py-5 max-w-md xl:max-w-xl">
+                                                    <div className="flex flex-col space-y-1.5">
+                                                        <div className="flex items-start gap-2">
+                                                            <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} group-hover:text-blue-500 font-bold text-sm leading-snug line-clamp-2 transition-colors`} title={item.name}>
                                                                 {item.name}
                                                             </a>
-                                                            <div className="flex gap-1 flex-shrink-0">
-                                                                {item.isHot && <span className="px-1.5 py-0.5 text-xs rounded bg-orange-500/20 text-orange-400 font-medium">🔥热门</span>}
-                                                                {item.isNew && <span className="px-1.5 py-0.5 text-xs rounded bg-green-500/20 text-green-400 font-medium">✨新</span>}
-                                                                {item.isFree && <span className="px-1.5 py-0.5 text-xs rounded bg-blue-500/20 text-blue-400 font-medium">🎁{item.freeType || '免费'}</span>}
-                                                            </div>
                                                         </div>
-                                                        <div className="flex items-center gap-2 mt-1">
-                                                            {item.subtitle && <span className={`${textSecondary} text-xs line-clamp-1`}>{item.subtitle}</span>}
-                                                            {item.freeUntil && <span className="text-xs text-yellow-500 flex-shrink-0">⏱️剩余 {item.freeUntil}</span>}
+                                                        <div className="flex items-center gap-3 flex-wrap">
+                                                            {item.subtitle && <span className={`${textSecondary} text-xs line-clamp-1 opacity-80`} title={item.subtitle}>{item.subtitle}</span>}
+                                                            <div className="flex gap-1.5 flex-shrink-0">
+                                                                {item.isHot && <span className="px-1.5 py-0.5 text-[10px] rounded bg-orange-500/10 text-orange-500 font-bold">🔥热门</span>}
+                                                                {item.isNew && <span className="px-1.5 py-0.5 text-[10px] rounded bg-green-500/10 text-green-500 font-bold">✨新</span>}
+                                                                {item.isFree && <span className="px-1.5 py-0.5 text-[10px] rounded bg-blue-500/10 text-blue-500 font-bold">🎁{item.freeType || '免费'}</span>}
+                                                                {item.freeUntil && <span className="px-1.5 py-0.5 text-[10px] rounded bg-amber-500/10 text-amber-500 font-bold">⏱️{item.freeUntil}</span>}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className={`p-4 ${textSecondary} whitespace-nowrap`}>{item.size}</td>
-                                                <td className="p-4 text-green-400 font-bold text-center">{item.seeders}</td>
-                                                <td className="p-4 text-red-400 text-center">{item.leechers}</td>
-                                                <td className={`p-4 ${textSecondary} text-sm whitespace-nowrap`}>{item.date}</td>
-                                                <td className="p-4">
+                                                <td className={`p-4 text-right align-middle`}>
+                                                    <span className={`text-xs font-mono font-bold ${textPrimary}`}>{item.size}</span>
+                                                </td>
+                                                <td className="p-4 text-right align-middle">
+                                                    <div className="flex flex-col items-end font-mono">
+                                                        <span className="text-green-500 text-xs font-bold">↑ {item.seeders}</span>
+                                                        <span className="text-red-400 text-[10px]">↓ {item.leechers}</span>
+                                                    </div>
+                                                </td>
+                                                <td className={`p-4 ${textSecondary} text-[11px] font-mono text-center align-middle whitespace-nowrap`}>
+                                                    {item.date}
+                                                </td>
+                                                <td className="p-4 text-right pr-6 align-middle">
                                                     <button
                                                         onClick={() => handleDownloadClick(item)}
                                                         disabled={downloading === item.link || !item.torrentUrl}
-                                                        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${!item.torrentUrl ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : downloading === item.link ? 'bg-yellow-600/50 text-yellow-200 cursor-wait' : 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/40'}`}
+                                                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${!item.torrentUrl ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : downloading === item.link ? 'bg-amber-600/50 text-amber-100 cursor-wait' : 'bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-600/20'}`}
                                                     >
                                                         {downloading === item.link ? '添加中...' : '下载'}
                                                     </button>

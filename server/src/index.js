@@ -16,6 +16,14 @@ initDB();
 const schedulerService = require('./services/schedulerService');
 schedulerService.init();
 
+// Initialize Stats Collection
+const statsService = require('./services/statsService');
+// Update stats immediately on start and then every 5 minutes
+statsService.updateDailyStats();
+setInterval(() => {
+  statsService.updateDailyStats();
+}, 5 * 60 * 1000);
+
 // Basic Route
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
@@ -26,6 +34,7 @@ app.use('/api/sites', require('./routes/sites'));
 app.use('/api/clients', require('./routes/clients'));
 app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/search', require('./routes/search'));
+app.use('/api/rss-sources', require('./routes/rssSources'));
 app.use('/api/download', require('./routes/download'));
 app.use('/api/stats', require('./routes/stats'));
 app.use('/api/settings', require('./routes/settings'));

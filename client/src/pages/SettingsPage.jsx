@@ -5,12 +5,30 @@ const SettingsPage = () => {
     const { darkMode, toggleDarkMode, siteName, setSiteName } = useTheme();
     const [subTab, setSubTab] = useState('general');
     const [tempSiteName, setTempSiteName] = useState(siteName);
+    const [logSettings, setLogSettings] = useState({
+        log_retention_days: '7',
+        log_max_count: '100'
+    });
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
 
     useEffect(() => {
         setTempSiteName(siteName);
+        fetchSettings();
     }, [siteName]);
+
+    const fetchSettings = async () => {
+        try {
+            const res = await fetch('/api/settings');
+            const data = await res.json();
+            setLogSettings({
+                log_retention_days: data.log_retention_days || '7',
+                log_max_count: data.log_max_count || '100'
+            });
+        } catch (err) {
+            console.error('Fetch settings failed:', err);
+        }
+    };
 
     // Theme-aware classes
     const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
@@ -26,7 +44,10 @@ const SettingsPage = () => {
             const res = await fetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ site_name: tempSiteName })
+                body: JSON.stringify({
+                    site_name: tempSiteName,
+                    ...logSettings
+                })
             });
             if (res.ok) {
                 setSiteName(tempSiteName);
@@ -46,65 +67,97 @@ const SettingsPage = () => {
         switch (subTab) {
             case 'general':
                 return (
-                    <div className="space-y-6">
+                    <div className="space-y-4">
                         {message && (
-                            <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                            <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                                 {message.text}
                             </div>
                         )}
-                        <div>
-                            <h3 className={`text-lg font-medium ${textPrimary} mb-4`}>站点设置</h3>
-                            <div className={`${bgSecondary} p-4 rounded-lg border ${borderColor} space-y-4`}>
+
+                        <div className={`${bgSecondary} p-4 rounded-xl border ${borderColor} space-y-6`}>
+                            {/* Section 1: Site Info */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className={`block text-sm ${textSecondary} mb-1`}>站点名称</label>
+                                    <label className={`block text-xs font-bold ${textSecondary} mb-2 uppercase tracking-wider`}>站点名称</label>
                                     <div className="flex space-x-2">
                                         <input
                                             type="text"
                                             value={tempSiteName}
                                             onChange={(e) => setTempSiteName(e.target.value)}
-                                            className={`flex-1 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded px-3 py-2 ${textPrimary} focus:border-blue-500 outline-none`}
+                                            className={`flex-1 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1.5 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
                                             placeholder="PT Manager"
                                         />
-                                        <button
-                                            onClick={handleSaveGeneral}
-                                            disabled={saving}
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors disabled:opacity-50"
-                                        >
-                                            {saving ? '保存中...' : '保存'}
-                                        </button>
                                     </div>
-                                    <p className={`text-xs ${textSecondary} mt-1`}>显示在侧边栏顶部的名称</p>
+                                    <p className={`text-[10px] ${textSecondary} mt-1`}>侧边栏顶部显示的名称</p>
+                                </div>
+                                <div>
+                                    <label className={`block text-xs font-bold ${textSecondary} mb-2 uppercase tracking-wider`}>界面语言</label>
+                                    <select className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1.5 text-sm ${textPrimary} outline-none focus:border-blue-500`}>
+                                        <option>简体中文</option>
+                                        <option>English</option>
+                                    </select>
                                 </div>
                             </div>
-                        </div>
 
-                        <div>
-                            <h3 className={`text-lg font-medium ${textPrimary} mb-4`}>界面设置</h3>
-                            <div className={`flex items-center justify-between p-4 ${bgSecondary} rounded-lg border ${borderColor}`}>
+                            <hr className={borderColor} />
+
+                            {/* Section 2: Log Management */}
+                            <div>
+                                <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>日志清理逻辑</label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="flex-1">
+                                            <p className={`text-sm ${textPrimary} font-medium`}>保留天数</p>
+                                            <p className={`text-[10px] ${textSecondary}`}>自动清理超过此天数的日志</p>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            value={logSettings.log_retention_days}
+                                            onChange={(e) => setLogSettings({ ...logSettings, log_retention_days: e.target.value })}
+                                            className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
+                                        />
+                                    </div>
+                                    <div className="flex items-center space-x-3">
+                                        <div className="flex-1">
+                                            <p className={`text-sm ${textPrimary} font-medium`}>最大条数/任务</p>
+                                            <p className={`text-[10px] ${textSecondary}`}>每个任务保留的最新的日志数</p>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            value={logSettings.log_max_count}
+                                            onChange={(e) => setLogSettings({ ...logSettings, log_max_count: e.target.value })}
+                                            className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr className={borderColor} />
+
+                            {/* Section 3: Interface */}
+                            <div className="flex items-center justify-between">
                                 <div>
-                                    <h4 className={`${textPrimary} font-medium`}>深色模式</h4>
-                                    <p className={`text-sm ${textSecondary}`}>
-                                        {darkMode ? '当前使用深色主题' : '当前使用浅色主题'}
-                                    </p>
+                                    <p className={`text-sm font-medium ${textPrimary}`}>深色模式</p>
+                                    <p className={`text-[10px] ${textSecondary}`}>切换系统的视觉主题</p>
                                 </div>
                                 <button
                                     onClick={toggleDarkMode}
-                                    className={`relative inline-block w-14 h-7 transition duration-200 ease-in-out rounded-full cursor-pointer ${darkMode ? 'bg-blue-600' : 'bg-gray-300'
-                                        }`}
+                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${darkMode ? 'bg-blue-600' : 'bg-gray-300'}`}
                                 >
-                                    <span
-                                        className={`absolute top-0.5 inline-block w-6 h-6 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${darkMode ? 'left-7' : 'left-0.5'
-                                            }`}
-                                    />
+                                    <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${darkMode ? 'left-6.5' : 'left-0.5'}`} />
                                 </button>
                             </div>
-                        </div>
-                        <div>
-                            <h3 className={`text-lg font-medium ${textPrimary} mb-4`}>语言</h3>
-                            <select className={`w-full ${bgSecondary} border ${borderColor} rounded-lg px-4 py-2 ${textPrimary} outline-none focus:border-blue-500`}>
-                                <option>简体中文</option>
-                                <option>English</option>
-                            </select>
+
+                            {/* Save Button Row */}
+                            <div className="pt-2 flex justify-end">
+                                <button
+                                    onClick={handleSaveGeneral}
+                                    disabled={saving}
+                                    className="px-8 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-bold text-sm disabled:opacity-50 shadow-lg shadow-blue-600/20"
+                                >
+                                    {saving ? '保存中...' : '提交所有设置'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 );

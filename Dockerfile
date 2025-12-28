@@ -13,10 +13,14 @@ FROM node:22-slim
 
 WORKDIR /app
 
-# Install build dependencies for better-sqlite3
+# Install build dependencies and tzdata
 RUN apt-get update && \
-    apt-get install -y python3 make g++ && \
+    apt-get install -y python3 make g++ tzdata && \
+    ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    dpkg-reconfigure -f noninteractive tzdata && \
     rm -rf /var/lib/apt/lists/*
+
+ENV TZ=Asia/Shanghai
 
 COPY server/package*.json ./
 RUN npm install --production
