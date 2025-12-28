@@ -1,6 +1,11 @@
 const axios = require('axios');
 
 class DownloaderService {
+    constructor() {
+        this.cache = new Map();
+        this.CACHE_TTL = 2000;
+    }
+
     async testConnection(client) {
         const { type, host, port, username, password } = client;
         const baseUrl = `http://${host}:${port}`;
@@ -44,10 +49,21 @@ class DownloaderService {
     }
 
     // Get torrents list and statistics from client
-    async getTorrents(client) {
+    async getTorrents(client, forceRefresh = false) {
+        const cacheKey = `torrents_${client.id}`;
+        const now = Date.now();
+
+        if (!forceRefresh && this.cache.has(cacheKey)) {
+            const cached = this.cache.get(cacheKey);
+            if (now - cached.timestamp < this.CACHE_TTL) {
+                return cached.data;
+            }
+        }
+
         const { type, host, port, username, password } = client;
         const baseUrl = `http://${host}:${port}`;
 
+        let result;
         try {
             if (type === 'qBittorrent') {
                 // 1. Login
@@ -182,7 +198,7 @@ class DownloaderService {
 
             if (type === 'Mock') {
                 // Return mock data for testing
-                return {
+                result = {
                     success: true,
                     clientType: 'Mock',
                     clientName: `${host}:${port}`,
@@ -198,14 +214,19 @@ class DownloaderService {
                         totalUploaded: 312000000000
                     }
                 };
+            } else {
+                result = { success: false, message: '不支持的客户端类型' };
             }
-
-            return { success: false, message: '不支持的客户端类型' };
 
         } catch (err) {
             console.error(`Get torrents failed for ${type}:`, err.message);
-            return { success: false, message: `获取失败: ${err.message}`, torrents: [], stats: {} };
+            result = { success: false, message: `获取失败: ${err.message}`, torrents: [], stats: {} };
         }
+
+        if (result && result.success) {
+            this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
+        }
+        return result;
     }
 
     _transmissionStateToString(status) {

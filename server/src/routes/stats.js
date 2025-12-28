@@ -143,4 +143,79 @@ router.get('/today-downloads', (req, res) => {
     }
 });
 
+router.get('/dashboard', async (req, res) => {
+    try {
+        // 1. Trigger stats update
+        await statsService.updateDailyStats();
+
+        // 2. Fetch all required data in parallel
+        const clients = clientService.getAllClients();
+        const db = require('../db').getDB();
+        const now = new Date();
+        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+        // Fetch clients stats
+        const clientStats = await Promise.all(
+            clients.map(async (client) => {
+                const result = await downloaderService.getTorrents(client);
+                if (result.success) {
+                    return {
+                        clientId: client.id,
+                        clientName: client.name,
+                        clientType: result.clientType,
+                        stats: result.stats,
+                        torrents: result.torrents,
+                        activeTorrents: result.torrents.filter(t =>
+                            ['downloading', 'uploading', 'stalledDL', 'stalledUP', 'pausedDL'].includes(t.state)
+                        ).length,
+                        totalTorrents: result.torrents.length
+                    };
+                }
+                return null;
+            })
+        );
+        const validClientStats = clientStats.filter(s => s !== null);
+
+        // Aggregate
+        const aggregatedStats = validClientStats.reduce(
+            (acc, clientStat) => ({
+                totalDownloadSpeed: acc.totalDownloadSpeed + (clientStat.stats.dlSpeed || 0),
+                totalUploadSpeed: acc.totalUploadSpeed + (clientStat.stats.upSpeed || 0),
+                activeTorrents: acc.activeTorrents + clientStat.activeTorrents,
+                totalTorrents: acc.totalTorrents + clientStat.totalTorrents
+            }),
+            { totalDownloadSpeed: 0, totalUploadSpeed: 0, activeTorrents: 0, totalTorrents: 0 }
+        );
+
+        // Today's traffic & completed size
+        const todayTraffic = db.prepare('SELECT * FROM daily_stats WHERE date = ?').get(todayStr) || { downloaded_bytes: 0, uploaded_bytes: 0 };
+        const completedToday = db.prepare(`SELECT SUM(item_size) as total_size FROM task_history WHERE is_finished = 1 AND date(finish_time, 'localtime') = date(?)`).get(todayStr);
+        const totalCompletedSize = completedToday ? (completedToday.total_size || 0) : 0;
+        const displayedDownload = Math.max(todayTraffic.downloaded_bytes, totalCompletedSize);
+
+        // History
+        const history = statsService.getHistory(7);
+
+        // Detailed Today's Downloads
+        const downloads = db.prepare(`
+            SELECT th.*, IFNULL(t.name, '手动下载') as task_name 
+            FROM task_history th
+            LEFT JOIN tasks t ON th.task_id = t.id
+            WHERE th.is_finished = 1 AND date(th.finish_time, 'localtime') = date(?)
+            ORDER BY th.finish_time DESC
+        `).all(todayStr);
+
+        res.json({
+            success: true,
+            stats: { ...aggregatedStats, totalDownloaded: displayedDownload, totalUploaded: todayTraffic.uploaded_bytes },
+            clients: validClientStats,
+            history,
+            todayDownloads: downloads
+        });
+    } catch (err) {
+        console.error('Dashboard API error:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 module.exports = router;

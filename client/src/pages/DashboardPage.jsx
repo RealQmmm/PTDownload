@@ -82,24 +82,14 @@ const DashboardPage = ({ setActiveTab }) => {
 
     const fetchTorrentData = async () => {
         try {
-            const [statsRes, histRes, todayRes] = await Promise.all([
-                fetch('/api/stats'),
-                fetch('/api/stats/history?days=7'),
-                fetch('/api/stats/today-downloads')
-            ]);
+            const res = await fetch('/api/stats/dashboard');
+            if (!res.ok) return;
 
-            if (!statsRes.ok || !histRes.ok || !todayRes.ok) return;
-
-            const [sStats, hStats, tdStats] = await Promise.all([
-                statsRes.json().catch(() => ({})),
-                histRes.json().catch(() => ({ success: false })),
-                todayRes.json().catch(() => ({ success: false }))
-            ]);
-
-            if (sStats && sStats.success) {
+            const data = await res.json();
+            if (data && data.success) {
                 const allTorrents = [];
-                if (Array.isArray(sStats.clients)) {
-                    sStats.clients.forEach(client => {
+                if (Array.isArray(data.clients)) {
+                    data.clients.forEach(client => {
                         if (client && Array.isArray(client.torrents)) {
                             client.torrents.forEach(torrent => {
                                 allTorrents.push({
@@ -116,22 +106,15 @@ const DashboardPage = ({ setActiveTab }) => {
                 const calculatedUpSpeed = allTorrents.reduce((acc, t) => acc + (Number(t.upspeed) || 0), 0);
 
                 setDownloadStats({
-                    ...(sStats.stats || {}),
+                    ...(data.stats || {}),
                     totalDownloadSpeed: calculatedDlSpeed,
                     totalUploadSpeed: calculatedUpSpeed
                 });
 
                 setAllTorrents(allTorrents);
+                setHistoryData(Array.isArray(data.history) ? data.history : []);
+                setTodayDownloads(Array.isArray(data.todayDownloads) ? data.todayDownloads : []);
             }
-
-            if (hStats && hStats.success) {
-                setHistoryData(Array.isArray(hStats.history) ? hStats.history : []);
-            }
-
-            if (tdStats && tdStats.success) {
-                setTodayDownloads(Array.isArray(tdStats.downloads) ? tdStats.downloads : []);
-            }
-
         } catch (err) {
             console.error('Failed to fetch dashboard stats:', err);
         } finally {
@@ -141,16 +124,18 @@ const DashboardPage = ({ setActiveTab }) => {
 
     useEffect(() => {
         fetchTorrentData();
-        const interval = setInterval(fetchTorrentData, 3000);
+        const interval = setInterval(fetchTorrentData, 5000); // 延长到5秒减少压力
         return () => clearInterval(interval);
     }, []);
 
-    if (loading) {
+    // Only show loading on initial fetch when we have no data
+    if (loading && allTorrents.length === 0 && historyData.length === 0) {
         return (
             <div className="flex items-center justify-center h-full p-20">
                 <div className={`text-center ${textSecondary}`}>
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                    <p>正在同步云端数据...</p>
+                    <p className="text-sm font-medium">正在获取最新数据...</p>
+                    <p className="text-xs opacity-50 mt-2">首次加载可能需要几秒钟</p>
                 </div>
             </div>
         );
