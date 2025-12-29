@@ -5,7 +5,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const { darkMode } = useTheme();
     const [query, setQuery] = useState(searchState?.query || '');
     const [results, setResults] = useState(searchState?.results || []);
-    const [days, setDays] = useState(searchState?.days || 1);
+    const [page, setPage] = useState(searchState?.page || 1);
     const [loading, setLoading] = useState(false);
     const [searched, setSearched] = useState(searchState?.searched || false);
     const [searchMode, setSearchMode] = useState(searchState?.searchMode || 'keyword'); // 'keyword' or 'recent'
@@ -27,45 +27,31 @@ const SearchPage = ({ searchState, setSearchState }) => {
     // Save state to parent when it changes
     useEffect(() => {
         if (setSearchState) {
-            setSearchState({ query, results, searched, days, searchMode });
+            setSearchState({ query, results, searched, searchMode, page });
         }
-    }, [query, results, searched, days, searchMode]);
+    }, [query, results, searched, searchMode, page]);
 
     const handleSearch = async (e) => {
         if (e) e.preventDefault();
-        if (!query.trim()) return;
 
         setLoading(true);
         setResults([]);
         setSearched(true);
-        setSearchMode('keyword');
+
+        const trimmedQuery = query.trim();
+        const mode = trimmedQuery ? 'keyword' : 'recent';
+        setSearchMode(mode);
 
         try {
-            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+            const url = trimmedQuery
+                ? `/api/search?q=${encodeURIComponent(trimmedQuery)}&page=${page}`
+                : `/api/search?days=1&page=${page}`;
+            const res = await fetch(url);
             const data = await res.json();
             setResults(data);
         } catch (err) {
             console.error('Search failed:', err);
-            alert('搜索失败，请重试');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleRecentSearch = async () => {
-        setLoading(true);
-        setResults([]);
-        setSearched(true);
-        setSearchMode('recent');
-        setQuery(''); // Clear query for recent mode
-
-        try {
-            const res = await fetch(`/api/search?days=${days}`);
-            const data = await res.json();
-            setResults(data);
-        } catch (err) {
-            console.error('Recent search failed:', err);
-            alert('获取近期资源失败');
+            alert(trimmedQuery ? '搜索失败，请重试' : '获取近期资源失败');
         } finally {
             setLoading(false);
         }
@@ -143,45 +129,32 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                 type="text"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
-                                placeholder="输入关键词，例如: Avatar..."
+                                placeholder="输入关键词搜索，或留空查询近期新增..."
                                 className={`w-full border rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-base ${inputBg}`}
                             />
                         </div>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold transition-all disabled:opacity-50 shadow-lg shadow-blue-900/20 whitespace-nowrap"
-                        >
-                            关键词搜索
-                        </button>
-                    </form>
-
-                    <div className={`p-4 rounded-xl border ${borderColor} ${bgSecondary} flex flex-wrap items-center gap-4`}>
                         <div className="flex items-center gap-2">
-                            <span className={`text-sm font-bold ${textSecondary} whitespace-nowrap`}>📅 查看近期新增:</span>
-                            <div className="flex items-center bg-white dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                            <div className={`flex items-center ${bgSecondary} rounded-xl border ${borderColor} px-3 h-full`}>
                                 <input
                                     type="number"
                                     min="1"
-                                    max="30"
-                                    value={days}
-                                    onChange={(e) => setDays(e.target.value)}
-                                    className={`w-16 px-3 py-1.5 text-center text-sm focus:outline-none ${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-gray-900'}`}
+                                    max="50"
+                                    value={page}
+                                    onChange={(e) => setPage(parseInt(e.target.value) || 1)}
+                                    className={`w-8 bg-transparent text-center text-sm font-bold focus:outline-none ${textPrimary}`}
+                                    title="抓取页数"
                                 />
-                                <span className={`px-3 py-1.5 text-xs ${textSecondary} border-l border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50`}>天内</span>
+                                <span className={`text-[10px] ${textSecondary} ml-1 whitespace-nowrap`}>页</span>
                             </div>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold transition-all disabled:opacity-50 shadow-lg shadow-blue-900/20 whitespace-nowrap h-full"
+                            >
+                                搜索
+                            </button>
                         </div>
-                        <button
-                            onClick={handleRecentSearch}
-                            disabled={loading}
-                            className="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-lg font-bold text-sm transition-all disabled:opacity-50 shadow-md shadow-amber-900/20 whitespace-nowrap"
-                        >
-                            ⚡ 立即查找
-                        </button>
-                        <p className={`text-[11px] ${textSecondary} hidden md:block italic`}>
-                            * 不输入关键词，直接获取各站点最近发布的资源
-                        </p>
-                    </div>
+                    </form>
                 </div>
             </div>
 
@@ -313,7 +286,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                         <p className="text-lg">未找到相关资源</p>
                         <p className="text-sm mt-2 text-center px-4">
                             {searchMode === 'recent'
-                                ? `最近 ${days} 天内各大站点似乎没有新资源发布，尝试增加天数再试试。`
+                                ? '最近各大站点似乎没有新资源发布。'
                                 : '试试更换关键词或检查站点配置'}
                         </p>
                     </div>

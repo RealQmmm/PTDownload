@@ -3,7 +3,7 @@ const siteService = require('./siteService');
 const siteParsers = require('../utils/siteParsers');
 
 class SearchService {
-    async search(query, days = null) {
+    async search(query, days = null, page = 1) {
         const sites = siteService.getAllSites();
         const enabledSites = sites.filter(s => s.enabled);
 
@@ -12,54 +12,77 @@ class SearchService {
         }
 
         const isRecentSearch = !query || query.trim() === '';
-        console.log(`Starting ${isRecentSearch ? 'recent' : 'keyword'} search ${!isRecentSearch ? `for "${query}"` : ''} across ${enabledSites.length} sites...`);
+        console.log(`Starting ${isRecentSearch ? 'recent' : 'keyword'} search ${!isRecentSearch ? `for "${query}"` : ''} at page ${page} across ${enabledSites.length} sites...`);
 
         const searchPromises = enabledSites.map(async (site) => {
-            try {
-                if (site.type === 'Mock') {
-                    await new Promise(r => setTimeout(r, 500));
-                    let results = siteParsers.parse('', 'Mock', site.url);
-                    if (!isRecentSearch) {
-                        results = results.filter(r => r.name.toLowerCase().includes(query.toLowerCase()));
+            const maxPages = parseInt(page) || 1;
+            const pageResultsPromises = Array.from({ length: maxPages }, async (_, i) => {
+                const currentPage = i;
+                try {
+                    if (site.type === 'Mock') {
+                        if (currentPage > 0) return []; // Mock only has one page
+                        await new Promise(r => setTimeout(r, 500));
+                        let results = siteParsers.parse('', 'Mock', site.url);
+                        if (!isRecentSearch) {
+                            results = results.filter(r => r.name.toLowerCase().includes(query.toLowerCase()));
+                        }
+                        return results;
                     }
-                    return results.map(r => ({ ...r, siteName: site.name }));
-                }
 
-                // Construct search URL
-                const searchUrl = new URL('/torrents.php', site.url);
-                if (!isRecentSearch) {
-                    searchUrl.searchParams.append('search', query);
-                }
-                searchUrl.searchParams.append('notsticky', '1');
+                    // Construct search URL
+                    const searchUrl = new URL('/torrents.php', site.url);
+                    if (!isRecentSearch) {
+                        searchUrl.searchParams.append('search', query);
+                    }
 
-                const headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Cookie': site.cookies || ''
-                };
+                    // Add page parameter (most NexusPHP sites use 0-indexed 'page')
+                    if (currentPage > 0) {
+                        searchUrl.searchParams.append('page', currentPage);
+                    }
 
-                const response = await axios.get(searchUrl.toString(), {
-                    headers,
-                    timeout: 10000
-                });
+                    searchUrl.searchParams.append('notsticky', '1');
 
-                let results = siteParsers.parse(response.data, site.type, site.url);
+                    const headers = {
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                        'Cookie': site.cookies || ''
+                    };
 
-                // Filter by days if specified
-                if (days !== null) {
-                    const cutoff = new Date();
-                    cutoff.setDate(cutoff.getDate() - parseInt(days));
-                    results = results.filter(item => {
-                        const itemDate = new Date(item.date);
-                        return !isNaN(itemDate.getTime()) && itemDate >= cutoff;
+                    const response = await axios.get(searchUrl.toString(), {
+                        headers,
+                        timeout: 10000
                     });
+
+                    let results = siteParsers.parse(response.data, site.type, site.url);
+
+                    // Filter by days if specified
+                    if (days !== null) {
+                        const cutoff = new Date();
+                        cutoff.setDate(cutoff.getDate() - parseInt(days));
+                        results = results.filter(item => {
+                            const itemDate = new Date(item.date);
+                            return !isNaN(itemDate.getTime()) && itemDate >= cutoff;
+                        });
+                    }
+                    return results;
+                } catch (err) {
+                    console.error(`Search failed for ${site.name} page ${currentPage + 1}:`, err.message);
+                    return [];
                 }
+            });
 
-                return results.map(r => ({ ...r, siteName: site.name }));
+            const allPagesResults = await Promise.all(pageResultsPromises);
+            const flatResults = allPagesResults.flat();
 
-            } catch (err) {
-                console.error(`Search failed for ${site.name}:`, err.message);
-                return [];
-            }
+            // Deduplicate by ID or Link
+            const seen = new Set();
+            const uniqueResults = flatResults.filter(item => {
+                const key = item.id || item.link;
+                if (!key || seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+
+            return uniqueResults.map(r => ({ ...r, siteName: site.name }));
         });
 
         const resultsArrays = await Promise.all(searchPromises);
