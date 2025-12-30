@@ -9,6 +9,7 @@ const SettingsPage = () => {
         log_retention_days: '7',
         log_max_count: '100'
     });
+    const [searchLimit, setSearchLimit] = useState('1');
     const [notifySettings, setNotifySettings] = useState({
         notify_enabled: false,
         notify_bark_url: '',
@@ -31,6 +32,7 @@ const SettingsPage = () => {
                 log_retention_days: data.log_retention_days || '7',
                 log_max_count: data.log_max_count || '100'
             });
+            setSearchLimit(data.search_page_limit || '1');
             setNotifySettings({
                 notify_enabled: data.notify_enabled === 'true',
                 notify_bark_url: data.notify_bark_url || '',
@@ -60,6 +62,7 @@ const SettingsPage = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     site_name: tempSiteName,
+                    search_page_limit: searchLimit,
                     ...logSettings
                 })
             });
@@ -209,6 +212,21 @@ const SettingsPage = () => {
                                     </select>
                                 </div>
                             </div>
+                            <div>
+                                <label className={`block text-xs font-bold ${textSecondary} mb-2 uppercase tracking-wider`}>搜索抓取页数</label>
+                                <div className="flex space-x-2">
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="50"
+                                        value={searchLimit}
+                                        onChange={(e) => setSearchLimit(e.target.value)}
+                                        className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1.5 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
+                                        title="每次搜索时抓取的最大页数"
+                                    />
+                                </div>
+                                <p className={`text-[10px] ${textSecondary} mt-1`}>每次搜索请求抓取的页面数量 (1-50)</p>
+                            </div>
 
                             <hr className={borderColor} />
 
@@ -282,7 +300,7 @@ const SettingsPage = () => {
                                 </button>
                             </div>
                         </div>
-                    </div>
+                    </div >
                 );
             case 'notifications':
                 return (

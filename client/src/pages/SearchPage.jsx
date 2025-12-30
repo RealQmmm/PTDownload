@@ -5,7 +5,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const { darkMode } = useTheme();
     const [query, setQuery] = useState(searchState?.query || '');
     const [results, setResults] = useState(searchState?.results || []);
-    const [page, setPage] = useState(searchState?.page || 1);
+
     const [loading, setLoading] = useState(false);
     const [searched, setSearched] = useState(searchState?.searched || false);
     const [searchMode, setSearchMode] = useState(searchState?.searchMode || 'keyword'); // 'keyword' or 'recent'
@@ -27,9 +27,9 @@ const SearchPage = ({ searchState, setSearchState }) => {
     // Save state to parent when it changes
     useEffect(() => {
         if (setSearchState) {
-            setSearchState({ query, results, searched, searchMode, page });
+            setSearchState({ query, results, searched, searchMode });
         }
-    }, [query, results, searched, searchMode, page]);
+    }, [query, results, searched, searchMode]);
 
     const handleSearch = async (e) => {
         if (e) e.preventDefault();
@@ -44,8 +44,8 @@ const SearchPage = ({ searchState, setSearchState }) => {
 
         try {
             const url = trimmedQuery
-                ? `/api/search?q=${encodeURIComponent(trimmedQuery)}&page=${page}`
-                : `/api/search?days=1&page=${page}`;
+                ? `/api/search?q=${encodeURIComponent(trimmedQuery)}`
+                : `/api/search?days=1`;
             const res = await fetch(url);
             const data = await res.json();
             setResults(data);
@@ -134,18 +134,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                             />
                         </div>
                         <div className="flex items-center gap-2">
-                            <div className={`flex items-center ${bgSecondary} rounded-xl border ${borderColor} px-3 h-full`}>
-                                <input
-                                    type="number"
-                                    min="1"
-                                    max="50"
-                                    value={page}
-                                    onChange={(e) => setPage(parseInt(e.target.value) || 1)}
-                                    className={`w-8 bg-transparent text-center text-sm font-bold focus:outline-none ${textPrimary}`}
-                                    title="抓取页数"
-                                />
-                                <span className={`text-[10px] ${textSecondary} ml-1 whitespace-nowrap`}>页</span>
-                            </div>
+
                             <button
                                 type="submit"
                                 disabled={loading}

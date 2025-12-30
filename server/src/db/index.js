@@ -119,6 +119,7 @@ function createTables() {
     INSERT OR IGNORE INTO settings (key, value) VALUES ('site_name', 'PT Manager');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('log_retention_days', '7');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('log_max_count', '100');
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('search_page_limit', '1');
   `;
 
   db.exec(schema);

@@ -2,8 +2,10 @@ const axios = require('axios');
 const siteService = require('./siteService');
 const siteParsers = require('../utils/siteParsers');
 
+const { getDB } = require('../db');
+
 class SearchService {
-    async search(query, days = null, page = 1) {
+    async search(query, days = null, page = null) {
         const sites = siteService.getAllSites();
         const enabledSites = sites.filter(s => s.enabled);
 
@@ -11,11 +13,29 @@ class SearchService {
             return [];
         }
 
+        // Determine page limit
+        let maxPages = 1;
+        if (page) {
+            maxPages = parseInt(page);
+        } else {
+            try {
+                const db = getDB();
+                const row = db.prepare("SELECT value FROM settings WHERE key = 'search_page_limit'").get();
+                if (row && row.value) {
+                    maxPages = parseInt(row.value);
+                }
+            } catch (err) {
+                console.warn('Failed to read search_page_limit setting, defaulting to 1', err);
+            }
+        }
+
+        // Cap maxPages to avoid abuse/errors
+        maxPages = Math.max(1, Math.min(maxPages, 50));
+
         const isRecentSearch = !query || query.trim() === '';
-        console.log(`Starting ${isRecentSearch ? 'recent' : 'keyword'} search ${!isRecentSearch ? `for "${query}"` : ''} at page ${page} across ${enabledSites.length} sites...`);
+        console.log(`Starting ${isRecentSearch ? 'recent' : 'keyword'} search ${!isRecentSearch ? `for "${query}"` : ''} with page limit ${maxPages} across ${enabledSites.length} sites...`);
 
         const searchPromises = enabledSites.map(async (site) => {
-            const maxPages = parseInt(page) || 1;
             const pageResultsPromises = Array.from({ length: maxPages }, async (_, i) => {
                 const currentPage = i;
                 try {
