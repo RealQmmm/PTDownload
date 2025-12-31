@@ -206,8 +206,9 @@ class StatsService {
             // Helper to normalize names for better matching
             const normalize = (name) => (name || '').toLowerCase()
                 .replace(/[\s\._\-\[\]\(\)\{\}\+]/g, '')
-                .replace(/第[一二三四五六七八九十\d]+[季集期]/g, '');
+                .replace(/第[一二三四五六七八九十\d]+[季集期]/g, ''); // Remove common Chinese episode/season tags which clients might strip
 
+            // 3. Check each unfinished item
             for (const item of unfinished) {
                 const itemTitleNorm = normalize(item.item_title);
 
@@ -243,7 +244,7 @@ class StatsService {
                         item.item_size = torrent.size;
                     }
 
-                    // Check finished status
+                    // Check if finished (progress is 1 or 100%)
                     const isFinished = torrent.progress >= 1 ||
                         ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished'].includes(torrent.state);
 
