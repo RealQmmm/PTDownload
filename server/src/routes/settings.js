@@ -143,4 +143,20 @@ router.post('/test-notify', async (req, res) => {
     }
 });
 
+// Maintenance: Sync historical data with downloader
+router.post('/maintenance/sync-history', async (req, res) => {
+    try {
+        const statsService = require('../services/statsService');
+        const result = await statsService.syncHistoryWithDownloader();
+        if (result.success) {
+            res.json({ success: true, message: `同步完成，更新了 ${result.updatedCount} 条记录` });
+        } else {
+            res.status(400).json({ error: result.message });
+        }
+    } catch (err) {
+        console.error('Maintenance sync failed:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

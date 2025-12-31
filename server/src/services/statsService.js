@@ -121,32 +121,55 @@ class StatsService {
 
                 // Try to find a matching torrent
                 const torrent = allTorrents.find(t => {
+                    // Match by hash if available
+                    if (item.item_hash && t.hash) {
+                        return t.hash.toLowerCase() === item.item_hash.toLowerCase();
+                    }
+
+                    // Fallback to name/size matching to "link" the hash
                     if (!t.name) return false;
                     const tNameNorm = normalize(t.name);
-                    // Exact normalized match or one contains the other (carefully)
-                    return tNameNorm === itemTitleNorm || tNameNorm.includes(itemTitleNorm) || itemTitleNorm.includes(tNameNorm);
+
+                    // Match by normalized name
+                    const nameMatch = tNameNorm === itemTitleNorm || tNameNorm.includes(itemTitleNorm) || itemTitleNorm.includes(tNameNorm);
+
+                    // If name matches, also verify size (within 1% threshold) to be sure it's the same torrent
+                    if (nameMatch && item.item_size > 0 && t.size > 0) {
+                        const sizeDiff = Math.abs(t.size - item.item_size);
+                        return sizeDiff < (item.item_size * 0.01);
+                    }
+
+                    return nameMatch;
                 });
 
                 if (torrent) {
-                    console.log(`[Stats] Found match for "${item.item_title}" -> "${torrent.name}" (State: ${torrent.state}, Progress: ${torrent.progress})`);
-                    // Update size if it was 0 or incorrect
-                    if ((!item.item_size || item.item_size === 0) && torrent.size > 0) {
-                        db.prepare('UPDATE task_history SET item_size = ? WHERE id = ?').run(torrent.size, item.id);
-                        item.item_size = torrent.size; // Update local object for this loop if needed
+                    // console.log(`[Stats] Found match for "${item.item_title}" -> "${torrent.name}" (State: ${torrent.state}, Progress: ${torrent.progress})`);
+
+                    // 1. Logic to "link" the hash if we didn't have it
+                    if (!item.item_hash && torrent.hash) {
+                        db.prepare('UPDATE task_history SET item_hash = ? WHERE id = ?').run(torrent.hash, item.id);
+                        item.item_hash = torrent.hash;
+                        console.log(`[Stats] Linked hash ${torrent.hash} to item: "${item.item_title}"`);
                     }
 
-                    // Check if finished (progress is 1 or 100%)
+                    // 2. Update size if it was 0 or incorrect
+                    if ((!item.item_size || item.item_size === 0) && torrent.size > 0) {
+                        db.prepare('UPDATE task_history SET item_size = ? WHERE id = ?').run(torrent.size, item.id);
+                        item.item_size = torrent.size;
+                    }
+
+                    // 3. Check if finished
                     const isFinished = torrent.progress >= 1 ||
                         ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished'].includes(torrent.state);
 
                     if (isFinished) {
-                        const now = new Date().toISOString();
-                        db.prepare('UPDATE task_history SET is_finished = 1, finish_time = ? WHERE id = ?')
-                            .run(now, item.id);
-                        console.log(`[Stats] Marked item as finished: "${item.item_title}" (Size: ${torrent.size})`);
+                        const finishTime = torrent.completion_on || new Date().toISOString();
+                        const downloadTime = torrent.added_on || item.download_time;
+
+                        db.prepare('UPDATE task_history SET is_finished = 1, finish_time = ?, download_time = ? WHERE id = ?')
+                            .run(finishTime, downloadTime, item.id);
+                        console.log(`[Stats] Marked item as finished via hash/name: "${item.item_title}" (Time: ${finishTime})`);
                     }
-                } else {
-                    // console.log(`[Stats] No active torrent match found for: "${item.item_title}"`);
                 }
             }
         } catch (err) {
@@ -185,6 +208,73 @@ class StatsService {
             }
         }
         return result;
+    }
+
+    async syncHistoryWithDownloader() {
+        const db = getDB();
+        try {
+            const clients = clientService.getAllClients();
+            if (clients.length === 0) return { success: false, message: 'No active clients' };
+
+            const allTorrents = [];
+            for (const client of clients) {
+                const result = await downloaderService.getTorrents(client);
+                if (result.success && result.torrents) {
+                    allTorrents.push(...result.torrents);
+                }
+            }
+
+            if (allTorrents.length === 0) return { success: false, message: 'No torrents in client' };
+
+            const history = db.prepare('SELECT * FROM task_history').all();
+            let updatedCount = 0;
+
+            const normalize = (name) => (name || '').toLowerCase()
+                .replace(/[\s\._\-\[\]\(\)\{\}\+]/g, '')
+                .replace(/第[一二三四五六七八九十\d]+[季集期]/g, '');
+
+            for (const item of history) {
+                const itemTitleNorm = normalize(item.item_title);
+
+                const torrent = allTorrents.find(t => {
+                    if (item.item_hash && t.hash) {
+                        return t.hash.toLowerCase() === item.item_hash.toLowerCase();
+                    }
+                    if (!t.name) return false;
+                    const tNameNorm = normalize(t.name);
+                    const nameMatch = tNameNorm === itemTitleNorm || tNameNorm.includes(itemTitleNorm) || itemTitleNorm.includes(tNameNorm);
+
+                    if (nameMatch && item.item_size > 0 && t.size > 0) {
+                        const sizeDiff = Math.abs(t.size - item.item_size);
+                        return sizeDiff < (item.item_size * 0.01);
+                    }
+                    return nameMatch;
+                });
+
+                if (torrent) {
+                    const isFinished = torrent.progress >= 1 ||
+                        ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished'].includes(torrent.state);
+
+                    const finishTime = torrent.completion_on || item.finish_time;
+                    const downloadTime = torrent.added_on || item.download_time;
+                    const itemHash = torrent.hash || item.item_hash;
+                    const itemSize = torrent.size || item.item_size;
+
+                    db.prepare(`
+                        UPDATE task_history 
+                        SET is_finished = ?, finish_time = ?, download_time = ?, item_hash = ?, item_size = ?
+                        WHERE id = ?
+                    `).run(isFinished ? 1 : 0, finishTime, downloadTime, itemHash, itemSize, item.id);
+
+                    updatedCount++;
+                }
+            }
+
+            return { success: true, updatedCount };
+        } catch (err) {
+            console.error('[Stats] Bulk sync failed:', err.message);
+            return { success: false, message: err.message };
+        }
     }
 }
 

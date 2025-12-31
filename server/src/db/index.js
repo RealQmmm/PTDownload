@@ -87,6 +87,7 @@ function createTables() {
       task_id INTEGER,
       item_guid TEXT,
       item_title TEXT,
+      item_hash TEXT,
       item_size INTEGER DEFAULT 0,
       is_finished INTEGER DEFAULT 0,
       download_time DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -94,6 +95,10 @@ function createTables() {
       UNIQUE(task_id, item_guid),
       FOREIGN KEY(task_id) REFERENCES tasks(id)
     );
+
+    try {
+      db.prepare('ALTER TABLE task_history ADD COLUMN item_hash TEXT').run();
+    } catch (e) {}
 
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,

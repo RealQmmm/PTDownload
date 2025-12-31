@@ -184,6 +184,26 @@ const SettingsPage = () => {
         reader.readAsText(file);
     };
 
+    const handleSyncHistory = async () => {
+        if (!confirm('此操作将扫描所有下载客户端中的种子，并更新历史记录的完成时间、创建时间及完成状态。确定要继续吗？')) return;
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/settings/maintenance/sync-history', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: data.message || '历史数据同步成功' });
+            } else {
+                setMessage({ type: 'error', text: data.error || '同步失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 5000);
+        }
+    };
+
     const renderContent = () => {
         switch (subTab) {
             case 'general':
@@ -496,6 +516,66 @@ const SettingsPage = () => {
                         </div>
                     </div>
                 );
+            case 'maintenance':
+                return (
+                    <div className="space-y-4">
+                        {message && (
+                            <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {message.text}
+                            </div>
+                        )}
+
+                        <div className={`${bgSecondary} p-6 rounded-xl border ${borderColor} space-y-6`}>
+                            <div className="space-y-4">
+                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                    <span className="mr-2">🧩</span> 历史数据校正
+                                </h3>
+                                <div className={`p-4 rounded-lg ${darkMode ? 'bg-blue-500/10' : 'bg-blue-50'} border ${darkMode ? 'border-blue-500/20' : 'border-blue-200'}`}>
+                                    <p className={`text-xs ${textPrimary} font-medium leading-relaxed`}>
+                                        如果您之前通过其他方式添加了种子，或者系统的完成时间记录不准，可以使用此功能。
+                                    </p>
+                                    <ul className={`mt-2 space-y-1 text-[11px] ${textSecondary}`}>
+                                        <li>• 自动匹配下载器中的种子与本地历史记录。</li>
+                                        <li>• 优先从下载器获取精确的 <b>完成时间</b> 和 <b>创建时间</b>。</li>
+                                        <li>• 自动校验并更新 <b>Hash 唯一标识</b>。</li>
+                                        <li>• 同步 <b>完成状态</b>，修复卡在“下载中”的历史条目。</li>
+                                    </ul>
+                                </div>
+                                <button
+                                    onClick={handleSyncHistory}
+                                    disabled={saving}
+                                    className="w-full sm:w-auto px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center space-x-2"
+                                >
+                                    <span>{saving ? '同步中...' : '立即开始全局数据同步'}</span>
+                                </button>
+                            </div>
+
+                            <hr className={borderColor} />
+
+                            <div className="space-y-4">
+                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center text-red-400`}>
+                                    <span className="mr-2">⚠️</span> 危险操作
+                                </h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <button
+                                        disabled
+                                        className={`p-3 border ${borderColor} rounded-lg text-xs ${textSecondary} text-left opacity-30 cursor-not-allowed`}
+                                    >
+                                        <p className="font-bold mb-1">重置所有统计数据</p>
+                                        <p>清空所有每日上传/下载量记录</p>
+                                    </button>
+                                    <button
+                                        disabled
+                                        className={`p-3 border ${borderColor} rounded-lg text-xs ${textSecondary} text-left opacity-30 cursor-not-allowed`}
+                                    >
+                                        <p className="font-bold mb-1">清空任务历史</p>
+                                        <p>删除所有已完成资源的下载历史</p>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
             case 'about':
                 return (
                     <div className="text-center py-10">
@@ -525,6 +605,7 @@ const SettingsPage = () => {
                             { id: 'general', name: '通用', icon: '⚙️' },
                             { id: 'notifications', name: '通知', icon: '🔔' },
                             { id: 'backup', name: '备份', icon: '💾' },
+                            { id: 'maintenance', name: '维护', icon: '🛠️' },
                             { id: 'network', name: '网络', icon: '🌐' },
                             { id: 'about', name: '关于', icon: 'ℹ️' }
                         ].map(item => (
