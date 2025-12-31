@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
 
+
+
 const SearchPage = ({ searchState, setSearchState }) => {
     const { darkMode, authenticatedFetch } = useTheme();
     const [query, setQuery] = useState(searchState?.query || '');
@@ -48,7 +50,12 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 : `/api/search?days=1`;
             const res = await authenticatedFetch(url);
             const data = await res.json();
-            setResults(data);
+
+            if (data) {
+                setResults(Array.isArray(data) ? data : (data.results || []));
+            } else {
+                setResults([]);
+            }
         } catch (err) {
             console.error('Search failed:', err);
             alert(trimmedQuery ? '搜索失败，请重试' : '获取近期资源失败');
@@ -70,7 +77,6 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 executeDownload(item, clients[0].id);
             }
         } else {
-            // Multiple clients - show selection modal
             setPendingDownload(item);
             setShowClientModal(true);
         }
@@ -159,9 +165,10 @@ const SearchPage = ({ searchState, setSearchState }) => {
                     </div>
                 ) : results.length > 0 ? (
                     <div className="flex-1 overflow-hidden flex flex-col">
-                        {/* Desktop Table View */}
-                        <div className={`hidden lg:block ${bgMain} rounded-xl border ${borderColor} overflow-hidden flex flex-col flex-1`}>
-                            <div className="overflow-x-auto overflow-y-auto flex-1">
+
+                        <div className={`flex-1 overflow-hidden flex flex-col ${bgMain} rounded-xl border ${borderColor}`}>
+                            {/* Desktop Table View */}
+                            <div className="hidden lg:block overflow-x-auto overflow-y-auto flex-1">
                                 <table className="w-full text-left border-collapse">
                                     <thead className={`${bgSecondary} ${textSecondary} sticky top-0 z-10`}>
                                         <tr>
@@ -183,23 +190,20 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                                 </td>
                                                 <td className="p-4 py-5 max-w-md xl:max-w-xl">
                                                     <div className="flex flex-col space-y-1.5">
-                                                        <div className="flex items-start gap-2">
-                                                            <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} group-hover:text-blue-500 font-bold text-sm leading-snug line-clamp-2 transition-colors`} title={item.name}>
-                                                                {item.name}
-                                                            </a>
-                                                        </div>
+                                                        <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} group-hover:text-blue-500 font-bold text-sm leading-snug line-clamp-2 transition-colors`} title={item.name}>
+                                                            {item.name}
+                                                        </a>
                                                         <div className="flex items-center gap-3 flex-wrap">
                                                             {item.subtitle && <span className={`${textSecondary} text-xs line-clamp-1 opacity-80`} title={item.subtitle}>{item.subtitle}</span>}
                                                             <div className="flex gap-1.5 flex-shrink-0">
                                                                 {item.isHot && <span className="px-1.5 py-0.5 text-[10px] rounded bg-orange-500/10 text-orange-500 font-bold">🔥热门</span>}
                                                                 {item.isNew && <span className="px-1.5 py-0.5 text-[10px] rounded bg-green-500/10 text-green-500 font-bold">✨新</span>}
                                                                 {item.isFree && <span className="px-1.5 py-0.5 text-[10px] rounded bg-blue-500/10 text-blue-500 font-bold">🎁{item.freeType || '免费'}</span>}
-                                                                {item.freeUntil && <span className="px-1.5 py-0.5 text-[10px] rounded bg-amber-500/10 text-amber-500 font-bold">⏱️{item.freeUntil}</span>}
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className={`p-4 text-right align-middle`}>
+                                                <td className="p-4 text-right align-middle">
                                                     <span className={`text-xs font-mono font-bold ${textPrimary}`}>{item.size}</span>
                                                 </td>
                                                 <td className="p-4 text-right align-middle">
@@ -225,46 +229,40 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                     </tbody>
                                 </table>
                             </div>
-                        </div>
 
-                        {/* Mobile Card View */}
-                        <div className="lg:hidden flex-1 overflow-y-auto space-y-4 pb-4">
-                            {results.map((item, index) => (
-                                <div key={index} className={`${bgMain} rounded-xl border ${borderColor} p-4 shadow-sm`}>
-                                    <div className="flex justify-between items-start mb-2">
-                                        <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-2 py-1 rounded text-xs font-bold`}>
-                                            {item.siteName}
-                                        </span>
-                                        <div className="flex gap-1">
-                                            {item.isHot && <span className="p-1 px-1.5 rounded bg-orange-500/20 text-orange-400 text-[10px] font-medium">🔥热门</span>}
-                                            {item.isNew && <span className="p-1 px-1.5 rounded bg-green-500/20 text-green-400 text-[10px] font-medium">✨新</span>}
-                                            {item.isFree && <span className="p-1 px-1.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-medium">🎁{item.freeType || '免费'}</span>}
+                            {/* Mobile Card View */}
+                            <div className="lg:hidden p-4 overflow-y-auto space-y-4">
+                                {results.map((item, index) => (
+                                    <div key={index} className={`${bgSecondary} rounded-xl border ${borderColor} p-4 shadow-sm`}>
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-2 py-1 rounded text-xs font-bold`}>
+                                                {item.siteName}
+                                            </span>
+                                            <div className="flex gap-1">
+                                                {item.isHot && <span className="p-1 px-1.5 rounded bg-orange-500/20 text-orange-400 text-[10px] font-medium">🔥热门</span>}
+                                                {item.isFree && <span className="p-1 px-1.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-medium">🎁{item.freeType || '免费'}</span>}
+                                            </div>
                                         </div>
-                                    </div>
-                                    <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} font-bold text-sm line-clamp-2 mb-2 leading-tight`}>
-                                        {item.name}
-                                    </a>
-                                    {item.subtitle && <p className={`${textSecondary} text-xs line-clamp-1 mb-3`}>{item.subtitle}</p>}
-
-                                    <div className="grid grid-cols-2 gap-y-3 mb-4 text-xs">
-                                        <div className="text-gray-500">大小: <span className={textPrimary}>{item.size}</span></div>
-                                        <div className="text-gray-500">时间: <span className={textPrimary}>{item.date}</span></div>
-                                        <div className="flex items-center gap-4">
+                                        <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} font-bold text-sm line-clamp-2 mb-2 leading-tight`}>
+                                            {item.name}
+                                        </a>
+                                        {item.subtitle && <p className={`${textSecondary} text-xs line-clamp-1 mb-3`}>{item.subtitle}</p>}
+                                        <div className="grid grid-cols-2 gap-y-3 mb-4 text-xs font-mono">
+                                            <div className="text-gray-500">大小: <span className={textPrimary}>{item.size}</span></div>
+                                            <div className="text-gray-500">时间: <span className={textPrimary}>{item.date}</span></div>
                                             <div className="text-green-500 font-bold">↑ {item.seeders}</div>
                                             <div className="text-red-400">↓ {item.leechers}</div>
                                         </div>
-                                        {item.freeUntil && <div className="text-yellow-500 text-[10px]">⏱️ {item.freeUntil}</div>}
+                                        <button
+                                            onClick={() => handleDownloadClick(item)}
+                                            disabled={downloading === item.link || !item.torrentUrl}
+                                            className={`w-full py-2.5 rounded-lg text-sm font-bold transition-all ${!item.torrentUrl ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : downloading === item.link ? 'bg-yellow-600/50 text-yellow-200 cursor-wait' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                        >
+                                            {downloading === item.link ? '⏳ 添加中...' : '📥 下 载'}
+                                        </button>
                                     </div>
-
-                                    <button
-                                        onClick={() => handleDownloadClick(item)}
-                                        disabled={downloading === item.link || !item.torrentUrl}
-                                        className={`w-full py-2.5 rounded-lg text-sm font-bold transition-all ${!item.torrentUrl ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : downloading === item.link ? 'bg-yellow-600/50 text-yellow-200 cursor-wait' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
-                                    >
-                                        {downloading === item.link ? '⏳ 添加下载中...' : '📥 立即下载'}
-                                    </button>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                         </div>
 
                         <div className={`mt-4 p-3 ${bgSecondary} rounded-lg border ${borderColor} ${textSecondary} text-xs text-center lg:text-right`}>
@@ -275,56 +273,41 @@ const SearchPage = ({ searchState, setSearchState }) => {
                     <div className={`flex-1 flex flex-col justify-center items-center ${textSecondary} border-2 border-dashed ${borderColor} rounded-xl`}>
                         <div className="text-4xl mb-4">🏜️</div>
                         <p className="text-lg">未找到相关资源</p>
-                        <p className="text-sm mt-2 text-center px-4">
-                            {searchMode === 'recent'
-                                ? '最近各大站点似乎没有新资源发布。'
-                                : '试试更换关键词或检查站点配置'}
-                        </p>
+                        <p className="text-sm mt-2">试试更换关键词或调整搜索范围</p>
                     </div>
                 ) : (
                     <div className={`flex-1 flex flex-col justify-center items-center ${textSecondary}`}>
                         <div className="text-6xl mb-6 opacity-20">🔍</div>
-                        <p>输入关键词开始搜索</p>
+                        <p>输入关键词开始跨站搜索</p>
                     </div>
                 )}
             </div>
 
-            {/* Client Selection Modal */}
+            {/* Client Modal */}
             {showClientModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-                    <div className={`${bgMain} rounded-xl w-full max-w-md border ${borderColor} shadow-2xl`}>
+                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+                    <div className={`${bgMain} rounded-2xl w-full max-w-md border ${borderColor} shadow-2xl overflow-hidden`}>
                         <div className={`p-6 border-b ${borderColor}`}>
-                            <h2 className={`text-xl font-bold ${textPrimary}`}>选择下载器</h2>
-                            <p className={`${textSecondary} text-sm mt-1`}>
-                                将 "{pendingDownload?.name?.substring(0, 40)}..." 发送到：
-                            </p>
+                            <h2 className={`text-xl font-bold ${textPrimary}`}>选择下载客户端</h2>
                         </div>
                         <div className="p-4 space-y-2 max-h-80 overflow-y-auto">
                             {clients.map((client) => (
                                 <button
                                     key={client.id}
                                     onClick={() => handleClientSelect(client.id)}
-                                    className={`w-full flex items-center p-4 ${darkMode ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} rounded-lg transition-colors text-left`}
+                                    className={`w-full flex items-center p-4 ${darkMode ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} rounded-xl transition-all text-left`}
                                 >
-                                    <div className="text-2xl mr-4">📥</div>
+                                    <div className="text-2xl mr-4">💾</div>
                                     <div className="flex-1">
-                                        <div className={`${textPrimary} font-medium`}>{client.name || client.type}</div>
+                                        <div className={`${textPrimary} font-medium`}>{client.type}</div>
                                         <div className={`${textSecondary} text-sm`}>{client.host}:{client.port}</div>
                                     </div>
-                                    <div className="text-blue-400">→</div>
+                                    <div className="text-blue-500">→</div>
                                 </button>
                             ))}
                         </div>
-                        <div className={`p-4 border-t ${borderColor}`}>
-                            <button
-                                onClick={() => {
-                                    setShowClientModal(false);
-                                    setPendingDownload(null);
-                                }}
-                                className={`w-full py-2 ${textSecondary} hover:${textPrimary} transition-colors`}
-                            >
-                                取消
-                            </button>
+                        <div className="p-4 flex justify-end">
+                            <button onClick={() => setShowClientModal(false)} className={`px-4 py-2 ${textSecondary} hover:${textPrimary} font-medium`}>取消</button>
                         </div>
                     </div>
                 </div>
