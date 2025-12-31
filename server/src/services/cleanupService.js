@@ -42,7 +42,8 @@ class CleanupService {
         console.log('[Cleanup] Starting auto-cleanup check...');
 
         try {
-            const clients = await downloaderService.getAllClients();
+            const db = this._getDB();
+            const clients = db.prepare('SELECT * FROM clients').all();
 
             for (const client of clients) {
                 // Determine client type to normalize data if needed

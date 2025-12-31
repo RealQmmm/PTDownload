@@ -172,11 +172,43 @@ const parsers = {
 
                 const date = parseDate(dateRaw);
 
+                let isFree = false;
+                let freeType = '';
+                let isHot = false;
+                let isNew = false;
+
+                // Typical NexusPHP promotion images/classes
+                const promotionImg = titleCell.find('img.pro_free, img.pro_free2down, img.pro_2xfree, img.pro_50pctdown, img.pro_2x50pctdown, img.pro_30pctdown, img.pro_2x');
+                if (promotionImg.length) {
+                    isFree = true;
+                    const alt = promotionImg.attr('alt') || '';
+                    const src = promotionImg.attr('src') || '';
+                    if (src.includes('free') || alt.includes('Free')) freeType = src.includes('2x') || alt.includes('2x') ? '2xFree' : 'Free';
+                    else if (src.includes('50pct') || alt.includes('50%')) freeType = src.includes('2x') || alt.includes('2x') ? '2x50%' : '50%';
+                    else if (src.includes('30pct')) freeType = '30%';
+                    else freeType = '促销';
+                } else {
+                    // Check for font or span with classes
+                    const fonts = titleCell.find('font.free, font.twoupfree, font.halfdown, span.free, span.twoupfree');
+                    if (fonts.length) {
+                        isFree = true;
+                        const cls = fonts.attr('class');
+                        if (cls === 'free') freeType = 'Free';
+                        else if (cls === 'twoupfree') freeType = '2xFree';
+                        else if (cls === 'halfdown') freeType = '50%';
+                        else freeType = '促销';
+                    }
+                }
+
+                if (titleCell.find('img.pro_hot').length) isHot = true;
+                if (titleCell.find('img.pro_new').length) isNew = true;
+
                 results.push({
                     id, name, subtitle, link, torrentUrl, size,
                     seeders: parseInt(seeders) || 0,
                     leechers: parseInt(leechers) || 0,
-                    date
+                    date,
+                    isFree, freeType, isHot, isNew
                 });
             } catch (err) {
                 // Silently skip rows that fail

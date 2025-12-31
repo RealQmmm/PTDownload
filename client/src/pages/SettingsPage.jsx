@@ -63,6 +63,11 @@ const SettingsPage = () => {
         notify_webhook_url: '',
         notify_webhook_method: 'GET'
     });
+    const [cleanupSettings, setCleanupSettings] = useState({
+        cleanup_enabled: false,
+        cleanup_min_ratio: '2.0',
+        cleanup_max_seeding_time: '336'
+    });
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
     const [cookieCheckInterval, setCookieCheckInterval] = useState('60');
@@ -89,6 +94,11 @@ const SettingsPage = () => {
                 notify_webhook_url: data.notify_webhook_url || '',
                 notify_webhook_method: data.notify_webhook_method || 'GET',
                 notify_on_download_start: data.notify_on_download_start === 'true'
+            });
+            setCleanupSettings({
+                cleanup_enabled: data.cleanup_enabled === 'true',
+                cleanup_min_ratio: data.cleanup_min_ratio || '2.0',
+                cleanup_max_seeding_time: data.cleanup_max_seeding_time || '336'
             });
             setCookieCheckInterval(data.cookie_check_interval || '60');
             setCheckinTime(data.checkin_time || '09:00');
@@ -298,6 +308,63 @@ const SettingsPage = () => {
         } finally {
             setSaving(false);
             setTimeout(() => setMessage(null), 5000);
+        }
+    };
+
+    const handleSaveCleanup = async (newValue) => {
+        // If enabling, show warning
+        if (newValue && !confirm('⚠️ 严重警告 ⚠️\n\n开启此功能后，系统将自动删除满足条件的种子和文件！\n\n请务必确认：\n1. 您已设置了合理的“最小分享率”和“最长做种时间”。\n2. 您了解此操作是不可逆的。\n\n是否确认开启？')) {
+            return;
+        }
+
+        setSaving(true);
+        setMessage(null);
+        try {
+            const newSettings = {
+                ...cleanupSettings,
+                cleanup_enabled: newValue
+            };
+
+            const res = await authenticatedFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newSettings)
+            });
+
+            if (res.ok) {
+                setCleanupSettings(newSettings);
+                setMessage({ type: 'success', text: newValue ? '自动清理已开启' : '自动清理已关闭' });
+            } else {
+                setMessage({ type: 'error', text: '保存失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const handleSaveCleanupConfig = async () => {
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await authenticatedFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(cleanupSettings)
+            });
+
+            if (res.ok) {
+                setMessage({ type: 'success', text: '清理策略已保存' });
+            } else {
+                setMessage({ type: 'error', text: '保存失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
         }
     };
 
@@ -645,6 +712,67 @@ const SettingsPage = () => {
                                 >
                                     <span>{saving ? '同步中...' : '立即开始全局数据同步'}</span>
                                 </button>
+                            </div>
+
+                            <hr className={borderColor} />
+
+                            {/* Section: Auto Cleanup */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                            <span className="mr-2">🧹</span> 自动清理 (实验性)
+                                        </h3>
+                                        <p className={`text-xs ${textSecondary} mt-1`}>
+                                            根据分享率或做种时间自动删除下载器中的任务和文件。
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleSaveCleanup(!cleanupSettings.cleanup_enabled)}
+                                        className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${cleanupSettings.cleanup_enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+                                    >
+                                        <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${cleanupSettings.cleanup_enabled ? 'left-6.5' : 'left-0.5'}`} />
+                                    </button>
+                                </div>
+
+                                <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-100/50'} border ${borderColor}`}>
+                                    <div>
+                                        <label className={`block text-xs font-bold ${textSecondary} mb-2 uppercase`}>最小分享率</label>
+                                        <div className="flex items-center space-x-2">
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={cleanupSettings.cleanup_min_ratio}
+                                                onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_min_ratio: e.target.value })}
+                                                className={`w-full ${inputBg} border rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500`}
+                                            />
+                                            <span className={`text-xs ${textSecondary}`}>Ratio</span>
+                                        </div>
+                                        <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此分享率时删除</p>
+                                    </div>
+                                    <div>
+                                        <label className={`block text-xs font-bold ${textSecondary} mb-2 uppercase`}>最长做种时间 (小时)</label>
+                                        <div className="flex items-center space-x-2">
+                                            <input
+                                                type="number"
+                                                value={cleanupSettings.cleanup_max_seeding_time}
+                                                onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_max_seeding_time: e.target.value })}
+                                                className={`w-full ${inputBg} border rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500`}
+                                            />
+                                            <span className={`text-xs ${textSecondary}`}>Hours</span>
+                                        </div>
+                                        <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此做种时间时删除 ({(cleanupSettings.cleanup_max_seeding_time / 24).toFixed(1)} 天)</p>
+                                    </div>
+                                    <div className="md:col-span-2 pt-2">
+                                        <button
+                                            onClick={handleSaveCleanupConfig}
+                                            disabled={saving}
+                                            className="w-full py-2 bg-blue-600/10 hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-bold transition-all border border-blue-600/20"
+                                        >
+                                            保存清理策略
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
 
                             <hr className={borderColor} />
