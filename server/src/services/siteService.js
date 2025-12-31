@@ -107,8 +107,17 @@ class SiteService {
                 const stats = siteParsers.parseUserStats(html, site.type);
                 const now = new Date().toISOString();
                 if (stats) {
-                    db.prepare('UPDATE sites SET cookie_status = 0, last_checked_at = ?, username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ? WHERE id = ?')
-                        .run(now, stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now, id);
+                    let sql = 'UPDATE sites SET cookie_status = 0, last_checked_at = ?, username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?';
+                    const params = [now, stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now];
+
+                    if (stats.isCheckedIn) {
+                        sql += ', last_checkin_at = ?';
+                        params.push(now);
+                    }
+
+                    sql += ' WHERE id = ?';
+                    params.push(id);
+                    db.prepare(sql).run(...params);
                 } else {
                     db.prepare('UPDATE sites SET cookie_status = 0, last_checked_at = ? WHERE id = ?')
                         .run(now, id);
@@ -172,8 +181,17 @@ class SiteService {
                 const oldUploadBytes = SiteService.parseSizeToBytes(oldSite.upload);
                 const newUploadBytes = SiteService.parseSizeToBytes(stats.upload);
 
-                db.prepare('UPDATE sites SET username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ? WHERE id = ?')
-                    .run(stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now, id);
+                let sql = 'UPDATE sites SET username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?';
+                const params = [stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now];
+
+                if (stats.isCheckedIn) {
+                    sql += ', last_checkin_at = ?';
+                    params.push(now);
+                }
+
+                sql += ' WHERE id = ?';
+                params.push(id);
+                db.prepare(sql).run(...params);
 
                 // 2. Update heatmap data if there is an increase
                 if (newUploadBytes > oldUploadBytes && oldUploadBytes > 0) {
@@ -253,10 +271,41 @@ class SiteService {
                 },
                 timeout: 15000,
                 maxRedirects: 5,
-                validateStatus: (status) => status < 400
+                validateStatus: (status) => status < 500 // Allow 404/403 for some attendance pages if handled
             });
 
-            if (enableLogs) console.log(`[Checkin] ${site.name} checkin response received`);
+            if (enableLogs) console.log(`[Checkin] ${site.name} checkin response received, status: ${response.status}`);
+
+            // Double check if success by parsing the response or just assuming 200 is success
+            const siteParsers = require('../utils/siteParsers');
+            const stats = siteParsers.parseUserStats(response.data, site.type);
+            const isSuccess = response.status === 200 || (stats && stats.isCheckedIn);
+
+            if (!isSuccess) {
+                // Try the second URL if the first one failed or didn't confirm sign-in
+                try {
+                    const resp2 = await axios.get(checkinUrls[1], {
+                        headers: {
+                            'Cookie': site.cookies || '',
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                        },
+                        timeout: 10000
+                    });
+                    const stats2 = siteParsers.parseUserStats(resp2.data, site.type);
+                    if (resp2.status === 200 || (stats2 && stats2.isCheckedIn)) {
+                        // Success on fallback
+                    } else {
+                        throw new Error('Checkin failed on both primary and fallback URLs');
+                    }
+                } catch (e) {
+                    // Check if it's already checked in via HTML anyway
+                    if (response.data && response.data.includes('已经签到')) {
+                        // This is actually success
+                    } else {
+                        throw e;
+                    }
+                }
+            }
 
             const db = this._getDB();
             db.prepare('UPDATE sites SET last_checkin_at = ? WHERE id = ?').run(new Date().toISOString(), id);

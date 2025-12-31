@@ -204,11 +204,11 @@ const parsers = {
 
 const parseUserStats = (html, type) => {
     if (type === 'Mock') {
-        return { username: 'MockUser', upload: '12.5 TB', download: '2.3 TB', ratio: '5.43', bonus: '15,204', level: '精英用户' };
+        return { username: 'MockUser', upload: '12.5 TB', download: '2.3 TB', ratio: '5.43', bonus: '15,204', level: '精英用户', isCheckedIn: false };
     }
     if (type === 'NexusPHP') {
         const $ = cheerio.load(html);
-        const stats = { username: '', upload: '', download: '', ratio: '', bonus: '', level: '' };
+        const stats = { username: '', upload: '', download: '', ratio: '', bonus: '', level: '', isCheckedIn: false };
         const userLink = $('a[href*="userdetails.php"]').first();
         if (userLink.length) stats.username = userLink.text().trim();
         const text = $('body').text();
@@ -222,6 +222,17 @@ const parseUserStats = (html, type) => {
         if (bonusMatch) stats.bonus = bonusMatch[2];
         const levelMatch = text.match(/(等级|Class|Level)[:\s]+([^\s]+)/i);
         if (levelMatch) stats.level = levelMatch[2];
+
+        // Check-in status detection
+        const alreadyCheckedIn = text.includes('已经签到') ||
+            text.includes('今日已签到') ||
+            text.includes('签到成功') ||
+            text.includes('Attendance successful') ||
+            text.includes('You have already attended');
+
+        const checkinLink = $('a[href*="attendance.php"], a[href*="add_bonus"]');
+        stats.isCheckedIn = alreadyCheckedIn || !checkinLink.length;
+
         return stats;
     }
     return null;

@@ -52,10 +52,9 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
                     </div>
                     <button
                         onClick={handleLogout}
-                        className={`p-1.5 rounded-lg ${hoverBg} ${textSecondary} hover:text-red-400 transition-colors`}
-                        title="退出登录"
+                        className={`text-xs font-medium px-2 py-1 rounded-md transition-colors ${textSecondary} ${hoverBg} hover:text-red-400`}
                     >
-                        <span className="text-lg">🚪</span>
+                        退出登录
                     </button>
                 </div>
             </div>
