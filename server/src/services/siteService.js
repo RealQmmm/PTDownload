@@ -1,6 +1,7 @@
 const { getDB } = require('../db');
 const axios = require('axios');
 const loggerService = require('./loggerService');
+const notificationService = require('./notificationService');
 
 class SiteService {
     constructor() {
@@ -90,8 +91,8 @@ class SiteService {
                 maxRedirects: 5,
                 validateStatus: (status) => status < 400
             });
+            html = response.data;
 
-            const html = response.data;
             const isLogin = html.includes('login.php') ||
                 html.includes('id="login"') ||
                 html.includes('name="login"') ||
@@ -124,6 +125,11 @@ class SiteService {
                 }
                 if (enableLogs) console.log(`[Status] ${site.name} cookie is valid`);
             } else {
+                // Only notify if status changed from valid (0) to invalid (1) to avoid spam
+                if (site.cookie_status === 0) {
+                    notificationService.notifyCookieExpiration(site.name);
+                }
+
                 db.prepare('UPDATE sites SET cookie_status = 1, last_checked_at = ? WHERE id = ?')
                     .run(now, id);
                 loggerService.log(`站点 ${site.name} Cookie 已失效，请及时处理`, 'error');
@@ -179,6 +185,11 @@ class SiteService {
                 (html.includes('Login') && !html.includes('Logout'));
 
             if (isLogin) {
+                // Only notify if status changed from valid (0) to invalid (1)
+                if (site.cookie_status === 0) {
+                    notificationService.notifyCookieExpiration(site.name);
+                }
+
                 db.prepare('UPDATE sites SET cookie_status = 1, last_checked_at = ? WHERE id = ?')
                     .run(new Date().toISOString(), id);
                 return null;
@@ -329,6 +340,7 @@ class SiteService {
         } catch (err) {
             if (enableLogs) console.error(`[Checkin] ${site.name} failed:`, err.message);
             loggerService.log(`站点 ${site.name} 自动签到失败: ${err.message}`, 'error');
+            notificationService.notifyCheckinFailed(site.name, err.message);
             return false;
         }
     }

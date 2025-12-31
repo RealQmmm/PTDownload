@@ -99,6 +99,42 @@ class NotificationService {
         const message = `${torrentTitle}\n体积: ${sizeStr || '未知'}`;
         await this.send(title, message, config);
     }
+
+    /**
+     * Send notification for generic system errors
+     */
+    async notifySystemError(errorTitle, errorMessage) {
+        const config = await this.getSettings();
+        // Always send system errors if notification is globally enabled
+        if (!config.enabled) return;
+
+        const title = `⚠️ 系统错误: ${errorTitle}`;
+        await this.send(title, errorMessage, config);
+    }
+
+    /**
+     * Send notification for cookie expiration
+     */
+    async notifyCookieExpiration(siteName) {
+        const config = await this.getSettings();
+        if (!config.enabled) return;
+
+        const title = `🚨 Cookie 已过期`;
+        const message = `站点: ${siteName}\n您的登录状态已失效，请尽快更新 Cookie 以免影响自动任务。`;
+        await this.send(title, message, config);
+    }
+
+    /**
+     * Send notification for check-in failure
+     */
+    async notifyCheckinFailed(siteName, reason) {
+        const config = await this.getSettings();
+        if (!config.enabled) return;
+
+        const title = `❌ 签到失败`;
+        const message = `站点: ${siteName}\n原因: ${reason || '未知错误'}\n请检查 Cookie 或网络连接。`;
+        await this.send(title, message, config);
+    }
 }
 
 module.exports = new NotificationService();
