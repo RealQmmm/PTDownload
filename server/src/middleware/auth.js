@@ -2,7 +2,7 @@ const authService = require('../services/authService');
 
 const authMiddleware = (req, res, next) => {
     // Path to skip auth (relative to /api)
-    const skipPaths = ['/auth/login', '/health'];
+    const skipPaths = ['/auth/login', '/health', '/settings/public'];
     if (skipPaths.includes(req.path)) {
         return next();
     }

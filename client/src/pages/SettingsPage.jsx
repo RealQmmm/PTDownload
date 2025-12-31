@@ -9,7 +9,52 @@ const SettingsPage = () => {
         log_retention_days: '7',
         log_max_count: '100'
     });
+    const [passwordData, setPasswordData] = useState({
+        oldPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+    });
     const [searchLimit, setSearchLimit] = useState('1');
+
+    const handleSavePassword = async () => {
+        if (!passwordData.oldPassword || !passwordData.newPassword) {
+            setMessage({ type: 'error', text: '请填写完整信息' });
+            setTimeout(() => setMessage(null), 3000);
+            return;
+        }
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            setMessage({ type: 'error', text: '两次输入的新密码不一致' });
+            setTimeout(() => setMessage(null), 3000);
+            return;
+        }
+
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await authenticatedFetch('/api/auth/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    oldPassword: passwordData.oldPassword,
+                    newPassword: passwordData.newPassword
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: '密码修改成功' });
+                setPasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
+            } else {
+                setMessage({ type: 'error', text: data.error || '修改失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+
     const [notifySettings, setNotifySettings] = useState({
         notify_enabled: false,
         notify_bark_url: '',
@@ -336,8 +381,8 @@ const SettingsPage = () => {
                                     </div>
                                     <div className="flex items-center space-x-3">
                                         <div className="flex-1">
-                                            <p className={`text-sm ${textPrimary} font-medium`}>Cookie 检查间隔 (分钟)</p>
-                                            <p className={`text-[10px] ${textSecondary}`}>后台自动检查站点 Cookie 的频率</p>
+                                            <p className={`text-sm ${textPrimary} font-medium`}>站点数据检查间隔 (分钟)</p>
+                                            <p className={`text-[10px] ${textSecondary}`}>后台自动检查站点数据的频率(包含Cookie检查)</p>
                                         </div>
                                         <input
                                             type="number"
@@ -627,11 +672,65 @@ const SettingsPage = () => {
                         </div>
                     </div>
                 );
+            case 'security':
+                return (
+                    <div className="space-y-4">
+                        {message && (
+                            <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {message.text}
+                            </div>
+                        )}
+
+                        <div className={`${bgSecondary} p-6 rounded-xl border ${borderColor} space-y-6`}>
+                            <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider`}>修改密码</h3>
+
+                            <div className="space-y-4 max-w-md">
+                                <div>
+                                    <label className={`block text-xs font-bold ${textSecondary} mb-2`}>当前密码</label>
+                                    <input
+                                        type="password"
+                                        value={passwordData.oldPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
+                                        className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
+                                    />
+                                </div>
+                                <div>
+                                    <label className={`block text-xs font-bold ${textSecondary} mb-2`}>新密码</label>
+                                    <input
+                                        type="password"
+                                        value={passwordData.newPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                        className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
+                                    />
+                                </div>
+                                <div>
+                                    <label className={`block text-xs font-bold ${textSecondary} mb-2`}>确认新密码</label>
+                                    <input
+                                        type="password"
+                                        value={passwordData.confirmPassword}
+                                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                        className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="pt-2">
+                                <button
+                                    onClick={handleSavePassword}
+                                    disabled={saving}
+                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-bold text-sm disabled:opacity-50 shadow-lg shadow-blue-600/20"
+                                >
+                                    {saving ? '保存中...' : '修改密码'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
             case 'about':
                 return (
                     <div className="text-center py-10">
                         <div className="text-4xl mb-4">📦</div>
-                        <h2 className={`text-2xl font-bold ${textPrimary} mb-2`}>PT Download Manager</h2>
+                        <h2 className={`text-2xl font-bold ${textPrimary} mb-2`}>{siteName}</h2>
                         <p className={textSecondary}>Version 0.1.0 (Alpha)</p>
                         <div className={`mt-8 p-4 ${bgSecondary} rounded-lg border ${borderColor} text-left text-sm ${textSecondary}`}>
                             <p>Powered by React, Express, and Docker.</p>
@@ -658,6 +757,7 @@ const SettingsPage = () => {
                             { id: 'backup', name: '备份', icon: '💾' },
                             { id: 'maintenance', name: '维护', icon: '🛠️' },
                             { id: 'network', name: '网络', icon: '🌐' },
+                            { id: 'security', name: '安全', icon: '🔒' },
                             { id: 'about', name: '关于', icon: 'ℹ️' }
                         ].map(item => (
                             <button

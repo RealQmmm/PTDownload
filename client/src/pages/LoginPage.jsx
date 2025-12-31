@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function LoginPage({ onLogin }) {
+export default function LoginPage({ onLogin, siteName }) {
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState('')
@@ -39,7 +39,7 @@ export default function LoginPage({ onLogin }) {
             <div className="max-w-md w-full space-y-8 bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700">
                 <div>
                     <h2 className="mt-6 text-center text-3xl font-extrabold text-blue-400">
-                        PT 下载管理器
+                        {siteName}
                     </h2>
                     <p className="mt-2 text-center text-sm text-gray-400">
                         请输入您的凭据以继续

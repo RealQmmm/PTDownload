@@ -3,6 +3,19 @@ const router = express.Router();
 const { getDB } = require('../db');
 const notificationService = require('../services/notificationService');
 
+// Get public settings (no auth required)
+router.get('/public', (req, res) => {
+    try {
+        const db = getDB();
+        const siteNameEntry = db.prepare("SELECT value FROM settings WHERE key = 'site_name'").get();
+        res.json({
+            site_name: siteNameEntry ? siteNameEntry.value : 'PT Manager'
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Get all settings or a specific setting
 router.get('/', (req, res) => {
     try {
@@ -12,6 +25,7 @@ router.get('/', (req, res) => {
         settings.forEach(s => {
             settingsMap[s.key] = s.value;
         });
+
         res.json(settingsMap);
     } catch (err) {
         res.status(500).json({ error: err.message });

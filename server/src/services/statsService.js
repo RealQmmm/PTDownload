@@ -12,9 +12,13 @@ class StatsService {
     }
 
     async updateDailyStats() {
+        const db = getDB();
+        // Check log setting
+        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
+        const enableLogs = logSetting && logSetting.value === 'true';
+
         await this.checkCompletion();
         try {
-            const db = getDB();
             const clients = clientService.getAllClients();
 
             if (clients.length === 0) return;
@@ -67,16 +71,16 @@ class StatsService {
 
                 // Handle reset for download/upload (e.g. client restart or clearing stats)
                 if (diffDownloaded < 0) {
-                    console.log(`[Stats] Download counter reset detected. New session starts at: ${currentTotalDownloaded}`);
+                    if (enableLogs) console.log(`[Stats] Download counter reset detected. New session starts at: ${currentTotalDownloaded}`);
                     diffDownloaded = currentTotalDownloaded;
                 }
                 if (diffUploaded < 0) {
-                    console.log(`[Stats] Upload counter reset detected. New session starts at: ${currentTotalUploaded}`);
+                    if (enableLogs) console.log(`[Stats] Upload counter reset detected. New session starts at: ${currentTotalUploaded}`);
                     diffUploaded = currentTotalUploaded;
                 }
 
                 if (diffDownloaded > 0 || diffUploaded > 0) {
-                    console.log(`[Stats] Recorded new traffic: DL +${diffDownloaded}, UP +${diffUploaded}`);
+                    if (enableLogs) console.log(`[Stats] Recorded new traffic: DL +${diffDownloaded}, UP +${diffUploaded}`);
                     histDl += diffDownloaded;
                     histUl += diffUploaded;
                 }
@@ -91,7 +95,7 @@ class StatsService {
                         .run(today, diffDownloaded, diffUploaded);
                 }
             } else {
-                console.log(`[Stats] Initializing stats checkpoint with DL:${currentTotalDownloaded}, UP:${currentTotalUploaded}`);
+                if (enableLogs) console.log(`[Stats] Initializing stats checkpoint with DL:${currentTotalDownloaded}, UP:${currentTotalUploaded}`);
                 // Initial run: Use current client totals as historical start point
                 histDl = currentTotalDownloaded;
                 histUl = currentTotalUploaded;
@@ -108,6 +112,10 @@ class StatsService {
 
     async checkCompletion() {
         const db = getDB();
+        // Check log setting
+        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
+        const enableLogs = logSetting && logSetting.value === 'true';
+
         try {
             const clients = clientService.getAllClients();
             if (clients.length === 0) return;
@@ -122,16 +130,16 @@ class StatsService {
             }
 
             if (allTorrents.length === 0) {
-                console.log('[Stats] No torrents found in clients.');
+                if (enableLogs) console.log('[Stats] No torrents found in clients.');
                 return;
             }
-            console.log(`[Stats] Found ${allTorrents.length} torrents in clients.`);
+            if (enableLogs) console.log(`[Stats] Found ${allTorrents.length} torrents in clients.`);
 
             // 2. IMPORT UNKNOWN TORRENTS
             // Fetch all known hashes to avoid duplicates
             const knownRows = db.prepare('SELECT item_hash FROM task_history WHERE item_hash IS NOT NULL').all();
             const knownHashes = new Set(knownRows.map(r => r.item_hash.toLowerCase()));
-            console.log(`[Stats] Known hashes count: ${knownHashes.size}`);
+            if (enableLogs) console.log(`[Stats] Known hashes count: ${knownHashes.size}`);
 
             let newImportCount = 0;
             const insertStmt = db.prepare(`
@@ -177,7 +185,7 @@ class StatsService {
             }
 
             if (newImportCount > 0) {
-                console.log(`[Stats] Imported ${newImportCount} new torrents from clients.`);
+                if (enableLogs) console.log(`[Stats] Imported ${newImportCount} new torrents from clients.`);
             }
 
             // 3. CHECK EXISTING UNFINISHED ITEMS
@@ -235,7 +243,7 @@ class StatsService {
 
                         db.prepare('UPDATE task_history SET is_finished = 1, finish_time = ?, download_time = ? WHERE id = ?')
                             .run(finishTime, downloadTime, item.id);
-                        console.log(`[Stats] Marked item as finished: "${item.item_title}"`);
+                        if (enableLogs) console.log(`[Stats] Marked item as finished: "${item.item_title}"`);
                     }
                 }
             }

@@ -153,7 +153,8 @@ function createTables() {
     { key: 'search_page_limit', value: '1' },
     { key: 'cookie_check_interval', value: '60' },
     { key: 'notify_on_download_start', value: 'true' },
-    { key: 'checkin_time', value: '09:00' }
+    { key: 'checkin_time', value: '09:00' },
+    { key: 'enable_system_logs', value: 'false' }
   ];
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

@@ -113,23 +113,36 @@ function App() {
         }
     };
 
-    // Fetch settings and status on mount
+    // Fetch public settings (Title) on mount
     useEffect(() => {
-        if (!isAuthenticated) return;
-
-        const fetchSettings = async () => {
+        const fetchPublicSettings = async () => {
             try {
-                const res = await authenticatedFetch('/api/settings');
+                const res = await fetch('/api/settings/public');
                 const data = await res.json();
                 if (data.site_name) {
                     setSiteName(data.site_name);
                 }
             } catch (err) {
-                console.error('Failed to fetch settings:', err);
+                console.error('Failed to fetch public settings:', err);
             }
         };
-        fetchSettings();
-        fetchStatus();
+        fetchPublicSettings();
+    }, []);
+
+    // Update Document Title
+    useEffect(() => {
+        document.title = siteName;
+    }, [siteName]);
+
+    // Fetch settings and status on mount (Authenticated)
+    useEffect(() => {
+        if (!isAuthenticated) return;
+
+        const fetchStatusAndSettings = async () => {
+            fetchStatus();
+            // We can also fetch full settings here if needed, but public name is already fetched.
+        };
+        fetchStatusAndSettings();
 
         // Check status every 5 minutes
         const interval = setInterval(fetchStatus, 5 * 60 * 1000);
@@ -159,7 +172,7 @@ function App() {
     }
 
     if (!isAuthenticated) {
-        return <LoginPage onLogin={handleLogin} />;
+        return <LoginPage onLogin={handleLogin} siteName={siteName} />;
     }
 
     const renderContent = () => {

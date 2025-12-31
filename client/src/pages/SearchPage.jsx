@@ -63,9 +63,11 @@ const SearchPage = ({ searchState, setSearchState }) => {
             return;
         }
 
-        // If only one client, download directly
+        // If only one client, confirm and download directly
         if (clients.length === 1) {
-            executeDownload(item, clients[0].id);
+            if (window.confirm(`确认下载 "${item.name}" 到 [${clients[0].name}] 吗？`)) {
+                executeDownload(item, clients[0].id);
+            }
         } else {
             // Multiple clients - show selection modal
             setPendingDownload(item);
@@ -122,23 +124,22 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 <h1 className={`text-2xl md:text-3xl font-bold mb-4 md:mb-6 ${textPrimary}`}>资源搜索</h1>
 
                 <div className="space-y-4">
-                    <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
+                    <form onSubmit={handleSearch} className="flex flex-row gap-2">
                         <div className="relative flex-1">
-                            <span className={`absolute left-4 top-3 ${textSecondary}`}>🔍</span>
+                            <span className={`absolute left-3 top-3 ${textSecondary}`}>🔍</span>
                             <input
                                 type="text"
                                 value={query}
                                 onChange={(e) => setQuery(e.target.value)}
-                                placeholder="输入关键词搜索，或留空查询近期新增..."
-                                className={`w-full border rounded-xl py-3 pl-12 pr-4 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-base ${inputBg}`}
+                                placeholder="输入关键词..."
+                                className={`w-full border rounded-xl py-2.5 pl-10 pr-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm ${inputBg}`}
                             />
                         </div>
-                        <div className="flex items-center gap-2">
-
+                        <div className="flex items-center">
                             <button
                                 type="submit"
                                 disabled={loading}
-                                className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold transition-all disabled:opacity-50 shadow-lg shadow-blue-900/20 whitespace-nowrap h-full"
+                                className="bg-blue-600 hover:bg-blue-500 text-white px-4 md:px-8 py-2.5 rounded-xl font-bold transition-all disabled:opacity-50 shadow-lg shadow-blue-900/20 whitespace-nowrap h-full text-sm md:text-base"
                             >
                                 搜索
                             </button>
