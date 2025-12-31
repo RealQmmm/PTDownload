@@ -7,6 +7,7 @@ import SitesPage from './pages/SitesPage'
 import ClientsPage from './pages/ClientsPage'
 import TasksPage from './pages/TasksPage'
 import HelpPage from './pages/HelpPage'
+import LoginPage from './pages/LoginPage'
 
 // Create Theme Context
 export const ThemeContext = createContext();
@@ -14,6 +15,11 @@ export const ThemeContext = createContext();
 export const useTheme = () => useContext(ThemeContext);
 
 function App() {
+    const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'))
+    const [user, setUser] = useState(() => {
+        const saved = localStorage.getItem('user')
+        return saved ? JSON.parse(saved) : null
+    })
     const [activeTab, setActiveTab] = useState('dashboard')
     const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -78,9 +84,27 @@ function App() {
         }
     }, [themeMode])
 
+    const authenticatedFetch = async (url, options = {}) => {
+        const token = localStorage.getItem('token');
+        const headers = {
+            ...options.headers,
+            'Authorization': `Bearer ${token}`
+        };
+
+        const res = await fetch(url, { ...options, headers });
+
+        if (res.status === 401) {
+            handleLogout();
+            throw new Error('Unauthorized');
+        }
+
+        return res;
+    };
+
     const fetchStatus = async () => {
+        if (!isAuthenticated) return;
         try {
-            const res = await fetch('/api/sites');
+            const res = await authenticatedFetch('/api/sites');
             const sites = await res.json();
             const expired = sites.filter(s => s.enabled && s.cookie_status === 1).length;
             setExpiredCookiesCount(expired);
@@ -91,9 +115,11 @@ function App() {
 
     // Fetch settings and status on mount
     useEffect(() => {
+        if (!isAuthenticated) return;
+
         const fetchSettings = async () => {
             try {
-                const res = await fetch('/api/settings');
+                const res = await authenticatedFetch('/api/settings');
                 const data = await res.json();
                 if (data.site_name) {
                     setSiteName(data.site_name);
@@ -108,7 +134,19 @@ function App() {
         // Check status every 5 minutes
         const interval = setInterval(fetchStatus, 5 * 60 * 1000);
         return () => clearInterval(interval);
-    }, []);
+    }, [isAuthenticated]);
+
+    const handleLogin = (data) => {
+        setIsAuthenticated(true);
+        setUser(data.user);
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setIsAuthenticated(false);
+        setUser(null);
+    };
 
     const toggleDarkMode = () => {
         if (themeMode === 'system') {
@@ -120,20 +158,24 @@ function App() {
         }
     }
 
+    if (!isAuthenticated) {
+        return <LoginPage onLogin={handleLogin} />;
+    }
+
     const renderContent = () => {
         switch (activeTab) {
             case 'sites':
-                return <SitesPage />
+                return <SitesPage authenticatedFetch={authenticatedFetch} />
             case 'clients':
-                return <ClientsPage />
+                return <ClientsPage authenticatedFetch={authenticatedFetch} />
             case 'tasks':
-                return <TasksPage />
+                return <TasksPage authenticatedFetch={authenticatedFetch} />
             case 'dashboard':
-                return <DashboardPage setActiveTab={setActiveTab} />
+                return <DashboardPage setActiveTab={setActiveTab} authenticatedFetch={authenticatedFetch} />
             case 'search':
-                return <SearchPage searchState={searchState} setSearchState={setSearchState} />
+                return <SearchPage searchState={searchState} setSearchState={setSearchState} authenticatedFetch={authenticatedFetch} />
             case 'settings':
-                return <SettingsPage />
+                return <SettingsPage authenticatedFetch={authenticatedFetch} />
             case 'help':
                 return <HelpPage />
             default:
@@ -154,7 +196,10 @@ function App() {
             siteName,
             setSiteName,
             expiredCookiesCount,
-            fetchStatus
+            fetchStatus,
+            handleLogout,
+            user,
+            authenticatedFetch
         }}>
             <div className={`flex h-screen overflow-hidden font-sans ${themeClasses} max-w-[100vw]`}>
                 {/* Mobile Backdrop */}

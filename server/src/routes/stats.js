@@ -143,8 +143,8 @@ router.get('/today-downloads', (req, res) => {
 
 router.get('/dashboard', async (req, res) => {
     try {
-        // 1. Trigger stats update
-        await statsService.updateDailyStats();
+        // 1. Trigger stats update (Optional: can comment this out and rely on background job to reduce writes)
+        // await statsService.updateDailyStats();
 
         // 2. Fetch all required data in parallel
         const clients = clientService.getAllClients();

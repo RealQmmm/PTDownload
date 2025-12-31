@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
 
 const SearchPage = ({ searchState, setSearchState }) => {
-    const { darkMode } = useTheme();
+    const { darkMode, authenticatedFetch } = useTheme();
     const [query, setQuery] = useState(searchState?.query || '');
     const [results, setResults] = useState(searchState?.results || []);
 
@@ -18,7 +18,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
 
     // Fetch clients on mount
     useEffect(() => {
-        fetch('/api/clients')
+        authenticatedFetch('/api/clients')
             .then(res => res.json())
             .then(data => setClients(data))
             .catch(err => console.error('Failed to fetch clients:', err));
@@ -46,7 +46,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
             const url = trimmedQuery
                 ? `/api/search?q=${encodeURIComponent(trimmedQuery)}`
                 : `/api/search?days=1`;
-            const res = await fetch(url);
+            const res = await authenticatedFetch(url);
             const data = await res.json();
             setResults(data);
         } catch (err) {
@@ -84,7 +84,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const executeDownload = async (item, clientId) => {
         setDownloading(item.link);
         try {
-            const res = await fetch('/api/download', {
+            const res = await authenticatedFetch('/api/download', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

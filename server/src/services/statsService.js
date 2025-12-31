@@ -112,13 +112,7 @@ class StatsService {
             const clients = clientService.getAllClients();
             if (clients.length === 0) return;
 
-            // 1. Get unfinished items from history (including manual downloads where task_id is NULL)
-            const unfinished = db.prepare('SELECT * FROM task_history WHERE is_finished = 0').all();
-            if (unfinished.length === 0) return;
-
-            console.log(`[Stats] Checking completion for ${unfinished.length} unfinished items...`);
-
-            // 2. Map of all torrents from all active clients
+            // 1. Fetch all torrents from all clients
             const allTorrents = [];
             for (const client of clients) {
                 const result = await downloaderService.getTorrents(client);
@@ -127,32 +121,89 @@ class StatsService {
                 }
             }
 
-            if (allTorrents.length === 0) return;
+            if (allTorrents.length === 0) {
+                console.log('[Stats] No torrents found in clients.');
+                return;
+            }
+            console.log(`[Stats] Found ${allTorrents.length} torrents in clients.`);
+
+            // 2. IMPORT UNKNOWN TORRENTS
+            // Fetch all known hashes to avoid duplicates
+            const knownRows = db.prepare('SELECT item_hash FROM task_history WHERE item_hash IS NOT NULL').all();
+            const knownHashes = new Set(knownRows.map(r => r.item_hash.toLowerCase()));
+            console.log(`[Stats] Known hashes count: ${knownHashes.size}`);
+
+            let newImportCount = 0;
+            const insertStmt = db.prepare(`
+                INSERT INTO task_history (
+                    task_id, item_guid, item_title, item_hash, item_size, 
+                    is_finished, download_time, finish_time
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            for (const t of allTorrents) {
+                if (!t.hash) continue;
+                const tHash = t.hash.toLowerCase();
+
+                // If we haven't seen this hash before, import it
+                if (!knownHashes.has(tHash)) {
+                    const isFinished = t.progress >= 1 ||
+                        ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished'].includes(t.state);
+
+                    const downloadTime = t.added_on || new Date().toISOString();
+                    const finishTime = isFinished ? (t.completion_on || new Date().toISOString()) : null;
+
+                    try {
+                        // Use hash as guid for external torrents (task_id is NULL)
+                        insertStmt.run(
+                            null,
+                            tHash,
+                            t.name,
+                            tHash,
+                            t.size,
+                            isFinished ? 1 : 0,
+                            downloadTime,
+                            finishTime
+                        );
+                        knownHashes.add(tHash);
+                        newImportCount++;
+                    } catch (err) {
+                        // Ignore UNIQUE constraint errors
+                        if (!err.message.includes('UNIQUE constraint failed')) {
+                            console.error('[Stats] Failed to import torrent:', t.name, err.message);
+                        }
+                    }
+                }
+            }
+
+            if (newImportCount > 0) {
+                console.log(`[Stats] Imported ${newImportCount} new torrents from clients.`);
+            }
+
+            // 3. CHECK EXISTING UNFINISHED ITEMS
+            // Logic to update status of items that were already in history but marked as unfinished
+            const unfinished = db.prepare('SELECT * FROM task_history WHERE is_finished = 0').all();
+            if (unfinished.length === 0) return;
 
             // Helper to normalize names for better matching
             const normalize = (name) => (name || '').toLowerCase()
                 .replace(/[\s\._\-\[\]\(\)\{\}\+]/g, '')
-                .replace(/第[一二三四五六七八九十\d]+[季集期]/g, ''); // Remove common Chinese episode/season tags which clients might strip
+                .replace(/第[一二三四五六七八九十\d]+[季集期]/g, '');
 
-            // 3. Check each unfinished item
             for (const item of unfinished) {
                 const itemTitleNorm = normalize(item.item_title);
 
-                // Try to find a matching torrent
                 const torrent = allTorrents.find(t => {
                     // Match by hash if available
                     if (item.item_hash && t.hash) {
                         return t.hash.toLowerCase() === item.item_hash.toLowerCase();
                     }
 
-                    // Fallback to name/size matching to "link" the hash
+                    // Fallback to name match
                     if (!t.name) return false;
                     const tNameNorm = normalize(t.name);
-
-                    // Match by normalized name
                     const nameMatch = tNameNorm === itemTitleNorm || tNameNorm.includes(itemTitleNorm) || itemTitleNorm.includes(tNameNorm);
 
-                    // If name matches, also verify size (within 1% threshold) to be sure it's the same torrent
                     if (nameMatch && item.item_size > 0 && t.size > 0) {
                         const sizeDiff = Math.abs(t.size - item.item_size);
                         return sizeDiff < (item.item_size * 0.01);
@@ -162,22 +213,19 @@ class StatsService {
                 });
 
                 if (torrent) {
-                    // console.log(`[Stats] Found match for "${item.item_title}" -> "${torrent.name}" (State: ${torrent.state}, Progress: ${torrent.progress})`);
-
-                    // 1. Logic to "link" the hash if we didn't have it
+                    // Link hash if missing
                     if (!item.item_hash && torrent.hash) {
                         db.prepare('UPDATE task_history SET item_hash = ? WHERE id = ?').run(torrent.hash, item.id);
                         item.item_hash = torrent.hash;
-                        console.log(`[Stats] Linked hash ${torrent.hash} to item: "${item.item_title}"`);
                     }
 
-                    // 2. Update size if it was 0 or incorrect
+                    // Update size if missing
                     if ((!item.item_size || item.item_size === 0) && torrent.size > 0) {
                         db.prepare('UPDATE task_history SET item_size = ? WHERE id = ?').run(torrent.size, item.id);
                         item.item_size = torrent.size;
                     }
 
-                    // 3. Check if finished
+                    // Check finished status
                     const isFinished = torrent.progress >= 1 ||
                         ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished'].includes(torrent.state);
 
@@ -187,7 +235,7 @@ class StatsService {
 
                         db.prepare('UPDATE task_history SET is_finished = 1, finish_time = ?, download_time = ? WHERE id = ?')
                             .run(finishTime, downloadTime, item.id);
-                        console.log(`[Stats] Marked item as finished via hash/name: "${item.item_title}" (Time: ${finishTime})`);
+                        console.log(`[Stats] Marked item as finished: "${item.item_title}"`);
                     }
                 }
             }

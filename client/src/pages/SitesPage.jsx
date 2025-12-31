@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo, memo } from 'react';
 import { useTheme } from '../App';
 
-const SiteHeatmap = memo(({ siteId, darkMode, borderColor, textSecondary }) => {
+const SiteHeatmap = memo(({ siteId, darkMode, borderColor, textSecondary, authenticatedFetch }) => {
     const [data, setData] = useState([]);
 
     useEffect(() => {
         const fetchHeatmap = async () => {
             try {
-                const res = await fetch(`/api/sites/${siteId}/heatmap`);
+                const res = await authenticatedFetch(`/api/sites/${siteId}/heatmap`);
                 const heatmapData = await res.json();
                 setData(heatmapData);
             } catch (err) {
@@ -15,7 +15,7 @@ const SiteHeatmap = memo(({ siteId, darkMode, borderColor, textSecondary }) => {
             }
         };
         fetchHeatmap();
-    }, [siteId]);
+    }, [siteId, authenticatedFetch]);
 
     const days = useMemo(() => {
         const result = [];
@@ -69,7 +69,7 @@ const SiteHeatmap = memo(({ siteId, darkMode, borderColor, textSecondary }) => {
 });
 
 const SitesPage = () => {
-    const { darkMode, fetchStatus } = useTheme();
+    const { darkMode, fetchStatus, authenticatedFetch } = useTheme();
     const [sites, setSites] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -96,7 +96,7 @@ const SitesPage = () => {
 
     const fetchSites = async () => {
         try {
-            const res = await fetch('/api/sites');
+            const res = await authenticatedFetch('/api/sites');
             const data = await res.json();
             setSites(data);
             // Also update global status
@@ -118,7 +118,7 @@ const SitesPage = () => {
         const url = editingSite ? `/api/sites/${editingSite.id}` : '/api/sites';
 
         try {
-            await fetch(url, {
+            await authenticatedFetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
@@ -135,7 +135,7 @@ const SitesPage = () => {
     const handleDelete = async (id) => {
         if (!confirm('确定要删除这个站点吗？')) return;
         try {
-            await fetch(`/api/sites/${id}`, { method: 'DELETE' });
+            await authenticatedFetch(`/api/sites/${id}`, { method: 'DELETE' });
             fetchSites();
         } catch (err) {
             alert('删除失败');
@@ -163,7 +163,7 @@ const SitesPage = () => {
 
     const toggleStatus = async (site) => {
         try {
-            await fetch(`/api/sites/${site.id}/toggle`, {
+            await authenticatedFetch(`/api/sites/${site.id}/toggle`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: !site.enabled })
@@ -177,7 +177,7 @@ const SitesPage = () => {
     const syncAllSiteData = async () => {
         setLoading(true);
         try {
-            await fetch('/api/sites/check-all', { method: 'POST' });
+            await authenticatedFetch('/api/sites/check-all', { method: 'POST' });
             fetchSites();
         } catch (err) {
             console.error('Failed to sync site data:', err);
@@ -188,7 +188,7 @@ const SitesPage = () => {
 
     const syncSingleSiteData = async (id) => {
         try {
-            const res = await fetch(`/api/sites/${id}/check-cookie`);
+            const res = await authenticatedFetch(`/api/sites/${id}/check-cookie`);
             const data = await res.json();
             if (data.isValid) {
                 await fetchSites();
@@ -204,7 +204,7 @@ const SitesPage = () => {
 
     const manualCheckin = async (id, notifySuccess = false) => {
         try {
-            const res = await fetch(`/api/sites/${id}/checkin`, { method: 'POST' });
+            const res = await authenticatedFetch(`/api/sites/${id}/checkin`, { method: 'POST' });
             const data = await res.json();
             if (data.success) {
                 await fetchSites();
@@ -232,7 +232,7 @@ const SitesPage = () => {
     const checkinAll = async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/sites/checkin-all', { method: 'POST' });
+            const res = await authenticatedFetch('/api/sites/checkin-all', { method: 'POST' });
             const data = await res.json();
             alert(`已尝试为所有站点签到，成功: ${data.count}`);
             fetchSites();
@@ -362,6 +362,7 @@ const SitesPage = () => {
                                     darkMode={darkMode}
                                     borderColor={borderColor}
                                     textSecondary={textSecondary}
+                                    authenticatedFetch={authenticatedFetch}
                                 />
                             )}
 

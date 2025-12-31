@@ -58,7 +58,7 @@ const HistoryChart = ({ data, textSecondary }) => {
 };
 
 const DashboardPage = ({ setActiveTab }) => {
-    const { darkMode } = useTheme();
+    const { darkMode, authenticatedFetch } = useTheme();
     const [downloadStats, setDownloadStats] = useState({
         totalDownloadSpeed: 0,
         totalUploadSpeed: 0,
@@ -84,7 +84,7 @@ const DashboardPage = ({ setActiveTab }) => {
 
     const fetchTorrentData = async () => {
         try {
-            const res = await fetch('/api/stats/dashboard');
+            const res = await authenticatedFetch('/api/stats/dashboard');
             if (!res.ok) return;
 
             const data = await res.json();
@@ -126,7 +126,7 @@ const DashboardPage = ({ setActiveTab }) => {
 
     useEffect(() => {
         fetchTorrentData();
-        const interval = setInterval(fetchTorrentData, 5000); // 延长到5秒减少压力
+        const interval = setInterval(fetchTorrentData, 5000); // 5 seconds for live speed updates
         return () => clearInterval(interval);
     }, []);
 
@@ -155,41 +155,41 @@ const DashboardPage = ({ setActiveTab }) => {
                 {/* Traffic Stats Card */}
                 <div className={`${bgMain} border ${borderColor} rounded-2xl p-5 shadow-sm flex flex-col justify-between`}>
                     <div>
-                        <p className={`${textSecondary} text-[11px] font-bold uppercase mb-3`}>流量统计 (今日)</p>
+                        <p className={`${textSecondary} text-sm font-bold uppercase mb-3`}>流量统计 (今日)</p>
                         <div className="space-y-3">
                             <div className="flex justify-between items-center">
-                                <span className={`${textSecondary} text-sm`}>下载</span>
+                                <span className={`${textSecondary} text-base`}>下载</span>
                                 <span className={`text-xl font-bold ${textPrimary}`}>{formatBytes(downloadStats.totalDownloaded || 0)}</span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className={`${textSecondary} text-sm`}>上传</span>
+                                <span className={`${textSecondary} text-base`}>上传</span>
                                 <span className={`text-xl font-bold text-blue-500`}>{formatBytes(downloadStats.totalUploaded || 0)}</span>
                             </div>
                         </div>
                     </div>
                     <div className={`mt-4 pt-4 border-t ${borderColor} flex justify-between items-center`}>
                         <div className="flex flex-col">
-                            <span className={`${textSecondary} text-[10px] opacity-70`}>累计下载</span>
-                            <span className={`text-sm font-bold ${textPrimary}`}>{formatBytes(downloadStats.histDownloaded || 0)}</span>
+                            <span className={`${textSecondary} text-xs opacity-70`}>累计下载</span>
+                            <span className={`text-base font-bold ${textPrimary}`}>{formatBytes(downloadStats.histDownloaded || 0)}</span>
                         </div>
                         <div className="h-6 w-px bg-gray-500/20"></div>
                         <div className="flex flex-col items-end">
-                            <span className={`${textSecondary} text-[10px] opacity-70`}>累计上传</span>
-                            <span className={`text-sm font-bold text-blue-500`}>{formatBytes(downloadStats.histUploaded || 0)}</span>
+                            <span className={`${textSecondary} text-xs opacity-70`}>累计上传</span>
+                            <span className={`text-base font-bold text-blue-500`}>{formatBytes(downloadStats.histUploaded || 0)}</span>
                         </div>
                     </div>
                 </div>
 
                 {/* Speed Card */}
                 <div className={`${bgMain} border ${borderColor} rounded-2xl p-5 shadow-sm flex flex-col`}>
-                    <p className={`${textSecondary} text-[11px] font-bold uppercase mb-3`}>即时速率</p>
+                    <p className={`${textSecondary} text-sm font-bold uppercase mb-3`}>即时速率</p>
                     <div className="flex-1 flex flex-col justify-around py-1">
                         <div className="flex justify-between items-center">
-                            <span className={`${textSecondary} text-sm`}>下载速度</span>
+                            <span className={`${textSecondary} text-base`}>下载速度</span>
                             <span className={`text-xl font-bold text-green-500`}>{formatSpeed(downloadStats.totalDownloadSpeed || 0)}</span>
                         </div>
                         <div className="flex justify-between items-center">
-                            <span className={`${textSecondary} text-sm`}>上传速度</span>
+                            <span className={`${textSecondary} text-base`}>上传速度</span>
                             <span className={`text-xl font-bold text-blue-500`}>{formatSpeed(downloadStats.totalUploadSpeed || 0)}</span>
                         </div>
                     </div>
@@ -198,7 +198,7 @@ const DashboardPage = ({ setActiveTab }) => {
                 {/* Chart Card */}
                 <div className={`lg:col-span-2 ${bgMain} border ${borderColor} rounded-2xl p-5 shadow-sm`}>
                     <div className="flex justify-between items-center mb-4">
-                        <p className={`${textSecondary} text-[11px] font-bold uppercase`}>最近7天流量</p>
+                        <p className={`${textSecondary} text-sm font-bold uppercase`}>最近7天流量</p>
                         <div className="flex space-x-3 text-[10px]">
                             <span className="flex items-center text-green-500"><i className="w-2 h-2 bg-green-500 rounded-full mr-1.5 inline-block"></i>下载</span>
                             <span className="flex items-center text-blue-500"><i className="w-2 h-2 bg-blue-500 rounded-full mr-1.5 inline-block"></i>上传</span>

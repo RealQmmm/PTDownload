@@ -97,8 +97,8 @@ router.post('/', async (req, res) => {
                     }
 
                     // For manual downloads, task_id is NULL
-                    db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size) VALUES (?, ?, ?, ?)')
-                        .run(null, torrentUrl, title, sizeBytes);
+                    db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, download_time) VALUES (?, ?, ?, ?, ?)')
+                        .run(null, torrentUrl, title, sizeBytes, new Date().toISOString());
 
                     // Send notification
                     const notificationService = require('../services/notificationService');

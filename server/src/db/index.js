@@ -96,10 +96,6 @@ function createTables() {
       FOREIGN KEY(task_id) REFERENCES tasks(id)
     );
 
-    try {
-      db.prepare('ALTER TABLE task_history ADD COLUMN item_hash TEXT').run();
-    } catch (e) {}
-
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT
@@ -131,13 +127,6 @@ function createTables() {
       last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    try {
-      db.prepare('ALTER TABLE stats_checkpoint ADD COLUMN historical_total_downloaded INTEGER DEFAULT 0').run();
-      db.prepare('ALTER TABLE stats_checkpoint ADD COLUMN historical_total_uploaded INTEGER DEFAULT 0').run();
-    } catch (e) {}
-
-    INSERT OR IGNORE INTO stats_checkpoint (id, last_total_downloaded, last_total_uploaded, historical_total_downloaded, historical_total_uploaded) VALUES (1, 0, 0, 0, 0);
-
     CREATE TABLE IF NOT EXISTS site_daily_stats (
       site_id INTEGER,
       date TEXT,
@@ -146,32 +135,61 @@ function createTables() {
       FOREIGN KEY(site_id) REFERENCES sites(id)
     );
 
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('site_name', 'PT Manager');
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('log_retention_days', '7');
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('log_max_count', '100');
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('search_page_limit', '1');
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('cookie_check_interval', '60');
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('notify_on_download_start', 'true');
-    INSERT OR IGNORE INTO settings (key, value) VALUES ('checkin_time', '09:00');
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `;
 
   db.exec(schema);
 
-  try { db.exec('ALTER TABLE sites ADD COLUMN username TEXT'); } catch (e) { }
-  try { db.exec('ALTER TABLE sites ADD COLUMN upload TEXT'); } catch (e) { }
-  try { db.exec('ALTER TABLE sites ADD COLUMN download TEXT'); } catch (e) { }
-  try { db.exec('ALTER TABLE sites ADD COLUMN ratio TEXT'); } catch (e) { }
-  try { db.exec('ALTER TABLE sites ADD COLUMN bonus TEXT'); } catch (e) { }
-  try { db.exec('ALTER TABLE sites ADD COLUMN level TEXT'); } catch (e) { }
-  try { db.exec('ALTER TABLE sites ADD COLUMN stats_updated_at DATETIME'); } catch (e) { }
-  try { db.exec('ALTER TABLE sites ADD COLUMN cookie_status INTEGER DEFAULT 0'); } catch (e) { }
-  try { db.exec('ALTER TABLE sites ADD COLUMN last_checked_at DATETIME'); } catch (e) { }
-  try { db.exec('ALTER TABLE sites ADD COLUMN auto_checkin INTEGER DEFAULT 0'); } catch (e) { }
-  try { db.exec('ALTER TABLE sites ADD COLUMN last_checkin_at DATETIME'); } catch (e) { }
-  // Migrations for existing tables
-  try { db.exec('ALTER TABLE task_history ADD COLUMN item_size INTEGER DEFAULT 0'); } catch (e) { }
-  try { db.exec('ALTER TABLE task_history ADD COLUMN is_finished INTEGER DEFAULT 0'); } catch (e) { }
-  try { db.exec('ALTER TABLE task_history ADD COLUMN finish_time DATETIME'); } catch (e) { }
+  // Initialize default settings
+  const defaultSettings = [
+    { key: 'site_name', value: 'PT Manager' },
+    { key: 'log_retention_days', value: '7' },
+    { key: 'log_max_count', value: '100' },
+    { key: 'search_page_limit', value: '1' },
+    { key: 'cookie_check_interval', value: '60' },
+    { key: 'notify_on_download_start', value: 'true' },
+    { key: 'checkin_time', value: '09:00' }
+  ];
+
+  const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
+  defaultSettings.forEach(s => insertSetting.run(s.key, s.value));
+
+  // Ensure checkpoint exists
+  db.prepare('INSERT OR IGNORE INTO stats_checkpoint (id, last_total_downloaded, last_total_uploaded, historical_total_downloaded, historical_total_uploaded) VALUES (1, 0, 0, 0, 0)').run();
+
+  // Migrations
+  const migrations = [
+    'ALTER TABLE sites ADD COLUMN username TEXT',
+    'ALTER TABLE sites ADD COLUMN upload TEXT',
+    'ALTER TABLE sites ADD COLUMN download TEXT',
+    'ALTER TABLE sites ADD COLUMN ratio TEXT',
+    'ALTER TABLE sites ADD COLUMN bonus TEXT',
+    'ALTER TABLE sites ADD COLUMN level TEXT',
+    'ALTER TABLE sites ADD COLUMN stats_updated_at DATETIME',
+    'ALTER TABLE sites ADD COLUMN cookie_status INTEGER DEFAULT 0',
+    'ALTER TABLE sites ADD COLUMN last_checked_at DATETIME',
+    'ALTER TABLE sites ADD COLUMN auto_checkin INTEGER DEFAULT 0',
+    'ALTER TABLE sites ADD COLUMN last_checkin_at DATETIME',
+    'ALTER TABLE task_history ADD COLUMN item_hash TEXT',
+    'ALTER TABLE task_history ADD COLUMN item_size INTEGER DEFAULT 0',
+    'ALTER TABLE task_history ADD COLUMN is_finished INTEGER DEFAULT 0',
+    'ALTER TABLE task_history ADD COLUMN finish_time DATETIME',
+    'ALTER TABLE stats_checkpoint ADD COLUMN historical_total_downloaded INTEGER DEFAULT 0',
+    'ALTER TABLE stats_checkpoint ADD COLUMN historical_total_uploaded INTEGER DEFAULT 0'
+  ];
+
+  migrations.forEach(sql => {
+    try {
+      db.exec(sql);
+    } catch (e) {
+      // Ignore "duplicate column name" errors
+    }
+  });
 
   console.log('Database tables initialized');
 }

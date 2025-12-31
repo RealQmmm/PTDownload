@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
 
 const ClientsPage = () => {
-    const { darkMode } = useTheme();
+    const { darkMode, authenticatedFetch } = useTheme();
     const [clients, setClients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -28,7 +28,7 @@ const ClientsPage = () => {
 
     const fetchClients = async () => {
         try {
-            const res = await fetch('/api/clients');
+            const res = await authenticatedFetch('/api/clients');
             const data = await res.json();
             setClients(data);
         } catch (err) {
@@ -45,7 +45,7 @@ const ClientsPage = () => {
     const testConnection = async (client) => {
         setTestingId(client.id);
         try {
-            const res = await fetch('/api/clients/test', {
+            const res = await authenticatedFetch('/api/clients/test', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(client)
@@ -89,7 +89,7 @@ const ClientsPage = () => {
         const url = editingClient ? `/api/clients/${editingClient.id}` : '/api/clients';
 
         try {
-            await fetch(url, {
+            await authenticatedFetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
@@ -103,7 +103,7 @@ const ClientsPage = () => {
 
     const handleDelete = async (id) => {
         if (!confirm('确定删除吗？')) return;
-        await fetch(`/api/clients/${id}`, { method: 'DELETE' });
+        await authenticatedFetch(`/api/clients/${id}`, { method: 'DELETE' });
         fetchClients();
     };
 

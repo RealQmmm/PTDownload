@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
 
 const SettingsPage = () => {
-    const { darkMode, themeMode, setThemeMode, siteName, setSiteName } = useTheme();
+    const { darkMode, themeMode, setThemeMode, siteName, setSiteName, authenticatedFetch } = useTheme();
     const [subTab, setSubTab] = useState('general');
     const [tempSiteName, setTempSiteName] = useState(siteName);
     const [logSettings, setLogSettings] = useState({
@@ -28,7 +28,7 @@ const SettingsPage = () => {
 
     const fetchSettings = async () => {
         try {
-            const res = await fetch('/api/settings');
+            const res = await authenticatedFetch('/api/settings');
             const data = await res.json();
             setLogSettings({
                 log_retention_days: data.log_retention_days || '7',
@@ -62,7 +62,7 @@ const SettingsPage = () => {
         setSaving(true);
         setMessage(null);
         try {
-            const res = await fetch('/api/settings', {
+            const res = await authenticatedFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -91,7 +91,7 @@ const SettingsPage = () => {
         setSaving(true);
         setMessage(null);
         try {
-            const res = await fetch('/api/settings', {
+            const res = await authenticatedFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(notifySettings)
@@ -113,7 +113,7 @@ const SettingsPage = () => {
         setSaving(true);
         setMessage(null);
         try {
-            const res = await fetch('/api/settings/test-notify', {
+            const res = await authenticatedFetch('/api/settings/test-notify', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -141,8 +141,25 @@ const SettingsPage = () => {
         }
     };
 
-    const handleExport = () => {
-        window.location.href = '/api/settings/export';
+    const handleExport = async () => {
+        try {
+            const res = await authenticatedFetch('/api/settings/export');
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `pt-manager-backup-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } else {
+                alert('导出失败');
+            }
+        } catch (err) {
+            alert('导出出错');
+        }
     };
 
     const handleImport = async (e) => {
@@ -161,7 +178,7 @@ const SettingsPage = () => {
         reader.onload = async (event) => {
             try {
                 const data = JSON.parse(event.target.result);
-                const res = await fetch('/api/settings/import', {
+                const res = await authenticatedFetch('/api/settings/import', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
@@ -189,7 +206,7 @@ const SettingsPage = () => {
         setSaving(true);
         setMessage(null);
         try {
-            const res = await fetch('/api/settings/maintenance/sync-history', { method: 'POST' });
+            const res = await authenticatedFetch('/api/settings/maintenance/sync-history', { method: 'POST' });
             const data = await res.json();
             if (res.ok) {
                 setMessage({ type: 'success', text: data.message || '历史数据同步成功' });
@@ -208,7 +225,7 @@ const SettingsPage = () => {
         if (!confirm('警告：此操作将永久删除所有 RSS 运行日志和已下载资源的记录！确定要开始初始化吗？')) return;
         setSaving(true);
         try {
-            const res = await fetch('/api/settings/maintenance/clear-tasks', { method: 'POST' });
+            const res = await authenticatedFetch('/api/settings/maintenance/clear-tasks', { method: 'POST' });
             const data = await res.json();
             if (res.ok) setMessage({ type: 'success', text: data.message });
             else setMessage({ type: 'error', text: data.error });
@@ -224,7 +241,7 @@ const SettingsPage = () => {
         if (!confirm('警告：此操作将永久清空所有站点的历史上传贡献数据！确定要继续吗？')) return;
         setSaving(true);
         try {
-            const res = await fetch('/api/settings/maintenance/clear-heatmap', { method: 'POST' });
+            const res = await authenticatedFetch('/api/settings/maintenance/clear-heatmap', { method: 'POST' });
             const data = await res.json();
             if (res.ok) setMessage({ type: 'success', text: data.message });
             else setMessage({ type: 'error', text: data.error });
@@ -567,7 +584,7 @@ const SettingsPage = () => {
                                         如果您之前通过其他方式添加了种子，或者系统的完成时间记录不准，可以使用此功能。
                                     </p>
                                     <ul className={`mt-2 space-y-1 text-[11px] ${textSecondary}`}>
-                                        <li>• 自动匹配下载器中的种子与本地历史记录。</li>
+                                        <li>• 自动 matching 下载器中的种子与本地历史记录。</li>
                                         <li>• 优先从下载器获取精确的 <b>完成时间</b> 和 <b>创建时间</b>。</li>
                                         <li>• 自动校验并更新 <b>Hash 唯一标识</b>。</li>
                                         <li>• 同步 <b>完成状态</b>，修复卡在“下载中”的历史条目。</li>

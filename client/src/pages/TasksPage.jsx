@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
 
 const TasksPage = () => {
-    const { darkMode } = useTheme();
+    const { darkMode, authenticatedFetch } = useTheme();
     const [tasks, setTasks] = useState([]);
     const [sites, setSites] = useState([]);
     const [clients, setClients] = useState([]);
@@ -69,10 +69,10 @@ const TasksPage = () => {
     const fetchData = async () => {
         try {
             const [tasksRes, sitesRes, clientsRes, rssSourcesRes] = await Promise.all([
-                fetch('/api/tasks'),
-                fetch('/api/sites'),
-                fetch('/api/clients'),
-                fetch('/api/rss-sources')
+                authenticatedFetch('/api/tasks'),
+                authenticatedFetch('/api/sites'),
+                authenticatedFetch('/api/clients'),
+                authenticatedFetch('/api/rss-sources')
             ]);
 
             const [tasksData, sitesData, clientsData, rssSourcesData] = await Promise.all([
@@ -136,7 +136,7 @@ const TasksPage = () => {
             const url = editingTask ? `/api/tasks/${editingTask.id}` : '/api/tasks';
             const method = editingTask ? 'PUT' : 'POST';
 
-            const res = await fetch(url, {
+            const res = await authenticatedFetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -155,7 +155,7 @@ const TasksPage = () => {
 
     const toggleTask = async (task) => {
         try {
-            await fetch(`/api/tasks/${task.id}/toggle`, {
+            await authenticatedFetch(`/api/tasks/${task.id}/toggle`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ enabled: !task.enabled })
@@ -168,13 +168,13 @@ const TasksPage = () => {
 
     const deleteTask = async (id) => {
         if (!confirm('确定删除该自动化任务吗？')) return;
-        await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+        await authenticatedFetch(`/api/tasks/${id}`, { method: 'DELETE' });
         fetchData();
     };
 
     const executeTask = async (task) => {
         try {
-            const res = await fetch(`/api/tasks/${task.id}/execute`, { method: 'POST' });
+            const res = await authenticatedFetch(`/api/tasks/${task.id}/execute`, { method: 'POST' });
             if (res.ok) {
                 alert('任务已开始执行，请稍后刷新查看结果');
                 setTimeout(fetchData, 2000);
@@ -191,7 +191,7 @@ const TasksPage = () => {
         setShowLogsModal(true);
         setLogLoading(true);
         try {
-            const res = await fetch(`/api/tasks/${task.id}/logs`);
+            const res = await authenticatedFetch(`/api/tasks/${task.id}/logs`);
             const data = await res.json();
             setSelectedTaskLogs(Array.isArray(data) ? data : []);
         } catch (err) {
@@ -207,7 +207,7 @@ const TasksPage = () => {
         const url = editingRSSSource ? `/api/rss-sources/${editingRSSSource.id}` : '/api/rss-sources';
 
         try {
-            const res = await fetch(url, {
+            const res = await authenticatedFetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(rssFormData)
@@ -238,7 +238,7 @@ const TasksPage = () => {
 
     const deleteRSSSource = async (id) => {
         if (!confirm('确定删除该订阅源吗？')) return;
-        await fetch(`/api/rss-sources/${id}`, { method: 'DELETE' });
+        await authenticatedFetch(`/api/rss-sources/${id}`, { method: 'DELETE' });
         fetchData();
     };
 
@@ -571,7 +571,7 @@ const TasksPage = () => {
 
                             <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100 dark:border-gray-700">
                                 <button type="button" onClick={() => setShowModal(false)} className={`px-6 py-2 rounded-lg ${textSecondary} hover:${textPrimary} transition-colors`}>取消</button>
-                                <button type="submit" className="px-10 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold transition-all shadow-lg shadow-blue-600/20">
+                                <button type="submit" className="px-10 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-all shadow-lg shadow-blue-600/20">
                                     {editingTask ? '保存更改' : '创建任务'}
                                 </button>
                             </div>
