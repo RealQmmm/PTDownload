@@ -159,4 +159,35 @@ router.post('/maintenance/sync-history', async (req, res) => {
     }
 });
 
+// Maintenance: Clear task history and logs
+router.post('/maintenance/clear-tasks', (req, res) => {
+    try {
+        const db = getDB();
+        const delLogs = db.prepare('DELETE FROM task_logs').run();
+        const delHistory = db.prepare('DELETE FROM task_history').run();
+        res.json({
+            success: true,
+            message: `清理完成：删除了 ${delHistory.changes} 条任务历史和 ${delLogs.changes} 条运行日志。`
+        });
+    } catch (err) {
+        console.error('Clear tasks failed:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Maintenance: Clear all heatmap data
+router.post('/maintenance/clear-heatmap', (req, res) => {
+    try {
+        const db = getDB();
+        const delHeatmap = db.prepare('DELETE FROM site_daily_stats').run();
+        res.json({
+            success: true,
+            message: `清理完成：删除了 ${delHeatmap.changes} 条站点热力图统计记录。`
+        });
+    } catch (err) {
+        console.error('Clear heatmap failed:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

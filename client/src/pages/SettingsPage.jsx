@@ -204,6 +204,38 @@ const SettingsPage = () => {
         }
     };
 
+    const handleClearTasks = async () => {
+        if (!confirm('警告：此操作将永久删除所有 RSS 运行日志和已下载资源的记录！确定要开始初始化吗？')) return;
+        setSaving(true);
+        try {
+            const res = await fetch('/api/settings/maintenance/clear-tasks', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) setMessage({ type: 'success', text: data.message });
+            else setMessage({ type: 'error', text: data.error });
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 5000);
+        }
+    };
+
+    const handleClearHeatmap = async () => {
+        if (!confirm('警告：此操作将永久清空所有站点的历史上传贡献数据！确定要继续吗？')) return;
+        setSaving(true);
+        try {
+            const res = await fetch('/api/settings/maintenance/clear-heatmap', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) setMessage({ type: 'success', text: data.message });
+            else setMessage({ type: 'error', text: data.error });
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 5000);
+        }
+    };
+
     const renderContent = () => {
         switch (subTab) {
             case 'general':
@@ -558,18 +590,20 @@ const SettingsPage = () => {
                                 </h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <button
-                                        disabled
-                                        className={`p-3 border ${borderColor} rounded-lg text-xs ${textSecondary} text-left opacity-30 cursor-not-allowed`}
+                                        onClick={handleClearHeatmap}
+                                        disabled={saving}
+                                        className={`p-3 border ${borderColor} rounded-lg text-xs ${textSecondary} text-left ${hoverBg} transition-all`}
                                     >
-                                        <p className="font-bold mb-1">重置所有统计数据</p>
-                                        <p>清空所有每日上传/下载量记录</p>
+                                        <p className="font-bold mb-1 text-red-400">清空全部热力数据</p>
+                                        <p>删除所有站点的历史上传记录图表</p>
                                     </button>
                                     <button
-                                        disabled
-                                        className={`p-3 border ${borderColor} rounded-lg text-xs ${textSecondary} text-left opacity-30 cursor-not-allowed`}
+                                        onClick={handleClearTasks}
+                                        disabled={saving}
+                                        className={`p-3 border ${borderColor} rounded-lg text-xs ${textSecondary} text-left ${hoverBg} transition-all`}
                                     >
-                                        <p className="font-bold mb-1">清空任务历史</p>
-                                        <p>删除所有已完成资源的下载历史</p>
+                                        <p className="font-bold mb-1 text-red-400">清理任务历史与日志</p>
+                                        <p>删除所有下载记录及 RSS 运行日志</p>
                                     </button>
                                 </div>
                             </div>
