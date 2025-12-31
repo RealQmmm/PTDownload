@@ -14,20 +14,17 @@ class NotificationService {
                 enabled: settingsMap['notify_enabled'] === 'true',
                 barkUrl: settingsMap['notify_bark_url'] || '',
                 webhookUrl: settingsMap['notify_webhook_url'] || '',
-                webhookMethod: settingsMap['notify_webhook_method'] || 'GET'
+                webhookMethod: settingsMap['notify_webhook_method'] || 'GET',
+                notifyOnDownloadStart: settingsMap['notify_on_download_start'] === 'true'
             };
         } catch (err) {
             console.error('[Notify] Failed to get settings:', err.message);
-            return { enabled: false };
+            return { enabled: false, notifyOnDownloadStart: false };
         }
     }
 
     async send(title, message, overrideConfig = null) {
         const config = overrideConfig || await this.getSettings();
-
-        if (!config.enabled && !overrideConfig) {
-            return { success: false, error: '通知功能已禁用' };
-        }
 
         console.log(`[Notify] Sending notification: ${title}`);
         const results = { bark: null, webhook: null };
@@ -80,12 +77,27 @@ class NotificationService {
     }
 
     /**
-     * Send notification for a new torrent match
+     * Send notification for a new torrent match (RSS)
      */
     async notifyNewTorrent(taskName, torrentTitle, sizeStr) {
-        const title = `✨ 匹配到新资源: ${taskName}`;
+        const config = await this.getSettings();
+        if (!config.notifyOnDownloadStart) return;
+
+        const title = `✨ RSS 匹配成功: ${taskName}`;
         const message = `${torrentTitle}\n体积: ${sizeStr}`;
-        await this.send(title, message);
+        await this.send(title, message, config);
+    }
+
+    /**
+     * Send notification when a manual download starts
+     */
+    async notifyDownloadStart(torrentTitle, sizeStr) {
+        const config = await this.getSettings();
+        if (!config.notifyOnDownloadStart) return;
+
+        const title = `🚀 开始下载资源`;
+        const message = `${torrentTitle}\n体积: ${sizeStr || '未知'}`;
+        await this.send(title, message, config);
     }
 }
 

@@ -19,6 +19,7 @@ const SettingsPage = () => {
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
     const [cookieCheckInterval, setCookieCheckInterval] = useState('60');
+    const [checkinTime, setCheckinTime] = useState('09:00');
 
     useEffect(() => {
         setTempSiteName(siteName);
@@ -38,9 +39,11 @@ const SettingsPage = () => {
                 notify_enabled: data.notify_enabled === 'true',
                 notify_bark_url: data.notify_bark_url || '',
                 notify_webhook_url: data.notify_webhook_url || '',
-                notify_webhook_method: data.notify_webhook_method || 'GET'
+                notify_webhook_method: data.notify_webhook_method || 'GET',
+                notify_on_download_start: data.notify_on_download_start === 'true'
             });
             setCookieCheckInterval(data.cookie_check_interval || '60');
+            setCheckinTime(data.checkin_time || '09:00');
         } catch (err) {
             console.error('Fetch settings failed:', err);
         }
@@ -66,6 +69,7 @@ const SettingsPage = () => {
                     site_name: tempSiteName,
                     search_page_limit: searchLimit,
                     cookie_check_interval: cookieCheckInterval,
+                    checkin_time: checkinTime,
                     ...logSettings
                 })
             });
@@ -252,13 +256,14 @@ const SettingsPage = () => {
                                     <div className="flex items-center space-x-3">
                                         <div className="flex-1">
                                             <p className={`text-sm ${textPrimary} font-medium`}>最大日志条数/任务</p>
-                                            <input
-                                                type="number"
-                                                value={logSettings.log_max_count}
-                                                onChange={(e) => setLogSettings({ ...logSettings, log_max_count: e.target.value })}
-                                                className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
-                                            />
+                                            <p className={`text-[10px] ${textSecondary}`}>每个任务最大保留条目数</p>
                                         </div>
+                                        <input
+                                            type="number"
+                                            value={logSettings.log_max_count}
+                                            onChange={(e) => setLogSettings({ ...logSettings, log_max_count: e.target.value })}
+                                            className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
+                                        />
                                     </div>
                                     <div className="flex items-center space-x-3">
                                         <div className="flex-1">
@@ -273,49 +278,61 @@ const SettingsPage = () => {
                                             className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
                                         />
                                     </div>
+                                    <div className="flex items-center space-x-3">
+                                        <div className="flex-1">
+                                            <p className={`text-sm ${textPrimary} font-medium`}>每日自动签到时间</p>
+                                            <p className={`text-[10px] ${textSecondary}`}>PT 站点每日自动打卡时间</p>
+                                        </div>
+                                        <input
+                                            type="time"
+                                            value={checkinTime}
+                                            onChange={(e) => setCheckinTime(e.target.value)}
+                                            className={`w-32 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center outline-none focus:border-blue-500`}
+                                        />
+                                    </div>
                                 </div>
-                            </div>
-
-                            <hr className={borderColor} />
-
-                            {/* Section 3: Interface */}
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-3 sm:space-y-0">
-                                <div>
-                                    <p className={`text-sm font-medium ${textPrimary}`}>视觉主题</p>
-                                    <p className={`text-[10px] ${textSecondary}`}>选择您偏好的界面显示模式</p>
-                                </div>
-                                <div className={`flex items-center ${darkMode ? 'bg-gray-700/50' : 'bg-gray-100'} p-1 rounded-lg border ${borderColor}`}>
-                                    {[
-                                        { id: 'light', name: '浅色', icon: '☀️' },
-                                        { id: 'dark', name: '深色', icon: '🌙' },
-                                        { id: 'system', name: '系统', icon: '🖥️' }
-                                    ].map((mode) => (
-                                        <button
-                                            key={mode.id}
-                                            onClick={() => setThemeMode(mode.id)}
-                                            className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center space-x-1.5 ${themeMode === mode.id
-                                                ? 'bg-blue-600 text-white shadow-sm font-bold'
-                                                : `${textSecondary} hover:${textPrimary} hover:bg-gray-200/50 dark:hover:bg-gray-600/30`}`}
-                                        >
-                                            <span>{mode.icon}</span>
-                                            <span>{mode.name}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Save Button Row */}
-                            <div className="pt-2 flex justify-end">
-                                <button
-                                    onClick={handleSaveGeneral}
-                                    disabled={saving}
-                                    className="px-8 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-bold text-sm disabled:opacity-50 shadow-lg shadow-blue-600/20"
-                                >
-                                    {saving ? '保存中...' : '提交所有设置'}
-                                </button>
                             </div>
                         </div>
-                    </div >
+
+                        <hr className={borderColor} />
+
+                        {/* Section 3: Interface */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-3 sm:space-y-0">
+                            <div>
+                                <p className={`text-sm font-medium ${textPrimary}`}>视觉主题</p>
+                                <p className={`text-[10px] ${textSecondary}`}>选择您偏好的界面显示模式</p>
+                            </div>
+                            <div className={`flex items-center ${darkMode ? 'bg-gray-700/50' : 'bg-gray-100'} p-1 rounded-lg border ${borderColor}`}>
+                                {[
+                                    { id: 'light', name: '浅色', icon: '☀️' },
+                                    { id: 'dark', name: '深色', icon: '🌙' },
+                                    { id: 'system', name: '系统', icon: '🖥️' }
+                                ].map((mode) => (
+                                    <button
+                                        key={mode.id}
+                                        onClick={() => setThemeMode(mode.id)}
+                                        className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center space-x-1.5 ${themeMode === mode.id
+                                            ? 'bg-blue-600 text-white shadow-sm font-bold'
+                                            : `${textSecondary} hover:${textPrimary} hover:bg-gray-200/50 dark:hover:bg-gray-600/30`}`}
+                                    >
+                                        <span>{mode.icon}</span>
+                                        <span>{mode.name}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Save Button Row */}
+                        <div className="pt-2 flex justify-end">
+                            <button
+                                onClick={handleSaveGeneral}
+                                disabled={saving}
+                                className="px-8 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-bold text-sm disabled:opacity-50 shadow-lg shadow-blue-600/20"
+                            >
+                                {saving ? '保存中...' : '提交所有设置'}
+                            </button>
+                        </div>
+                    </div>
                 );
             case 'notifications':
                 return (
@@ -329,20 +346,20 @@ const SettingsPage = () => {
                         <div className={`${bgSecondary} p-6 rounded-xl border ${borderColor} space-y-8`}>
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <h3 className={`text-sm font-bold ${textPrimary}`}>推送通知</h3>
-                                    <p className={`text-[10px] ${textSecondary}`}>在 RSS 匹配到合适资源并成功下种时发送通知</p>
+                                    <h3 className={`text-sm font-bold ${textPrimary}`}>资源下载通知</h3>
+                                    <p className={`text-[10px] ${textSecondary}`}>当 RSS 自动匹配或手动搜索点击下载时发送通知</p>
                                 </div>
                                 <button
-                                    onClick={() => setNotifySettings({ ...notifySettings, notify_enabled: !notifySettings.notify_enabled })}
-                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${notifySettings.notify_enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+                                    onClick={() => setNotifySettings({ ...notifySettings, notify_on_download_start: !notifySettings.notify_on_download_start })}
+                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${notifySettings.notify_on_download_start ? 'bg-blue-600' : 'bg-gray-300'}`}
                                 >
-                                    <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${notifySettings.notify_enabled ? 'left-6.5' : 'left-0.5'}`} />
+                                    <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${notifySettings.notify_on_download_start ? 'left-6.5' : 'left-0.5'}`} />
                                 </button>
                             </div>
 
                             <hr className={borderColor} />
 
-                            <div className={`space-y-6 ${notifySettings.notify_enabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                            <div className="space-y-6">
                                 <div>
                                     <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>Bark 通知 (iOS 专用)</label>
                                     <input
@@ -381,7 +398,7 @@ const SettingsPage = () => {
                             <div className="pt-4 flex justify-end space-x-3">
                                 <button
                                     onClick={handleTestNotify}
-                                    disabled={saving || !notifySettings.notify_enabled}
+                                    disabled={saving || !notifySettings.notify_on_download_start}
                                     className={`px-6 py-2 border ${borderColor} ${textSecondary} hover:${textPrimary} rounded-lg transition-all font-bold text-sm disabled:opacity-30`}
                                 >
                                     发送测试通知

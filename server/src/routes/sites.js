@@ -86,4 +86,44 @@ router.post('/check-all', async (req, res) => {
     }
 });
 
+// Refresh site user stats
+router.get('/:id/refresh-stats', async (req, res) => {
+    try {
+        const stats = await siteService.refreshUserStats(req.params.id);
+        res.json({ stats });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Refresh all sites' user stats
+router.post('/refresh-all-stats', async (req, res) => {
+    try {
+        await siteService.refreshAllUserStats();
+        res.json({ message: 'All user stats refreshed' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Manual checkin for a site
+router.post('/:id/checkin', async (req, res) => {
+    try {
+        const success = await siteService.checkinSite(req.params.id);
+        res.json({ success });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Manual checkin for all sites
+router.post('/checkin-all', async (req, res) => {
+    try {
+        const count = await siteService.checkinAllSites();
+        res.json({ count });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

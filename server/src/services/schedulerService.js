@@ -20,6 +20,9 @@ class SchedulerService {
 
         // Start cookie check job
         this.startCookieCheckJob();
+
+        // Start checkin job
+        this.startCheckinJob();
     }
 
     startCookieCheckJob() {
@@ -40,6 +43,26 @@ class SchedulerService {
         this.cookieJob = schedule.scheduleJob(`*/${interval} * * * *`, () => {
             console.log(`[${new Date().toLocaleString()}] Periodic cookie check triggered...`);
             siteService.checkAllCookies();
+        });
+    }
+
+    startCheckinJob() {
+        if (this.checkinJob) {
+            this.checkinJob.cancel();
+        }
+
+        const { getDB } = require('../db');
+        const db = getDB();
+        const setting = db.prepare("SELECT value FROM settings WHERE key = 'checkin_time'").get();
+        const time = setting?.value || '09:00'; // HH:mm
+        const [hour, minute] = time.split(':');
+
+        console.log(`Starting daily check-in job at: ${time}`);
+
+        const siteService = require('./siteService');
+        this.checkinJob = schedule.scheduleJob(`${minute} ${hour} * * *`, () => {
+            console.log(`[${new Date().toLocaleString()}] Daily site check-in triggered...`);
+            siteService.checkinAllSites();
         });
     }
 

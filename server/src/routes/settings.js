@@ -34,9 +34,10 @@ router.post('/', (req, res) => {
         transaction(settings);
 
         // If cookie_check_interval was updated, restart the job
-        if (settings.cookie_check_interval) {
+        if (settings.cookie_check_interval || settings.checkin_time) {
             const schedulerService = require('../services/schedulerService');
-            schedulerService.startCookieCheckJob();
+            if (settings.cookie_check_interval) schedulerService.startCookieCheckJob();
+            if (settings.checkin_time) schedulerService.startCheckinJob();
         }
 
         res.json({ success: true });

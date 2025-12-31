@@ -413,6 +413,71 @@ const parsers = {
     }
 };
 
+const parseUserStats = (html, type) => {
+    if (type === 'Mock') {
+        return {
+            username: 'MockUser',
+            upload: '12.5 TB',
+            download: '2.3 TB',
+            ratio: '5.43',
+            bonus: '15,204',
+            level: '精英用户'
+        };
+    }
+
+    if (type === 'NexusPHP') {
+        const $ = cheerio.load(html);
+        const stats = {
+            username: '',
+            upload: '',
+            download: '',
+            ratio: '',
+            bonus: '',
+            level: ''
+        };
+
+        // Username: typically in the userdetails.php?id=... link
+        const userLink = $('a[href*="userdetails.php"]').first();
+        if (userLink.length) {
+            stats.username = userLink.text().trim();
+        }
+
+        const text = $('body').text();
+
+        // Ratio pattern: 分享率: 5.43 or Ratio: 5.43
+        const ratioMatch = text.match(/(分享率|Ratio)[:\s]+([\d.]+)/i);
+        if (ratioMatch) stats.ratio = ratioMatch[2];
+
+        // Upload pattern: 上传量: 12.5 TB or Uploaded: 12.5 TB
+        const uploadMatch = text.match(/(上传量|Uploaded)[:\s]+([\d.]+\s*[MGT]B)/i);
+        if (uploadMatch) stats.upload = uploadMatch[2];
+
+        // Download pattern: 下载量: 2.3 TB or Downloaded: 2.3 TB
+        const downloadMatch = text.match(/(下载量|Downloaded)[:\s]+([\d.]+\s*[MGT]B)/i);
+        if (downloadMatch) stats.download = downloadMatch[2];
+
+        // Bonus pattern: 魔力值: 15,204 or Bonus: 15,204
+        const bonusMatch = text.match(/(魔力值|Bonus|积分|Karma)[:\s]+([\d,.]+)/i);
+        if (bonusMatch) stats.bonus = bonusMatch[2];
+
+        // Level pattern: 用户等级 in some specific span or text
+        const levelMatch = text.match(/(等级|Class|Level)[:\s]+([^\s]+)/i);
+        if (levelMatch) stats.level = levelMatch[2];
+
+        // If level not found in text, try looking for common level class links
+        if (!stats.level) {
+            const levelLink = $('a[href*="userdetails.php"] font[class], a[href*="userdetails.php"] span[class]').first();
+            if (levelLink.length) {
+                stats.level = levelLink.text().trim();
+            }
+        }
+
+        return stats;
+    }
+
+    return null;
+};
+
 module.exports = {
     parse: (html, type, baseUrl) => {
         const parser = parsers[type];
@@ -420,5 +485,6 @@ module.exports = {
             return parser(html, baseUrl);
         }
         return [];
-    }
+    },
+    parseUserStats
 };

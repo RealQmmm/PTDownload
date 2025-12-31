@@ -99,9 +99,13 @@ router.post('/', async (req, res) => {
                     // For manual downloads, task_id is NULL
                     db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size) VALUES (?, ?, ?, ?)')
                         .run(null, torrentUrl, title, sizeBytes);
+
+                    // Send notification
+                    const notificationService = require('../services/notificationService');
+                    notificationService.notifyDownloadStart(title, size);
                 }
             } catch (err) {
-                console.error('Failed to record manual download:', err.message);
+                console.error('Failed to record manual download or notify:', err.message);
                 // Non-critical error, don't fail the response
             }
             res.json(result);

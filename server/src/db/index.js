@@ -33,6 +33,15 @@ function createTables() {
       enabled INTEGER DEFAULT 1,
       cookie_status INTEGER DEFAULT 0,
       last_checked_at DATETIME,
+      username TEXT,
+      upload TEXT,
+      download TEXT,
+      ratio TEXT,
+      bonus TEXT,
+      level TEXT,
+      stats_updated_at DATETIME,
+      auto_checkin INTEGER DEFAULT 0,
+      last_checkin_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -123,12 +132,23 @@ function createTables() {
     INSERT OR IGNORE INTO settings (key, value) VALUES ('log_max_count', '100');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('search_page_limit', '1');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('cookie_check_interval', '60');
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('notify_on_download_start', 'true');
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('checkin_time', '09:00');
   `;
 
   db.exec(schema);
 
+  try { db.exec('ALTER TABLE sites ADD COLUMN username TEXT'); } catch (e) { }
+  try { db.exec('ALTER TABLE sites ADD COLUMN upload TEXT'); } catch (e) { }
+  try { db.exec('ALTER TABLE sites ADD COLUMN download TEXT'); } catch (e) { }
+  try { db.exec('ALTER TABLE sites ADD COLUMN ratio TEXT'); } catch (e) { }
+  try { db.exec('ALTER TABLE sites ADD COLUMN bonus TEXT'); } catch (e) { }
+  try { db.exec('ALTER TABLE sites ADD COLUMN level TEXT'); } catch (e) { }
+  try { db.exec('ALTER TABLE sites ADD COLUMN stats_updated_at DATETIME'); } catch (e) { }
   try { db.exec('ALTER TABLE sites ADD COLUMN cookie_status INTEGER DEFAULT 0'); } catch (e) { }
   try { db.exec('ALTER TABLE sites ADD COLUMN last_checked_at DATETIME'); } catch (e) { }
+  try { db.exec('ALTER TABLE sites ADD COLUMN auto_checkin INTEGER DEFAULT 0'); } catch (e) { }
+  try { db.exec('ALTER TABLE sites ADD COLUMN last_checkin_at DATETIME'); } catch (e) { }
   // Migrations for existing tables
   try { db.exec('ALTER TABLE task_history ADD COLUMN item_size INTEGER DEFAULT 0'); } catch (e) { }
   try { db.exec('ALTER TABLE task_history ADD COLUMN is_finished INTEGER DEFAULT 0'); } catch (e) { }
