@@ -2,7 +2,7 @@ import React from 'react';
 import { useTheme } from '../App';
 
 const Sidebar = ({ activeTab, setActiveTab }) => {
-    const { darkMode, siteName, expiredCookiesCount } = useTheme();
+    const { darkMode, siteName, expiredCookiesCount, handleLogout } = useTheme();
 
     const menus = [
         { id: 'dashboard', name: '仪表盘', icon: '📊' },
@@ -45,9 +45,18 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
                 ))}
             </nav>
             <div className={`p-4 border-t ${borderColor}`}>
-                <div className={`flex items-center ${textSecondary} text-sm`}>
-                    <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-                    服务运行中
+                <div className="flex items-center justify-between">
+                    <div className={`flex items-center ${textSecondary} text-sm`}>
+                        <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                        服务运行中
+                    </div>
+                    <button
+                        onClick={handleLogout}
+                        className={`p-1.5 rounded-lg ${hoverBg} ${textSecondary} hover:text-red-400 transition-colors`}
+                        title="退出登录"
+                    >
+                        <span className="text-lg">🚪</span>
+                    </button>
                 </div>
             </div>
         </div>

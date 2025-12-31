@@ -6,8 +6,15 @@ class SchedulerService {
         this.jobs = new Map();
     }
 
+    _isLogEnabled() {
+        const { getDB } = require('../db');
+        const db = getDB();
+        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
+        return logSetting && logSetting.value === 'true';
+    }
+
     init() {
-        console.log('Initializing scheduler...');
+        if (this._isLogEnabled()) console.log('Initializing scheduler...');
         const tasks = taskService.getAllTasks();
         tasks.forEach(task => {
             if (task.enabled) {
@@ -35,14 +42,19 @@ class SchedulerService {
         const setting = db.prepare("SELECT value FROM settings WHERE key = 'cookie_check_interval'").get();
         const interval = parseInt(setting?.value || '60');
 
-        console.log(`Starting cookie check job with interval: ${interval} minutes`);
+        if (this._isLogEnabled()) console.log(`Starting cookie check job with interval: ${interval} minutes`);
 
         const siteService = require('./siteService');
+        const loggerService = require('./loggerService');
         // Define the job using RecurrenceRule or cron string
         // Cron: */interval * * * *
-        this.cookieJob = schedule.scheduleJob(`*/${interval} * * * *`, () => {
-            console.log(`[${new Date().toLocaleString()}] Periodic cookie check triggered...`);
-            siteService.checkAllCookies();
+        this.cookieJob = schedule.scheduleJob(`*/${interval} * * * *`, async () => {
+            if (this._isLogEnabled()) console.log(`[${new Date().toLocaleString()}] Periodic cookie check triggered...`);
+            const results = await siteService.checkAllCookies();
+            const valid = results.filter(r => r === true).length;
+            if (this._isLogEnabled() || results.some(r => r === false)) {
+                loggerService.log(`周期性 Cookie 检查完成：${valid}/${results.length} 站点有效`, results.every(r => r) ? 'success' : 'error');
+            }
         });
     }
 
@@ -57,24 +69,26 @@ class SchedulerService {
         const time = setting?.value || '09:00'; // HH:mm
         const [hour, minute] = time.split(':');
 
-        console.log(`Starting daily check-in job at: ${time}`);
+        if (this._isLogEnabled()) console.log(`Starting daily check-in job at: ${time}`);
 
         const siteService = require('./siteService');
-        this.checkinJob = schedule.scheduleJob(`${minute} ${hour} * * *`, () => {
-            console.log(`[${new Date().toLocaleString()}] Daily site check-in triggered...`);
-            siteService.checkinAllSites();
+        const loggerService = require('./loggerService');
+        this.checkinJob = schedule.scheduleJob(`${minute} ${hour} * * *`, async () => {
+            if (this._isLogEnabled()) console.log(`[${new Date().toLocaleString()}] Daily site check-in triggered...`);
+            const successCount = await siteService.checkinAllSites();
+            loggerService.log(`每日自动签到完成，成功 ${successCount} 个站点`, 'success');
         });
     }
 
     startCleanupJob() {
-        console.log('Starting daily log cleanup job (3 AM)...');
-        schedule.scheduleJob('0 3 * * *', () => {
-            this.cleanOldLogs();
+        if (this._isLogEnabled()) console.log('Starting daily log cleanup job (3 AM)...');
+        schedule.scheduleJob('0 3 * * *', async () => {
+            await this.cleanOldLogs();
         });
     }
 
     async cleanOldLogs() {
-        console.log('Executing log cleanup...');
+        if (this._isLogEnabled()) console.log('Executing log cleanup...');
         const { getDB } = require('../db');
         const db = getDB();
 
@@ -113,6 +127,9 @@ class SchedulerService {
             const delHeatmap = db.prepare('DELETE FROM site_daily_stats WHERE date < ?').run(heatmapDateStr);
             console.log(`[Cleanup] Deleted ${delHeatmap.changes} heatmap records older than ${heatmapDateStr}`);
 
+            const loggerService = require('./loggerService');
+            loggerService.log(`系统维护完成：清理了 ${delDate.changes + totalKeepDeleted} 条日志及 ${delHeatmap.changes} 条热力数据`, 'success');
+
         } catch (err) {
             console.error('[Cleanup] Failed to clean logs:', err.message);
         }
@@ -143,12 +160,12 @@ class SchedulerService {
         if (this.jobs.has(id)) {
             this.jobs.get(id).cancel();
             this.jobs.delete(id);
-            console.log(`Cancelled task: ${id}`);
+            if (this._isLogEnabled()) console.log(`Cancelled task: ${id}`);
         }
     }
 
     async executeTask(task) {
-        console.log(`[${new Date().toLocaleString()}] Executing task: ${task.name} (Type: ${task.type})`);
+        if (this._isLogEnabled()) console.log(`[${new Date().toLocaleString()}] Executing task: ${task.name} (Type: ${task.type})`);
 
         if (task.type === 'rss') {
             const rssService = require('./rssService');

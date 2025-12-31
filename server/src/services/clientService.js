@@ -21,18 +21,18 @@ class ClientService {
     }
 
     createClient(client) {
-        const { type, host, port, username, password } = client;
+        const { name, type, host, port, username, password } = client;
         const info = this._getDB().prepare(
-            'INSERT INTO clients (type, host, port, username, password) VALUES (?, ?, ?, ?, ?)'
-        ).run(type, host, port, username, password);
+            'INSERT INTO clients (name, type, host, port, username, password) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(name, type, host, port, username, password);
         return info.lastInsertRowid;
     }
 
     updateClient(id, client) {
-        const { type, host, port, username, password } = client;
+        const { name, type, host, port, username, password } = client;
         return this._getDB().prepare(
-            'UPDATE clients SET type = ?, host = ?, port = ?, username = ?, password = ? WHERE id = ?'
-        ).run(type, host, port, username, password, id);
+            'UPDATE clients SET name = ?, type = ?, host = ?, port = ?, username = ?, password = ? WHERE id = ?'
+        ).run(name, type, host, port, username, password, id);
     }
 
     deleteClient(id) {

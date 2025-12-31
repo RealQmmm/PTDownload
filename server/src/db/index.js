@@ -56,6 +56,7 @@ function createTables() {
 
     CREATE TABLE IF NOT EXISTS clients (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT,
       type TEXT NOT NULL,
       host TEXT NOT NULL,
       port INTEGER NOT NULL,
@@ -181,7 +182,8 @@ function createTables() {
     'ALTER TABLE task_history ADD COLUMN is_finished INTEGER DEFAULT 0',
     'ALTER TABLE task_history ADD COLUMN finish_time DATETIME',
     'ALTER TABLE stats_checkpoint ADD COLUMN historical_total_downloaded INTEGER DEFAULT 0',
-    'ALTER TABLE stats_checkpoint ADD COLUMN historical_total_uploaded INTEGER DEFAULT 0'
+    'ALTER TABLE stats_checkpoint ADD COLUMN historical_total_uploaded INTEGER DEFAULT 0',
+    'ALTER TABLE clients ADD COLUMN name TEXT'
   ];
 
   migrations.forEach(sql => {

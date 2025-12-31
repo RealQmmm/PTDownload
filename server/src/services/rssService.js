@@ -5,11 +5,15 @@ const downloaderService = require('./downloaderService');
 const siteService = require('./siteService');
 const clientService = require('./clientService');
 const notificationService = require('./notificationService');
+const loggerService = require('./loggerService');
 
 class RSSService {
     async executeTask(task) {
-        console.log(`[RSS] Executing task: ${task.name}`);
         const db = getDB();
+        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
+        const enableLogs = logSetting && logSetting.value === 'true';
+
+        if (enableLogs) console.log(`[RSS] Executing task: ${task.name}`);
 
         try {
             // 1. Get site info for cookies
@@ -51,7 +55,7 @@ class RSSService {
                 items.push({ title, link, guid, size });
             });
 
-            console.log(`[RSS] Found ${items.length} items in feed`);
+            if (enableLogs) console.log(`[RSS] Found ${items.length} items in feed`);
 
             // 4. Filter and Process
             const filterConfig = JSON.parse(task.filter_config || '{}');
@@ -66,7 +70,7 @@ class RSSService {
                     const exists = db.prepare('SELECT id FROM task_history WHERE task_id = ? AND item_guid = ?').get(task.id, item.guid);
 
                     if (!exists) {
-                        console.log(`[RSS] Match found: ${item.title}. Adding to downloader...`);
+                        if (enableLogs) console.log(`[RSS] Match found: ${item.title}. Adding to downloader...`);
 
                         const result = await downloaderService.addTorrent(targetClient, item.link, {
                             savePath: task.save_path,
@@ -76,7 +80,7 @@ class RSSService {
                         if (result.success) {
                             db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size) VALUES (?, ?, ?, ?)')
                                 .run(task.id, item.guid, item.title, item.size);
-                            console.log(`[RSS] Successfully added: ${item.title}`);
+                            if (enableLogs) console.log(`[RSS] Successfully added: ${item.title}`);
 
                             // Send notification
                             try {
@@ -92,33 +96,23 @@ class RSSService {
                                 console.error('[RSS] Notification failed:', notifyErr.message);
                             }
                         } else {
-                            console.error(`[RSS] Failed to add ${item.title}: ${result.message}`);
+                            if (enableLogs) console.error(`[RSS] Failed to add ${item.title}: ${result.message}`);
                         }
                     }
                 }
             }
 
-            this._logTask(task.id, 'success', `成功发现 ${items.length} 个资源，匹配 ${matchCount} 个`, items.length, matchCount);
+            loggerService.log(`成功发现 ${items.length} 个资源，匹配 ${matchCount} 个`, 'success', task.id, items.length, matchCount);
 
         } catch (err) {
-            console.error(`[RSS] Task ${task.name} failed:`, err.message);
-            this._logTask(task.id, 'error', err.message);
+            if (enableLogs) console.error(`[RSS] Task ${task.name} failed:`, err.message);
+            loggerService.log(err.message, 'error', task.id);
         }
     }
 
+    // _logTask is now handled by loggerService.log
     _logTask(taskId, status, message, found = 0, matched = 0) {
-        const db = getDB();
-        try {
-            // 使用当地 ISO 时间格式，避免 UTC 转换偏差
-            const localTime = new Date().toLocaleString('sv-SE').replace(' ', 'T');
-            db.prepare('INSERT INTO task_logs (task_id, run_time, status, message, items_found, items_matched) VALUES (?, ?, ?, ?, ?, ?)')
-                .run(taskId, localTime, status, message, found, matched);
-
-            // 同时更新任务表的最后运行时间
-            db.prepare('UPDATE tasks SET last_run = ? WHERE id = ?').run(localTime, taskId);
-        } catch (err) {
-            console.error('[RSS] Failed to write log:', err.message);
-        }
+        loggerService.log(message, status, taskId, found, matched);
     }
 
     _itemMatches(item, config) {

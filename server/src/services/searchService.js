@@ -7,9 +7,13 @@ const { getDB } = require('../db');
 class SearchService {
     async search(query, days = null, page = null) {
         const sites = siteService.getAllSites();
-        const enabledSites = sites.filter(s => s.enabled);
+        const enabledSites = sites.filter(s => {
+            const isEnabled = s.enabled === 1 || s.enabled === true || s.enabled === '1';
+            return isEnabled && s.url;
+        });
 
         if (enabledSites.length === 0) {
+            console.warn(`Search requested but no enabled sites found. Total sites: ${sites.length}`);
             return [];
         }
 
@@ -32,8 +36,9 @@ class SearchService {
         // Cap maxPages to avoid abuse/errors
         maxPages = Math.max(1, Math.min(maxPages, 50));
 
+        const siteNames = enabledSites.map(s => s.name).join(', ');
         const isRecentSearch = !query || query.trim() === '';
-        console.log(`Starting ${isRecentSearch ? 'recent' : 'keyword'} search ${!isRecentSearch ? `for "${query}"` : ''} with page limit ${maxPages} across ${enabledSites.length} sites...`);
+        console.log(`Starting ${isRecentSearch ? 'recent' : 'keyword'} search ${!isRecentSearch ? `for "${query}"` : ''} with page limit ${maxPages} across [${siteNames}]...`);
 
         const searchPromises = enabledSites.map(async (site) => {
             const pageResultsPromises = Array.from({ length: maxPages }, async (_, i) => {
@@ -67,10 +72,20 @@ class SearchService {
                         'Cookie': site.cookies || ''
                     };
 
+                    const https = require('https');
                     const response = await axios.get(searchUrl.toString(), {
                         headers,
-                        timeout: 10000
+                        timeout: 10000,
+                        validateStatus: null, // Capture all statuses
+                        httpsAgent: new https.Agent({
+                            rejectUnauthorized: false,
+                            servername: new URL(site.url).hostname // Explicitly set SNI
+                        })
                     });
+
+                    if (response.status !== 200) {
+                        return [];
+                    }
 
                     let results = siteParsers.parse(response.data, site.type, site.url);
 
@@ -93,16 +108,7 @@ class SearchService {
             const allPagesResults = await Promise.all(pageResultsPromises);
             const flatResults = allPagesResults.flat();
 
-            // Deduplicate by ID or Link
-            const seen = new Set();
-            const uniqueResults = flatResults.filter(item => {
-                const key = item.id || item.link;
-                if (!key || seen.has(key)) return false;
-                seen.add(key);
-                return true;
-            });
-
-            return uniqueResults.map(r => ({ ...r, siteName: site.name }));
+            return flatResults.map(r => ({ ...r, siteName: site.name }));
         });
 
         const resultsArrays = await Promise.all(searchPromises);

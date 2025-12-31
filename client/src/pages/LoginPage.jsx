@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function LoginPage({ onLogin, siteName }) {
+export default function LoginPage({ onLogin, siteName, themeMode, setThemeMode, darkMode }) {
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState('')
@@ -34,64 +34,102 @@ export default function LoginPage({ onLogin, siteName }) {
         }
     }
 
+    const bgClass = darkMode ? 'bg-gray-900' : 'bg-gray-50';
+    const cardBg = darkMode ? 'bg-gray-800' : 'bg-white';
+    const borderClass = darkMode ? 'border-gray-700' : 'border-gray-200';
+    const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
+    const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-500';
+    const inputBg = darkMode ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900';
+
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 p-4">
-            <div className="max-w-md w-full space-y-8 bg-gray-800 p-8 rounded-2xl shadow-2xl border border-gray-700">
-                <div>
-                    <h2 className="mt-6 text-center text-3xl font-extrabold text-blue-400">
+        <div className={`min-h-screen flex flex-col items-center justify-center ${bgClass} p-4 transition-colors duration-300`}>
+            {/* Theme Toggle in Header-right style */}
+            <div className="fixed top-6 right-6 flex items-center bg-gray-500/10 backdrop-blur-sm p-1 rounded-xl border border-gray-500/20">
+                {[
+                    { id: 'light', icon: '☀️' },
+                    { id: 'dark', icon: '🌙' },
+                    { id: 'system', icon: '🖥️' }
+                ].map((mode) => (
+                    <button
+                        key={mode.id}
+                        onClick={() => setThemeMode(mode.id)}
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${themeMode === mode.id
+                            ? 'bg-blue-600 text-white shadow-lg'
+                            : 'text-gray-500 hover:bg-gray-500/20'}`}
+                    >
+                        {mode.icon}
+                    </button>
+                ))}
+            </div>
+
+            <div className={`max-w-md w-full space-y-8 ${cardBg} p-10 rounded-3xl shadow-2xl border ${borderClass} transition-all`}>
+                <div className="text-center">
+                    <div className="inline-block p-4 rounded-2xl bg-blue-600/10 mb-4">
+                        <span className="text-4xl text-blue-500">📁</span>
+                    </div>
+                    <h2 className={`text-3xl font-black ${textPrimary} tracking-tight`}>
                         {siteName}
                     </h2>
-                    <p className="mt-2 text-center text-sm text-gray-400">
-                        请输入您的凭据以继续
+                    <p className={`mt-3 ${textSecondary} text-sm font-medium`}>
+                        请登录您的管理账号
                     </p>
                 </div>
+
                 <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
                     {error && (
-                        <div className="bg-red-500/10 border border-red-500 text-red-500 text-sm p-3 rounded-lg text-center">
+                        <div className="bg-red-500/10 border border-red-500/50 text-red-500 text-xs py-3 px-4 rounded-xl text-center font-bold animate-shake">
                             {error}
                         </div>
                     )}
-                    <div className="rounded-md shadow-sm -space-y-px">
-                        <div className="mb-4">
-                            <label className="text-gray-400 text-xs mb-1 block ml-1">用户名</label>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className={`${textSecondary} text-[10px] font-bold uppercase tracking-widest mb-1.5 block ml-1`}>用户名 / Username</label>
                             <input
                                 type="text"
                                 required
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
-                                className="appearance-none relative block w-full px-3 py-2 border border-gray-600 placeholder-gray-500 text-white rounded-lg bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all"
-                                placeholder="Admin"
+                                className={`appearance-none relative block w-full px-4 py-3 border ${borderClass} placeholder-gray-500 ${textPrimary} rounded-2xl ${inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 sm:text-sm transition-all`}
+                                placeholder="请输入用户名"
                             />
                         </div>
                         <div>
-                            <label className="text-gray-400 text-xs mb-1 block ml-1">密码</label>
+                            <label className={`${textSecondary} text-[10px] font-bold uppercase tracking-widest mb-1.5 block ml-1`}>密码 / Password</label>
                             <input
                                 type="password"
                                 required
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="appearance-none relative block w-full px-3 py-2 border border-gray-600 placeholder-gray-500 text-white rounded-lg bg-gray-700 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all"
-                                placeholder="••••••••"
+                                className={`appearance-none relative block w-full px-4 py-3 border ${borderClass} placeholder-gray-500 ${textPrimary} rounded-2xl ${inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 sm:text-sm transition-all`}
+                                placeholder="请输入密码"
                             />
                         </div>
                     </div>
 
-                    <div>
+                    <div className="pt-2">
                         <button
                             type="submit"
                             disabled={loading}
-                            className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            className={`group relative w-full flex justify-center py-3.5 px-4 border border-transparent text-sm font-black rounded-2xl text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-500/30 transition-all active:scale-[0.98] shadow-lg shadow-blue-600/30 ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
                         >
-                            {loading ? '登录中...' : '登录'}
+                            {loading ? (
+                                <span className="flex items-center">
+                                    <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    身份验证中...
+                                </span>
+                            ) : '进入控制台'}
                         </button>
-                    </div>
-
-                    <div className="text-center text-xs text-gray-500">
-                        <p>默认账号: admin / admin123</p>
-                        <p className="mt-1 text-yellow-500/80">首次登录后请务必在设置中修改密码</p>
                     </div>
                 </form>
             </div>
+
+            <p className={`mt-8 ${textSecondary} text-xs font-medium`}>
+                &copy; {new Date().getFullYear()} {siteName}. All Rights Reserved.
+            </p>
         </div>
     )
 }

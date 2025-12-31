@@ -1,5 +1,6 @@
 const { getDB } = require('../db');
 const axios = require('axios');
+const loggerService = require('./loggerService');
 
 class SiteService {
     constructor() {
@@ -74,8 +75,12 @@ class SiteService {
         const site = this.getSiteById(id);
         if (!site || !site.url || site.type === 'Mock') return true;
 
+        const db = this._getDB();
+        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
+        const enableLogs = logSetting && logSetting.value === 'true';
+
         try {
-            console.log(`Checking cookie for site: ${site.name} (${site.url})`);
+            if (enableLogs) console.log(`Checking cookie for site: ${site.name} (${site.url})`);
             const response = await axios.get(site.url, {
                 headers: {
                     'Cookie': site.cookies || '',
@@ -108,14 +113,16 @@ class SiteService {
                     db.prepare('UPDATE sites SET cookie_status = 0, last_checked_at = ? WHERE id = ?')
                         .run(now, id);
                 }
+                if (enableLogs) console.log(`[Status] ${site.name} cookie is valid`);
             } else {
                 db.prepare('UPDATE sites SET cookie_status = 1, last_checked_at = ? WHERE id = ?')
                     .run(new Date().toISOString(), id);
+                loggerService.log(`站点 ${site.name} Cookie 已失效，请及时处理`, 'error');
             }
 
             return status === 0;
         } catch (err) {
-            console.error(`Cookie check failed for ${site.name}:`, err.message);
+            if (enableLogs) console.error(`Cookie check failed for ${site.name}:`, err.message);
             return false;
         }
     }
@@ -124,10 +131,14 @@ class SiteService {
         const site = this.getSiteById(id);
         if (!site || !site.url) return null;
 
+        const db = this._getDB();
+        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
+        const enableLogs = logSetting && logSetting.value === 'true';
+
         const siteParsers = require('../utils/siteParsers');
 
         try {
-            console.log(`Refreshing user stats for site: ${site.name}`);
+            if (enableLogs) console.log(`Refreshing user stats for site: ${site.name}`);
             let html = '';
 
             if (site.type === 'Mock') {
@@ -179,7 +190,7 @@ class SiteService {
             }
             return null;
         } catch (err) {
-            console.error(`Failed to refresh stats for ${site.name}:`, err.message);
+            if (enableLogs) console.error(`Failed to refresh stats for ${site.name}:`, err.message);
             return null;
         }
     }
@@ -215,10 +226,14 @@ class SiteService {
         const site = this.getSiteById(id);
         if (!site || !site.url || !site.enabled) return false;
 
-        console.log(`[Checkin] Starting checkin for: ${site.name}`);
+        const db = this._getDB();
+        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
+        const enableLogs = logSetting && logSetting.value === 'true';
+
+        if (enableLogs) console.log(`[Checkin] Starting checkin for: ${site.name}`);
 
         if (site.type === 'Mock') {
-            console.log(`[Checkin] Mock checkin successful for ${site.name}`);
+            if (enableLogs) console.log(`[Checkin] Mock checkin successful for ${site.name}`);
             const db = this._getDB();
             db.prepare('UPDATE sites SET last_checkin_at = ? WHERE id = ?').run(new Date().toISOString(), id);
             return true;
@@ -241,16 +256,16 @@ class SiteService {
                 validateStatus: (status) => status < 400
             });
 
-            console.log(`[Checkin] ${site.name} checkin response received`);
+            if (enableLogs) console.log(`[Checkin] ${site.name} checkin response received`);
 
             const db = this._getDB();
             db.prepare('UPDATE sites SET last_checkin_at = ? WHERE id = ?').run(new Date().toISOString(), id);
 
-            await this.refreshUserStats(id);
-
+            loggerService.log(`站点 ${site.name} 自动签到成功`, 'success');
             return true;
         } catch (err) {
-            console.error(`[Checkin] ${site.name} failed:`, err.message);
+            if (enableLogs) console.error(`[Checkin] ${site.name} failed:`, err.message);
+            loggerService.log(`站点 ${site.name} 自动签到失败: ${err.message}`, 'error');
             return false;
         }
     }

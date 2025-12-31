@@ -65,7 +65,8 @@ const SearchPage = ({ searchState, setSearchState }) => {
 
         // If only one client, confirm and download directly
         if (clients.length === 1) {
-            if (window.confirm(`确认下载 "${item.name}" 到 [${clients[0].name}] 吗？`)) {
+            const clientName = clients[0].name || clients[0].type;
+            if (window.confirm(`确认下载 "${item.name}" 到 [${clientName}] 吗？`)) {
                 executeDownload(item, clients[0].id);
             }
         } else {
@@ -307,7 +308,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                 >
                                     <div className="text-2xl mr-4">📥</div>
                                     <div className="flex-1">
-                                        <div className={`${textPrimary} font-medium`}>{client.type}</div>
+                                        <div className={`${textPrimary} font-medium`}>{client.name || client.type}</div>
                                         <div className={`${textSecondary} text-sm`}>{client.host}:{client.port}</div>
                                     </div>
                                     <div className="text-blue-400">→</div>

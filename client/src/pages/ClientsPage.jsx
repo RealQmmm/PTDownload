@@ -17,6 +17,7 @@ const ClientsPage = () => {
     const hoverBg = darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100';
 
     const [formData, setFormData] = useState({
+        name: '',
         type: 'qBittorrent',
         host: 'localhost',
         port: 8080,
@@ -62,6 +63,7 @@ const ClientsPage = () => {
     const handleEdit = (client) => {
         setEditingClient(client);
         setFormData({
+            name: client.name || '',
             type: client.type,
             host: client.host,
             port: client.port,
@@ -74,6 +76,7 @@ const ClientsPage = () => {
     const handleAdd = () => {
         setEditingClient(null);
         setFormData({
+            name: '',
             type: 'qBittorrent',
             host: 'localhost',
             port: 8080,
@@ -136,7 +139,7 @@ const ClientsPage = () => {
                                 <div className="flex items-center">
                                     <div className={`text-2xl mr-3 w-12 h-12 ${darkMode ? 'bg-green-900/30' : 'bg-green-100'} rounded-lg flex items-center justify-center`}>📥</div>
                                     <div>
-                                        <h3 className={`font-bold ${textPrimary}`}>{client.type}</h3>
+                                        <h3 className={`font-bold ${textPrimary}`}>{client.name || client.type}</h3>
                                         <p className={`text-sm ${textSecondary}`}>{client.host}:{client.port}</p>
                                     </div>
                                 </div>
@@ -179,6 +182,16 @@ const ClientsPage = () => {
                             </h2>
                         </div>
                         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                            <div>
+                                <label className={`block text-sm font-medium ${textSecondary} mb-1`}>自定义名称</label>
+                                <input
+                                    type="text"
+                                    value={formData.name}
+                                    placeholder="例如：主下载器、NAS-QB 等"
+                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    className={`w-full ${inputBg} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
+                                />
+                            </div>
                             <div>
                                 <label className={`block text-sm font-medium ${textSecondary} mb-1`}>类型</label>
                                 <select

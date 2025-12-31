@@ -172,7 +172,7 @@ function App() {
     }
 
     if (!isAuthenticated) {
-        return <LoginPage onLogin={handleLogin} siteName={siteName} />;
+        return <LoginPage onLogin={handleLogin} siteName={siteName} themeMode={themeMode} setThemeMode={setThemeMode} darkMode={computedDarkMode} />;
     }
 
     const renderContent = () => {

@@ -65,6 +65,7 @@ app.use('/api/rss-sources', require('./routes/rssSources'));
 app.use('/api/download', require('./routes/download'));
 app.use('/api/stats', require('./routes/stats'));
 app.use('/api/settings', require('./routes/settings'));
+app.use('/api/logs', require('./routes/logs'));
 
 // Serve static files from React app
 const clientDistPath = path.join(__dirname, '../../client/dist');

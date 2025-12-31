@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
+import LogsPage from './LogsPage';
 
 const SettingsPage = () => {
     const { darkMode, themeMode, setThemeMode, siteName, setSiteName, authenticatedFetch } = useTheme();
@@ -7,7 +8,8 @@ const SettingsPage = () => {
     const [tempSiteName, setTempSiteName] = useState(siteName);
     const [logSettings, setLogSettings] = useState({
         log_retention_days: '7',
-        log_max_count: '100'
+        log_max_count: '100',
+        enable_system_logs: false
     });
     const [passwordData, setPasswordData] = useState({
         oldPassword: '',
@@ -77,7 +79,8 @@ const SettingsPage = () => {
             const data = await res.json();
             setLogSettings({
                 log_retention_days: data.log_retention_days || '7',
-                log_max_count: data.log_max_count || '100'
+                log_max_count: data.log_max_count || '100',
+                enable_system_logs: data.enable_system_logs === 'true'
             });
             setSearchLimit(data.search_page_limit || '1');
             setNotifySettings({
@@ -738,6 +741,8 @@ const SettingsPage = () => {
                         </div>
                     </div>
                 );
+            case 'logs':
+                return <LogsPage />;
             default:
                 return null;
         }
@@ -757,6 +762,7 @@ const SettingsPage = () => {
                             { id: 'backup', name: '备份', icon: '💾' },
                             { id: 'maintenance', name: '维护', icon: '🛠️' },
                             { id: 'network', name: '网络', icon: '🌐' },
+                            { id: 'logs', name: '日志', icon: '📜' },
                             { id: 'security', name: '安全', icon: '🔒' },
                             { id: 'about', name: '关于', icon: 'ℹ️' }
                         ].map(item => (

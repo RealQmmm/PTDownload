@@ -1,6 +1,7 @@
 const { getDB } = require('../db');
 const clientService = require('./clientService');
 const downloaderService = require('./downloaderService');
+const loggerService = require('./loggerService');
 
 class StatsService {
     // Helper to get local date string YYYY-MM-DD
@@ -104,6 +105,15 @@ class StatsService {
             // Update checkpoint
             db.prepare('UPDATE stats_checkpoint SET last_total_downloaded = ?, last_total_uploaded = ?, historical_total_downloaded = ?, historical_total_uploaded = ?, last_updated = CURRENT_TIMESTAMP WHERE id = 1')
                 .run(currentTotalDownloaded, currentTotalUploaded, histDl, histUl);
+
+            // Periodically log heartbeat if something was recorded
+            if (checkpoint && (checkpoint.last_total_downloaded > 0 || checkpoint.last_total_uploaded > 0)) {
+                let diffDownloaded = currentTotalDownloaded - checkpoint.last_total_downloaded;
+                let diffUploaded = currentTotalUploaded - checkpoint.last_total_uploaded;
+                if (diffDownloaded > 0 || diffUploaded > 0) {
+                    loggerService.log(`数据采集：新增下载 ${(diffDownloaded / 1024 / 1024).toFixed(2)}MB, 新增上传 ${(diffUploaded / 1024 / 1024).toFixed(2)}MB`, 'success');
+                }
+            }
 
         } catch (err) {
             console.error('Failed to update daily stats:', err);
