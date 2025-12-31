@@ -155,7 +155,10 @@ function createTables() {
     { key: 'cookie_check_interval', value: '60' },
     { key: 'notify_on_download_start', value: 'true' },
     { key: 'checkin_time', value: '09:00' },
-    { key: 'enable_system_logs', value: 'false' }
+    { key: 'enable_system_logs', value: 'false' },
+    { key: 'cleanup_enabled', value: 'false' },
+    { key: 'cleanup_min_ratio', value: '2.0' },
+    { key: 'cleanup_max_seeding_time', value: '336' } // 14 days in hours
   ];
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

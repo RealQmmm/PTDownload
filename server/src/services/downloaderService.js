@@ -103,7 +103,8 @@ class DownloaderService {
                     ratio: t.ratio,
                     eta: t.eta,
                     added_on: t.added_on > 0 ? new Date(t.added_on * 1000).toISOString() : null,
-                    completion_on: t.completion_on > 0 ? new Date(t.completion_on * 1000).toISOString() : null
+                    completion_on: t.completion_on > 0 ? new Date(t.completion_on * 1000).toISOString() : null,
+                    seeding_time: t.seeding_time || 0
                 }));
 
                 return {
@@ -143,7 +144,7 @@ class DownloaderService {
                     {
                         method: 'torrent-get',
                         arguments: {
-                            fields: ['hashString', 'name', 'totalSize', 'percentDone', 'status', 'rateDownload', 'rateUpload', 'downloadedEver', 'uploadedEver', 'uploadRatio', 'eta', 'addedDate', 'doneDate']
+                            fields: ['hashString', 'name', 'totalSize', 'percentDone', 'status', 'rateDownload', 'rateUpload', 'downloadedEver', 'uploadedEver', 'uploadRatio', 'eta', 'addedDate', 'doneDate', 'secondsSeeding']
                         }
                     },
                     {
@@ -181,7 +182,8 @@ class DownloaderService {
                     ratio: t.uploadRatio,
                     eta: t.eta,
                     added_on: t.addedDate > 0 ? new Date(t.addedDate * 1000).toISOString() : null,
-                    completion_on: t.doneDate > 0 ? new Date(t.doneDate * 1000).toISOString() : null
+                    completion_on: t.doneDate > 0 ? new Date(t.doneDate * 1000).toISOString() : null,
+                    seeding_time: t.secondsSeeding || 0
                 }));
 
                 const cumStats = statsRes.data.arguments['cumulative-stats'] || {};
@@ -207,16 +209,17 @@ class DownloaderService {
                     clientType: 'Mock',
                     clientName: `${host}:${port}`,
                     torrents: [
-                        { hash: '8f7d9a1c2e3b4f5a6b7c8d9e0f1a2b3c4d5e6f7g', name: '[Mock] Ubuntu 24.04 LTS', size: 4500000000, progress: 1, state: 'seeding', dlspeed: 0, upspeed: 1500000, downloaded: 4500000000, uploaded: 9800000000, ratio: 2.17, eta: -1, added_on: new Date(Date.now() - 86400000).toISOString(), completion_on: new Date(Date.now() - 43200000).toISOString() },
-                        { hash: '1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t', name: '[Mock] Avatar 2160p HDR', size: 25600000000, progress: 0.75, state: 'downloading', dlspeed: 12500000, upspeed: 500000, downloaded: 19200000000, uploaded: 2500000000, ratio: 0.13, eta: 512, added_on: new Date(Date.now() - 3600000).toISOString(), completion_on: null },
-                        { hash: 'z1x2c3v4b5n6m7l8k9j0h1g2f3d4s5a6p7o8i9u0', name: '[Mock] Oppenheimer 1080p', size: 15200000000, progress: 0.32, state: 'downloading', dlspeed: 8700000, upspeed: 200000, downloaded: 4864000000, uploaded: 800000000, ratio: 0.16, eta: 1190, added_on: new Date(Date.now() - 7200000).toISOString(), completion_on: null }
-                    ],
-                    stats: {
-                        dlSpeed: 21200000,
-                        upSpeed: 2200000,
-                        totalDownloaded: 156000000000,
-                        totalUploaded: 312000000000
-                    }
+                        torrents: [
+                            { hash: '8f7d9a1c2e3b4f5a6b7c8d9e0f1a2b3c4d5e6f7g', name: '[Mock] Ubuntu 24.04 LTS', size: 4500000000, progress: 1, state: 'seeding', dlspeed: 0, upspeed: 1500000, downloaded: 4500000000, uploaded: 9800000000, ratio: 2.17, eta: -1, added_on: new Date(Date.now() - 86400000).toISOString(), completion_on: new Date(Date.now() - 43200000).toISOString(), seeding_time: 43200 },
+                            { hash: '1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t', name: '[Mock] Avatar 2160p HDR', size: 25600000000, progress: 0.75, state: 'downloading', dlspeed: 12500000, upspeed: 500000, downloaded: 19200000000, uploaded: 2500000000, ratio: 0.13, eta: 512, added_on: new Date(Date.now() - 3600000).toISOString(), completion_on: null, seeding_time: 0 },
+                            { hash: 'z1x2c3v4b5n6m7l8k9j0h1g2f3d4s5a6p7o8i9u0', name: '[Mock] Oppenheimer 1080p', size: 15200000000, progress: 0.32, state: 'downloading', dlspeed: 8700000, upspeed: 200000, downloaded: 4864000000, uploaded: 800000000, ratio: 0.16, eta: 1190, added_on: new Date(Date.now() - 7200000).toISOString(), completion_on: null, seeding_time: 0 }
+                        ],
+                        stats: {
+                            dlSpeed: 21200000,
+                            upSpeed: 2200000,
+                            totalDownloaded: 156000000000,
+                            totalUploaded: 312000000000
+                        }
                 };
             } else {
                 result = { success: false, message: '不支持的客户端类型' };
@@ -420,6 +423,71 @@ class DownloaderService {
         } catch (err) {
             console.error(`Add torrent from data failed for ${type}:`, err.message);
             return { success: false, message: `添加失败: ${err.message}` };
+        }
+    }
+
+    // Delete torrent
+    async deleteTorrent(client, hash, deleteFiles = true) {
+        const { type, host, port, username, password } = client;
+        const baseUrl = `http://${host}:${port}`;
+
+        try {
+            if (type === 'qBittorrent') {
+                const loginRes = await axios.post(
+                    `${baseUrl}/api/v2/auth/login`,
+                    `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+                );
+                const cookie = loginRes.headers['set-cookie'];
+
+                await axios.post(
+                    `${baseUrl}/api/v2/torrents/delete`,
+                    `hashes=${hash}&deleteFiles=${deleteFiles}`,
+                    {
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'Cookie': cookie
+                        }
+                    }
+                );
+                return { success: true };
+            }
+
+            if (type === 'Transmission') {
+                const rpcUrl = `${baseUrl}/transmission/rpc`;
+                const auth = Buffer.from(`${username}:${password}`).toString('base64');
+                const headers = { 'Authorization': `Basic ${auth}` };
+                let sessionId = '';
+                try {
+                    await axios.get(rpcUrl, { headers });
+                } catch (err) {
+                    if (err.response && err.response.status === 409) sessionId = err.response.headers['x-transmission-session-id'];
+                    else throw err;
+                }
+
+                await axios.post(
+                    rpcUrl,
+                    {
+                        method: 'torrent-remove',
+                        arguments: {
+                            ids: [hash],
+                            'delete-local-data': deleteFiles
+                        }
+                    },
+                    { headers: { ...headers, 'X-Transmission-Session-Id': sessionId } }
+                );
+                return { success: true };
+            }
+
+            if (type === 'Mock') {
+                console.log(`[Mock] Deleting torrent ${hash} (files=${deleteFiles})`);
+                return { success: true };
+            }
+
+            return { success: false, message: '不支持的客户端类型' };
+        } catch (err) {
+            console.error(`Delete torrent failed:`, err.message);
+            return { success: false, message: err.message };
         }
     }
 }

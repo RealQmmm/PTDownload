@@ -30,6 +30,9 @@ class SchedulerService {
 
         // Start checkin job
         this.startCheckinJob();
+
+        // Start auto-cleanup job
+        this.startAutoCleanupJob();
     }
 
     startCookieCheckJob() {
@@ -80,10 +83,19 @@ class SchedulerService {
         });
     }
 
-    startCleanupJob() {
+    async startCleanupJob() {
         if (this._isLogEnabled()) console.log('Starting daily log cleanup job (3 AM)...');
         schedule.scheduleJob('0 3 * * *', async () => {
             await this.cleanOldLogs();
+        });
+    }
+
+    startAutoCleanupJob() {
+        if (this._isLogEnabled()) console.log('Starting auto-cleanup job (Hourly)...');
+        // Run every hour
+        schedule.scheduleJob('0 * * * *', async () => {
+            const cleanupService = require('./cleanupService');
+            await cleanupService.runCleanup();
         });
     }
 
