@@ -126,4 +126,14 @@ router.post('/checkin-all', async (req, res) => {
     }
 });
 
+// Get site heatmap data
+router.get('/:id/heatmap', async (req, res) => {
+    try {
+        const heatmap = await siteService.getSiteHeatmap(req.params.id);
+        res.json(heatmap);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

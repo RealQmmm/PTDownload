@@ -6,6 +6,7 @@ import SettingsPage from './pages/SettingsPage'
 import SitesPage from './pages/SitesPage'
 import ClientsPage from './pages/ClientsPage'
 import TasksPage from './pages/TasksPage'
+import HelpPage from './pages/HelpPage'
 
 // Create Theme Context
 export const ThemeContext = createContext();
@@ -133,6 +134,8 @@ function App() {
                 return <SearchPage searchState={searchState} setSearchState={setSearchState} />
             case 'settings':
                 return <SettingsPage />
+            case 'help':
+                return <HelpPage />
             default:
                 return <div className="p-8 text-center text-gray-500">页面开发中...</div>
         }

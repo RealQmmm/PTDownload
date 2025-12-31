@@ -13,6 +13,21 @@ class SiteService {
         return this.db;
     }
 
+    // Helper to parse size strings like "1.23 GB" into bytes
+    static parseSizeToBytes(sizeStr) {
+        if (!sizeStr) return 0;
+        const match = sizeStr.match(/^([\d.]+)\s*([MGT]B)$/i);
+        if (!match) return 0;
+        const value = parseFloat(match[1]);
+        const unit = match[2].toUpperCase();
+        const multiplier = {
+            'MB': 1024 * 1024,
+            'GB': 1024 * 1024 * 1024,
+            'TB': 1024 * 1024 * 1024 * 1024
+        };
+        return Math.floor(value * (multiplier[unit] || 0));
+    }
+
     getAllSites() {
         const db = this._getDB();
         return db.prepare('SELECT * FROM sites ORDER BY created_at DESC').all();
@@ -101,9 +116,6 @@ class SiteService {
             return status === 0;
         } catch (err) {
             console.error(`Cookie check failed for ${site.name}:`, err.message);
-            // If it's a connection error, we might not want to mark it as "cookie expired"
-            // But if it's a 401 or similar, then yes.
-            // For now, let's only update if we get a valid response.
             return false;
         }
     }
@@ -121,8 +133,8 @@ class SiteService {
             if (site.type === 'Mock') {
                 const stats = siteParsers.parseUserStats('', 'Mock');
                 const db = this._getDB();
-                db.prepare('UPDATE sites SET username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-                    .run(stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, id);
+                db.prepare('UPDATE sites SET username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ? WHERE id = ?')
+                    .run(stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, new Date().toISOString(), id);
                 return stats;
             }
 
@@ -139,11 +151,30 @@ class SiteService {
             html = response.data;
             const stats = siteParsers.parseUserStats(html, site.type);
 
-            const now = new Date().toISOString();
             if (stats) {
                 const db = this._getDB();
+                const now = new Date().toISOString();
+                const today = new Date().toISOString().split('T')[0];
+
+                // 1. Get old stats to calculate delta
+                const oldSite = this.getSiteById(id);
+                const oldUploadBytes = SiteService.parseSizeToBytes(oldSite.upload);
+                const newUploadBytes = SiteService.parseSizeToBytes(stats.upload);
+
                 db.prepare('UPDATE sites SET username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ? WHERE id = ?')
                     .run(stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now, id);
+
+                // 2. Update heatmap data if there is an increase
+                if (newUploadBytes > oldUploadBytes && oldUploadBytes > 0) {
+                    const delta = newUploadBytes - oldUploadBytes;
+                    db.prepare(`
+                        INSERT INTO site_daily_stats (site_id, date, uploaded_bytes)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(site_id, date) DO UPDATE SET
+                        uploaded_bytes = uploaded_bytes + ?
+                    `).run(id, today, delta, delta);
+                }
+
                 return stats;
             }
             return null;
@@ -151,6 +182,11 @@ class SiteService {
             console.error(`Failed to refresh stats for ${site.name}:`, err.message);
             return null;
         }
+    }
+
+    async getSiteHeatmap(id) {
+        const db = this._getDB();
+        return db.prepare('SELECT date, uploaded_bytes FROM site_daily_stats WHERE site_id = ? AND date > date("now", "-90 days") ORDER BY date ASC').all(id);
     }
 
     async checkAllCookies() {
@@ -192,10 +228,9 @@ class SiteService {
             const baseUrl = site.url.endsWith('/') ? site.url.slice(0, -1) : site.url;
             const checkinUrls = [
                 `${baseUrl}/attendance.php`,
-                `${baseUrl}/index.php?action=add_bonus` // Some alternative sites
+                `${baseUrl}/index.php?action=add_bonus`
             ];
 
-            // For NexusPHP, usually visiting attendance.php is enough
             const response = await axios.get(checkinUrls[0], {
                 headers: {
                     'Cookie': site.cookies || '',
@@ -211,7 +246,6 @@ class SiteService {
             const db = this._getDB();
             db.prepare('UPDATE sites SET last_checkin_at = ? WHERE id = ?').run(new Date().toISOString(), id);
 
-            // Optionally refresh stats after checkin to see bonus increase
             await this.refreshUserStats(id);
 
             return true;

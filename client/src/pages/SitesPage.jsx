@@ -1,5 +1,72 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import { useTheme } from '../App';
+
+const SiteHeatmap = memo(({ siteId, darkMode, borderColor, textSecondary }) => {
+    const [data, setData] = useState([]);
+
+    useEffect(() => {
+        const fetchHeatmap = async () => {
+            try {
+                const res = await fetch(`/api/sites/${siteId}/heatmap`);
+                const heatmapData = await res.json();
+                setData(heatmapData);
+            } catch (err) {
+                console.error('Failed to fetch heatmap:', err);
+            }
+        };
+        fetchHeatmap();
+    }, [siteId]);
+
+    const days = useMemo(() => {
+        const result = [];
+        const today = new Date();
+        const heatmapData = Array.isArray(data) ? data : [];
+
+        for (let i = 89; i >= 0; i--) {
+            const date = new Date(today);
+            date.setDate(today.getDate() - i);
+            const dateStr = date.toISOString().split('T')[0];
+            const dayData = heatmapData.find(d => d.date === dateStr);
+            result.push({
+                date: dateStr,
+                value: dayData ? dayData.uploaded_bytes : 0
+            });
+        }
+        return result;
+    }, [data]);
+
+    const getColor = (value) => {
+        if (value === 0) return darkMode ? 'bg-gray-800' : 'bg-gray-100';
+        if (value < 1024 * 1024 * 1024) return 'bg-blue-900/40'; // < 1GB
+        if (value < 10 * 1024 * 1024 * 1024) return 'bg-blue-700/60'; // < 10GB
+        if (value < 50 * 1024 * 1024 * 1024) return 'bg-blue-500/80'; // < 50GB
+        return 'bg-blue-400'; // > 50GB
+    }
+
+    const formatSize = (bytes) => {
+        if (bytes === 0) return '无上传';
+        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        if (bytes < 1024 * 1024 * 1024 * 1024) return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+        return (bytes / (1024 * 1024 * 1024 * 1024)).toFixed(1) + ' TB';
+    };
+
+    return (
+        <div className="mt-4 pt-4 border-t border-dashed border-gray-700/50">
+            <div className="flex items-center justify-between mb-2">
+                <span className={`text-[10px] ${textSecondary} font-bold uppercase tracking-wider`}>上传贡献图 (最近90天)</span>
+            </div>
+            <div className="flex flex-wrap gap-[3px]">
+                {days.map((day, idx) => (
+                    <div
+                        key={idx}
+                        className={`w-[10px] h-[16px] rounded-[1px] ${getColor(day.value)} transition-colors cursor-help`}
+                        title={`${day.date}: ${formatSize(day.value)}`}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+});
 
 const SitesPage = () => {
     const { darkMode, fetchStatus } = useTheme();
@@ -304,6 +371,15 @@ const SitesPage = () => {
                                     </p>
                                 )}
                             </div>
+
+                            {site.enabled && (
+                                <SiteHeatmap
+                                    siteId={site.id}
+                                    darkMode={darkMode}
+                                    borderColor={borderColor}
+                                    textSecondary={textSecondary}
+                                />
+                            )}
 
                             <div className={`flex justify-between items-center pt-4 border-t ${borderColor}`}>
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${site.enabled

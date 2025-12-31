@@ -126,7 +126,14 @@ function createTables() {
 
     INSERT OR IGNORE INTO stats_checkpoint (id, last_total_downloaded, last_total_uploaded) VALUES (1, 0, 0);
 
-    -- Insert default settings
+    CREATE TABLE IF NOT EXISTS site_daily_stats (
+      site_id INTEGER,
+      date TEXT,
+      uploaded_bytes INTEGER DEFAULT 0,
+      PRIMARY KEY (site_id, date),
+      FOREIGN KEY(site_id) REFERENCES sites(id)
+    );
+
     INSERT OR IGNORE INTO settings (key, value) VALUES ('site_name', 'PT Manager');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('log_retention_days', '7');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('log_max_count', '100');

@@ -106,6 +106,13 @@ class SchedulerService {
             }
             console.log(`[Cleanup] Deleted ${totalKeepDeleted} extra logs to maintain max count per task`);
 
+            // 3. Delete site heatmap data older than 180 days
+            const heatmapThreshold = new Date();
+            heatmapThreshold.setDate(heatmapThreshold.getDate() - 180);
+            const heatmapDateStr = heatmapThreshold.toISOString().split('T')[0];
+            const delHeatmap = db.prepare('DELETE FROM site_daily_stats WHERE date < ?').run(heatmapDateStr);
+            console.log(`[Cleanup] Deleted ${delHeatmap.changes} heatmap records older than ${heatmapDateStr}`);
+
         } catch (err) {
             console.error('[Cleanup] Failed to clean logs:', err.message);
         }

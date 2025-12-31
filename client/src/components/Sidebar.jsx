@@ -11,6 +11,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
         { id: 'clients', name: '下载客户端', icon: '📥' },
         { id: 'tasks', name: '自动任务', icon: '⏰' },
         { id: 'settings', name: '系统设置', icon: '⚙️' },
+        { id: 'help', name: '使用帮助', icon: '❓' },
     ];
 
     const bgColor = darkMode ? 'bg-gray-800' : 'bg-white';
