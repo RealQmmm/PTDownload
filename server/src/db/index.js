@@ -126,10 +126,17 @@ function createTables() {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       last_total_downloaded INTEGER DEFAULT 0,
       last_total_uploaded INTEGER DEFAULT 0,
+      historical_total_downloaded INTEGER DEFAULT 0,
+      historical_total_uploaded INTEGER DEFAULT 0,
       last_updated DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    INSERT OR IGNORE INTO stats_checkpoint (id, last_total_downloaded, last_total_uploaded) VALUES (1, 0, 0);
+    try {
+      db.prepare('ALTER TABLE stats_checkpoint ADD COLUMN historical_total_downloaded INTEGER DEFAULT 0').run();
+      db.prepare('ALTER TABLE stats_checkpoint ADD COLUMN historical_total_uploaded INTEGER DEFAULT 0').run();
+    } catch (e) {}
+
+    INSERT OR IGNORE INTO stats_checkpoint (id, last_total_downloaded, last_total_uploaded, historical_total_downloaded, historical_total_uploaded) VALUES (1, 0, 0, 0, 0);
 
     CREATE TABLE IF NOT EXISTS site_daily_stats (
       site_id INTEGER,

@@ -25,9 +25,15 @@ class StatsService {
                     try {
                         const result = await downloaderService.getTorrents(client);
                         if (result.success) {
+                            // Sum up individual torrent values as a reliable alternative to global counters
+                            const torrentSumDL = (result.torrents || []).reduce((sum, t) => sum + (Number(t.downloaded) || 0), 0);
+                            const torrentSumUL = (result.torrents || []).reduce((sum, t) => sum + (Number(t.uploaded) || 0), 0);
+
+                            // Use the larger value between the global counter and the sum of torrents
+                            // Some clients might return session-only totals in stats, while torrents keep their lifetime totals
                             return {
-                                downloaded: result.stats.totalDownloaded || 0,
-                                uploaded: result.stats.totalUploaded || 0
+                                downloaded: Math.max(result.stats.totalDownloaded || 0, torrentSumDL),
+                                uploaded: Math.max(result.stats.totalUploaded || 0, torrentSumUL)
                             };
                         }
                         return null;
@@ -47,11 +53,19 @@ class StatsService {
             // Use local date string
             const today = this.getLocalDateString();
 
+            let histDl = checkpoint.historical_total_downloaded || 0;
+            let histUl = checkpoint.historical_total_uploaded || 0;
+
+            // Ensure historical stats are initialized from current totals if they are empty
+            // or if the current total is significantly larger than what we have (first-run sync)
+            if (histDl === 0 && currentTotalDownloaded > 0) histDl = currentTotalDownloaded;
+            if (histUl === 0 && currentTotalUploaded > 0) histUl = currentTotalUploaded;
+
             if (checkpoint && (checkpoint.last_total_downloaded > 0 || checkpoint.last_total_uploaded > 0)) {
                 let diffDownloaded = currentTotalDownloaded - checkpoint.last_total_downloaded;
                 let diffUploaded = currentTotalUploaded - checkpoint.last_total_uploaded;
 
-                // Handle reset for download/upload
+                // Handle reset for download/upload (e.g. client restart or clearing stats)
                 if (diffDownloaded < 0) {
                     console.log(`[Stats] Download counter reset detected. New session starts at: ${currentTotalDownloaded}`);
                     diffDownloaded = currentTotalDownloaded;
@@ -63,6 +77,8 @@ class StatsService {
 
                 if (diffDownloaded > 0 || diffUploaded > 0) {
                     console.log(`[Stats] Recorded new traffic: DL +${diffDownloaded}, UP +${diffUploaded}`);
+                    histDl += diffDownloaded;
+                    histUl += diffUploaded;
                 }
 
                 // Update today's stats record (incremental for both)
@@ -76,11 +92,14 @@ class StatsService {
                 }
             } else {
                 console.log(`[Stats] Initializing stats checkpoint with DL:${currentTotalDownloaded}, UP:${currentTotalUploaded}`);
+                // Initial run: Use current client totals as historical start point
+                histDl = currentTotalDownloaded;
+                histUl = currentTotalUploaded;
             }
 
             // Update checkpoint
-            db.prepare('UPDATE stats_checkpoint SET last_total_downloaded = ?, last_total_uploaded = ?, last_updated = CURRENT_TIMESTAMP WHERE id = 1')
-                .run(currentTotalDownloaded, currentTotalUploaded);
+            db.prepare('UPDATE stats_checkpoint SET last_total_downloaded = ?, last_total_uploaded = ?, historical_total_downloaded = ?, historical_total_uploaded = ?, last_updated = CURRENT_TIMESTAMP WHERE id = 1')
+                .run(currentTotalDownloaded, currentTotalUploaded, histDl, histUl);
 
         } catch (err) {
             console.error('Failed to update daily stats:', err);

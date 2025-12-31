@@ -64,6 +64,8 @@ const DashboardPage = ({ setActiveTab }) => {
         totalUploadSpeed: 0,
         totalDownloaded: 0,
         totalUploaded: 0,
+        histDownloaded: 0,
+        histUploaded: 0,
         activeTorrents: 0,
         totalTorrents: 0
     });
@@ -150,43 +152,61 @@ const DashboardPage = ({ setActiveTab }) => {
 
             {/* Stats Overview */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <div className={`${bgMain} border ${borderColor} rounded-2xl p-6 shadow-sm`}>
-                    <p className={`${textSecondary} text-xs font-bold uppercase mb-4`}>流量统计 (今日)</p>
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-end">
-                            <span className={textSecondary}>今日下载</span>
-                            <span className={`text-xl font-bold ${textPrimary}`}>{formatBytes(downloadStats.totalDownloaded)}</span>
+                {/* Traffic Stats Card */}
+                <div className={`${bgMain} border ${borderColor} rounded-2xl p-5 shadow-sm flex flex-col justify-between`}>
+                    <div>
+                        <p className={`${textSecondary} text-[11px] font-bold uppercase mb-3`}>流量统计 (今日)</p>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center">
+                                <span className={`${textSecondary} text-sm`}>下载</span>
+                                <span className={`text-xl font-bold ${textPrimary}`}>{formatBytes(downloadStats.totalDownloaded || 0)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className={`${textSecondary} text-sm`}>上传</span>
+                                <span className={`text-xl font-bold text-blue-500`}>{formatBytes(downloadStats.totalUploaded || 0)}</span>
+                            </div>
                         </div>
-                        <div className="flex justify-between items-end">
-                            <span className={textSecondary}>今日上传</span>
-                            <span className={`text-xl font-bold text-blue-500`}>{formatBytes(downloadStats.totalUploaded)}</span>
+                    </div>
+                    <div className={`mt-4 pt-4 border-t ${borderColor} flex justify-between items-center`}>
+                        <div className="flex flex-col">
+                            <span className={`${textSecondary} text-[10px] opacity-70`}>累计下载</span>
+                            <span className={`text-sm font-bold ${textPrimary}`}>{formatBytes(downloadStats.histDownloaded || 0)}</span>
+                        </div>
+                        <div className="h-6 w-px bg-gray-500/20"></div>
+                        <div className="flex flex-col items-end">
+                            <span className={`${textSecondary} text-[10px] opacity-70`}>累计上传</span>
+                            <span className={`text-sm font-bold text-blue-500`}>{formatBytes(downloadStats.histUploaded || 0)}</span>
                         </div>
                     </div>
                 </div>
 
-                <div className={`${bgMain} border ${borderColor} rounded-2xl p-6 shadow-sm`}>
-                    <p className={`${textSecondary} text-xs font-bold uppercase mb-4`}>即时速率</p>
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-end">
-                            <span className={textSecondary}>下载速度</span>
-                            <span className={`text-xl font-bold text-green-500`}>{formatSpeed(downloadStats.totalDownloadSpeed)}</span>
+                {/* Speed Card */}
+                <div className={`${bgMain} border ${borderColor} rounded-2xl p-5 shadow-sm flex flex-col`}>
+                    <p className={`${textSecondary} text-[11px] font-bold uppercase mb-3`}>即时速率</p>
+                    <div className="flex-1 flex flex-col justify-around py-1">
+                        <div className="flex justify-between items-center">
+                            <span className={`${textSecondary} text-sm`}>下载速度</span>
+                            <span className={`text-xl font-bold text-green-500`}>{formatSpeed(downloadStats.totalDownloadSpeed || 0)}</span>
                         </div>
-                        <div className="flex justify-between items-end">
-                            <span className={textSecondary}>上传速度</span>
-                            <span className={`text-xl font-bold text-blue-500`}>{formatSpeed(downloadStats.totalUploadSpeed)}</span>
+                        <div className="flex justify-between items-center">
+                            <span className={`${textSecondary} text-sm`}>上传速度</span>
+                            <span className={`text-xl font-bold text-blue-500`}>{formatSpeed(downloadStats.totalUploadSpeed || 0)}</span>
                         </div>
                     </div>
                 </div>
 
-                <div className={`lg:col-span-2 ${bgMain} border ${borderColor} rounded-2xl p-6 shadow-sm min-h-[160px]`}>
+                {/* Chart Card */}
+                <div className={`lg:col-span-2 ${bgMain} border ${borderColor} rounded-2xl p-5 shadow-sm`}>
                     <div className="flex justify-between items-center mb-4">
-                        <p className={`${textSecondary} text-xs font-bold uppercase`}>最近7天流量</p>
+                        <p className={`${textSecondary} text-[11px] font-bold uppercase`}>最近7天流量</p>
                         <div className="flex space-x-3 text-[10px]">
-                            <span className="flex items-center text-green-500"><i className="w-2 h-2 bg-green-500 rounded-full mr-1 inline-block"></i>下载</span>
-                            <span className="flex items-center text-blue-500"><i className="w-2 h-2 bg-blue-500 rounded-full mr-1 inline-block"></i>上传</span>
+                            <span className="flex items-center text-green-500"><i className="w-2 h-2 bg-green-500 rounded-full mr-1.5 inline-block"></i>下载</span>
+                            <span className="flex items-center text-blue-500"><i className="w-2 h-2 bg-blue-500 rounded-full mr-1.5 inline-block"></i>上传</span>
                         </div>
                     </div>
-                    <HistoryChart data={historyData} textSecondary={textSecondary} />
+                    <div className="h-[100px]">
+                        <HistoryChart data={historyData} textSecondary={textSecondary} />
+                    </div>
                 </div>
             </div>
 

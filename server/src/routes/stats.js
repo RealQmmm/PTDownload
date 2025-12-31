@@ -193,6 +193,9 @@ router.get('/dashboard', async (req, res) => {
         // History
         const history = statsService.getHistory(7);
 
+        // Historical Totals from checkpoint
+        const checkpoint = db.prepare('SELECT historical_total_downloaded, historical_total_uploaded FROM stats_checkpoint WHERE id = 1').get();
+
         // Detailed Today's Downloads
         const downloads = db.prepare(`
             SELECT th.*, IFNULL(t.name, '手动下载') as task_name 
@@ -204,7 +207,13 @@ router.get('/dashboard', async (req, res) => {
 
         res.json({
             success: true,
-            stats: { ...aggregatedStats, totalDownloaded: displayedDownload, totalUploaded: todayTraffic.uploaded_bytes },
+            stats: {
+                ...aggregatedStats,
+                totalDownloaded: displayedDownload,
+                totalUploaded: todayTraffic.uploaded_bytes,
+                histDownloaded: checkpoint ? checkpoint.historical_total_downloaded : 0,
+                histUploaded: checkpoint ? checkpoint.historical_total_uploaded : 0
+            },
             clients: validClientStats,
             history,
             todayDownloads: downloads

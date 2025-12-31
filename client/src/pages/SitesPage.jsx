@@ -252,22 +252,6 @@ const SitesPage = () => {
                 </div>
                 <div className="flex space-x-2 w-full sm:w-auto">
                     <button
-                        onClick={syncAllSiteData}
-                        disabled={loading}
-                        className={`flex-1 sm:flex-none px-4 py-3 border ${borderColor} ${textSecondary} hover:${textPrimary} rounded-lg font-medium transition-all flex items-center justify-center`}
-                        title="同步所有已启用站点的用户数据与 Cookie 状态"
-                    >
-                        🔄 同步站点数据
-                    </button>
-                    <button
-                        onClick={checkinAll}
-                        disabled={loading}
-                        className={`flex-1 sm:flex-none px-4 py-3 border ${borderColor} ${textSecondary} hover:${textPrimary} rounded-lg font-medium transition-all flex items-center justify-center`}
-                        title="立即触发所有已开启自动签到站点的签到任务"
-                    >
-                        ✨ 一键签到
-                    </button>
-                    <button
                         onClick={handleAdd}
                         className="flex-1 sm:flex-none px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-600/20"
                     >
