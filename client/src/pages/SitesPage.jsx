@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
 
 const SitesPage = () => {
-    const { darkMode } = useTheme();
+    const { darkMode, fetchStatus } = useTheme();
     const [sites, setSites] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
@@ -31,6 +31,8 @@ const SitesPage = () => {
             const res = await fetch('/api/sites');
             const data = await res.json();
             setSites(data);
+            // Also update global status
+            fetchStatus();
         } catch (err) {
             console.error('Failed to fetch sites:', err);
         } finally {
@@ -103,6 +105,34 @@ const SitesPage = () => {
         }
     };
 
+    const checkAllCookies = async () => {
+        setLoading(true);
+        try {
+            await fetch('/api/sites/check-all', { method: 'POST' });
+            fetchSites();
+        } catch (err) {
+            console.error('Failed to check cookies:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const checkSingleCookie = async (id) => {
+        try {
+            const res = await fetch(`/api/sites/${id}/check-cookie`);
+            const data = await res.json();
+            if (data.isValid) {
+                // Refresh list to update status
+                fetchSites();
+            } else {
+                alert('Cookie 已失效，请更新！');
+                fetchSites();
+            }
+        } catch (err) {
+            alert('检查失败');
+        }
+    };
+
     return (
         <div className="p-4 md:p-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 space-y-4 sm:space-y-0">
@@ -110,12 +140,22 @@ const SitesPage = () => {
                     <h1 className={`text-2xl md:text-3xl font-bold ${textPrimary}`}>站点管理</h1>
                     <p className={`${textSecondary} mt-1 text-sm`}>配置您已加入的 PT 站点</p>
                 </div>
-                <button
-                    onClick={handleAdd}
-                    className="w-full sm:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-600/20"
-                >
-                    + 添加新站点
-                </button>
+                <div className="flex space-x-2 w-full sm:w-auto">
+                    <button
+                        onClick={checkAllCookies}
+                        disabled={loading}
+                        className={`flex-1 sm:flex-none px-4 py-3 border ${borderColor} ${textSecondary} hover:${textPrimary} rounded-lg font-medium transition-all flex items-center justify-center`}
+                        title="检查所有已启用站点的 Cookie 是否有效"
+                    >
+                        🔄 检查 Cookie
+                    </button>
+                    <button
+                        onClick={handleAdd}
+                        className="flex-1 sm:flex-none px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-600/20"
+                    >
+                        + 添加新站点
+                    </button>
+                </div>
             </div>
 
             {loading ? (
@@ -123,7 +163,15 @@ const SitesPage = () => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {sites.map((site) => (
-                        <div key={site.id} className={`${bgMain} rounded-xl p-6 border ${borderColor} hover:border-blue-500/50 transition-all group shadow-sm`}>
+                        <div key={site.id} className={`${bgMain} rounded-xl p-6 border ${borderColor} hover:border-blue-500/50 transition-all group shadow-sm relative overflow-hidden`}>
+                            {/* Cookie Status Indicator */}
+                            {site.enabled && site.type !== 'Mock' && (
+                                <div className={`absolute top-0 right-0 px-2 py-0.5 text-[8px] font-bold uppercase ${site.cookie_status === 1 ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+                                    }`}>
+                                    {site.cookie_status === 1 ? 'Cookie 已失效' : 'Cookie 正常'}
+                                </div>
+                            )}
+
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex items-center">
                                     <div className={`w-12 h-12 ${darkMode ? 'bg-blue-900/30' : 'bg-blue-100'} rounded-lg flex items-center justify-center text-2xl mr-4 group-hover:scale-110 transition-transform`}>
@@ -135,15 +183,31 @@ const SitesPage = () => {
                                     </div>
                                 </div>
                                 <div className="flex space-x-2">
+                                    {site.enabled && site.type !== 'Mock' && (
+                                        <button
+                                            onClick={() => checkSingleCookie(site.id)}
+                                            className={`${textSecondary} hover:text-blue-400 transition-colors`}
+                                            title="立即检查该站点 Cookie"
+                                        >
+                                            🔄
+                                        </button>
+                                    )}
                                     <button onClick={() => openEdit(site)} className={`${textSecondary} hover:${textPrimary} transition-colors`}>✏️</button>
                                     <button onClick={() => handleDelete(site.id)} className={`${textSecondary} hover:text-red-400 transition-colors`}>🗑️</button>
                                 </div>
                             </div>
                             <p className={`${textSecondary} text-sm truncate mb-4`}>{site.url}</p>
+
+                            {site.last_checked_at && (
+                                <p className={`text-[10px] ${textSecondary} mb-4`}>
+                                    上次检查: {new Date(site.last_checked_at).toLocaleString()}
+                                </p>
+                            )}
+
                             <div className={`flex justify-between items-center pt-4 border-t ${borderColor}`}>
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${site.enabled
-                                        ? (darkMode ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-green-50 text-green-600 border-green-100')
-                                        : (darkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-600 border-red-100')
+                                    ? (darkMode ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-green-50 text-green-600 border-green-100')
+                                    : (darkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-600 border-red-100')
                                     }`}>
                                     {site.enabled ? '已启用' : '已禁用'}
                                 </span>

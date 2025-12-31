@@ -66,4 +66,24 @@ router.patch('/:id/toggle', (req, res) => {
     }
 });
 
+// Check site cookie status
+router.get('/:id/check-cookie', async (req, res) => {
+    try {
+        const isValid = await siteService.checkCookie(req.params.id);
+        res.json({ isValid });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Check all sites' cookie status
+router.post('/check-all', async (req, res) => {
+    try {
+        await siteService.checkAllCookies();
+        res.json({ message: 'All cookies checked' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;

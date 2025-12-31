@@ -18,6 +18,7 @@ const SettingsPage = () => {
     });
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
+    const [cookieCheckInterval, setCookieCheckInterval] = useState('60');
 
     useEffect(() => {
         setTempSiteName(siteName);
@@ -39,6 +40,7 @@ const SettingsPage = () => {
                 notify_webhook_url: data.notify_webhook_url || '',
                 notify_webhook_method: data.notify_webhook_method || 'GET'
             });
+            setCookieCheckInterval(data.cookie_check_interval || '60');
         } catch (err) {
             console.error('Fetch settings failed:', err);
         }
@@ -63,6 +65,7 @@ const SettingsPage = () => {
                 body: JSON.stringify({
                     site_name: tempSiteName,
                     search_page_limit: searchLimit,
+                    cookie_check_interval: cookieCheckInterval,
                     ...logSettings
                 })
             });
@@ -230,13 +233,13 @@ const SettingsPage = () => {
 
                             <hr className={borderColor} />
 
-                            {/* Section 2: Log Management */}
+                            {/* Section 2: Log & Sync Management */}
                             <div>
-                                <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>日志清理逻辑</label>
+                                <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>日志与同步设置</label>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="flex items-center space-x-3">
                                         <div className="flex-1">
-                                            <p className={`text-sm ${textPrimary} font-medium`}>保留天数</p>
+                                            <p className={`text-sm ${textPrimary} font-medium`}>日志保留天数</p>
                                             <p className={`text-[10px] ${textSecondary}`}>自动清理超过此天数的日志</p>
                                         </div>
                                         <input
@@ -248,13 +251,25 @@ const SettingsPage = () => {
                                     </div>
                                     <div className="flex items-center space-x-3">
                                         <div className="flex-1">
-                                            <p className={`text-sm ${textPrimary} font-medium`}>最大条数/任务</p>
-                                            <p className={`text-[10px] ${textSecondary}`}>每个任务保留的最新的日志数</p>
+                                            <p className={`text-sm ${textPrimary} font-medium`}>最大日志条数/任务</p>
+                                            <input
+                                                type="number"
+                                                value={logSettings.log_max_count}
+                                                onChange={(e) => setLogSettings({ ...logSettings, log_max_count: e.target.value })}
+                                                className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center space-x-3">
+                                        <div className="flex-1">
+                                            <p className={`text-sm ${textPrimary} font-medium`}>Cookie 检查间隔 (分钟)</p>
+                                            <p className={`text-[10px] ${textSecondary}`}>后台自动检查站点 Cookie 的频率</p>
                                         </div>
                                         <input
                                             type="number"
-                                            value={logSettings.log_max_count}
-                                            onChange={(e) => setLogSettings({ ...logSettings, log_max_count: e.target.value })}
+                                            min="5"
+                                            value={cookieCheckInterval}
+                                            onChange={(e) => setCookieCheckInterval(e.target.value)}
                                             className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
                                         />
                                     </div>

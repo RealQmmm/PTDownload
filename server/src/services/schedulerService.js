@@ -17,6 +17,30 @@ class SchedulerService {
 
         // Start daily cleanup job at 3:00 AM
         this.startCleanupJob();
+
+        // Start cookie check job
+        this.startCookieCheckJob();
+    }
+
+    startCookieCheckJob() {
+        if (this.cookieJob) {
+            this.cookieJob.cancel();
+        }
+
+        const { getDB } = require('../db');
+        const db = getDB();
+        const setting = db.prepare("SELECT value FROM settings WHERE key = 'cookie_check_interval'").get();
+        const interval = parseInt(setting?.value || '60');
+
+        console.log(`Starting cookie check job with interval: ${interval} minutes`);
+
+        const siteService = require('./siteService');
+        // Define the job using RecurrenceRule or cron string
+        // Cron: */interval * * * *
+        this.cookieJob = schedule.scheduleJob(`*/${interval} * * * *`, () => {
+            console.log(`[${new Date().toLocaleString()}] Periodic cookie check triggered...`);
+            siteService.checkAllCookies();
+        });
     }
 
     startCleanupJob() {

@@ -2,12 +2,12 @@ import React from 'react';
 import { useTheme } from '../App';
 
 const Sidebar = ({ activeTab, setActiveTab }) => {
-    const { darkMode, siteName } = useTheme();
+    const { darkMode, siteName, expiredCookiesCount } = useTheme();
 
     const menus = [
         { id: 'dashboard', name: '仪表盘', icon: '📊' },
         { id: 'search', name: '资源搜索', icon: '🔍' },
-        { id: 'sites', name: '站点管理', icon: '🌐' },
+        { id: 'sites', name: '站点管理', icon: '🌐', badge: expiredCookiesCount > 0 ? expiredCookiesCount : null },
         { id: 'clients', name: '下载客户端', icon: '📥' },
         { id: 'tasks', name: '自动任务', icon: '⏰' },
         { id: 'settings', name: '系统设置', icon: '⚙️' },
@@ -34,7 +34,12 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
                             }`}
                     >
                         <span className="mr-3 text-xl">{menu.icon}</span>
-                        <span className="font-medium">{menu.name}</span>
+                        <span className="font-medium flex-1 text-left">{menu.name}</span>
+                        {menu.badge && (
+                            <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                                {menu.badge}
+                            </span>
+                        )}
                     </button>
                 ))}
             </nav>

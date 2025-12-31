@@ -18,6 +18,7 @@ schedulerService.init();
 
 // Initialize Stats Collection
 const statsService = require('./services/statsService');
+
 // Update stats immediately on start and then every 5 minutes
 statsService.updateDailyStats();
 setInterval(() => {

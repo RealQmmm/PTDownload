@@ -37,6 +37,9 @@ function App() {
 
     const [computedDarkMode, setComputedDarkMode] = useState(false);
 
+    // Sites Status state
+    const [expiredCookiesCount, setExpiredCookiesCount] = useState(0)
+
     // Site Name state
     const [siteName, setSiteName] = useState('PT Manager')
 
@@ -74,7 +77,18 @@ function App() {
         }
     }, [themeMode])
 
-    // Fetch settings on mount
+    const fetchStatus = async () => {
+        try {
+            const res = await fetch('/api/sites');
+            const sites = await res.json();
+            const expired = sites.filter(s => s.enabled && s.cookie_status === 1).length;
+            setExpiredCookiesCount(expired);
+        } catch (err) {
+            console.error('Failed to fetch sites status:', err);
+        }
+    };
+
+    // Fetch settings and status on mount
     useEffect(() => {
         const fetchSettings = async () => {
             try {
@@ -88,6 +102,11 @@ function App() {
             }
         };
         fetchSettings();
+        fetchStatus();
+
+        // Check status every 5 minutes
+        const interval = setInterval(fetchStatus, 5 * 60 * 1000);
+        return () => clearInterval(interval);
     }, []);
 
     const toggleDarkMode = () => {
@@ -124,7 +143,16 @@ function App() {
         : 'bg-gray-100 text-gray-900'
 
     return (
-        <ThemeContext.Provider value={{ darkMode: computedDarkMode, themeMode, setThemeMode, toggleDarkMode, siteName, setSiteName }}>
+        <ThemeContext.Provider value={{
+            darkMode: computedDarkMode,
+            themeMode,
+            setThemeMode,
+            toggleDarkMode,
+            siteName,
+            setSiteName,
+            expiredCookiesCount,
+            fetchStatus
+        }}>
             <div className={`flex h-screen overflow-hidden font-sans ${themeClasses} max-w-[100vw]`}>
                 {/* Mobile Backdrop */}
                 {sidebarOpen && (

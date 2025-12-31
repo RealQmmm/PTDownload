@@ -31,6 +31,8 @@ function createTables() {
       cookies TEXT,
       type TEXT DEFAULT 'NexusPHP',
       enabled INTEGER DEFAULT 1,
+      cookie_status INTEGER DEFAULT 0,
+      last_checked_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -120,10 +122,13 @@ function createTables() {
     INSERT OR IGNORE INTO settings (key, value) VALUES ('log_retention_days', '7');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('log_max_count', '100');
     INSERT OR IGNORE INTO settings (key, value) VALUES ('search_page_limit', '1');
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('cookie_check_interval', '60');
   `;
 
   db.exec(schema);
 
+  try { db.exec('ALTER TABLE sites ADD COLUMN cookie_status INTEGER DEFAULT 0'); } catch (e) { }
+  try { db.exec('ALTER TABLE sites ADD COLUMN last_checked_at DATETIME'); } catch (e) { }
   // Migrations for existing tables
   try { db.exec('ALTER TABLE task_history ADD COLUMN item_size INTEGER DEFAULT 0'); } catch (e) { }
   try { db.exec('ALTER TABLE task_history ADD COLUMN is_finished INTEGER DEFAULT 0'); } catch (e) { }

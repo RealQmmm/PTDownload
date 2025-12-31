@@ -32,6 +32,13 @@ router.post('/', (req, res) => {
         });
 
         transaction(settings);
+
+        // If cookie_check_interval was updated, restart the job
+        if (settings.cookie_check_interval) {
+            const schedulerService = require('../services/schedulerService');
+            schedulerService.startCookieCheckJob();
+        }
+
         res.json({ success: true });
     } catch (err) {
         console.error('Failed to update settings:', err);
