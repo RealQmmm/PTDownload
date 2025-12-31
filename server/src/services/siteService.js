@@ -99,13 +99,13 @@ class SiteService {
                 (html.includes('Login') && !html.includes('Logout'));
 
             const status = isLogin ? 1 : 0;
-            const db = this._getDB();
+            const now = new Date().toISOString();
 
             if (status === 0) {
                 // Cookie is valid, parse user stats
                 const siteParsers = require('../utils/siteParsers');
                 const stats = siteParsers.parseUserStats(html, site.type);
-                const now = new Date().toISOString();
+
                 if (stats) {
                     let sql = 'UPDATE sites SET cookie_status = 0, last_checked_at = ?, username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?';
                     const params = [now, stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now];
@@ -125,13 +125,14 @@ class SiteService {
                 if (enableLogs) console.log(`[Status] ${site.name} cookie is valid`);
             } else {
                 db.prepare('UPDATE sites SET cookie_status = 1, last_checked_at = ? WHERE id = ?')
-                    .run(new Date().toISOString(), id);
+                    .run(now, id);
                 loggerService.log(`站点 ${site.name} Cookie 已失效，请及时处理`, 'error');
             }
 
             return status === 0;
         } catch (err) {
             if (enableLogs) console.error(`Cookie check failed for ${site.name}:`, err.message);
+            // Don't mark as invalid on network errors, only on 4xx/5xx or login redirects
             return false;
         }
     }
@@ -152,9 +153,9 @@ class SiteService {
 
             if (site.type === 'Mock') {
                 const stats = siteParsers.parseUserStats('', 'Mock');
-                const db = this._getDB();
-                db.prepare('UPDATE sites SET username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ? WHERE id = ?')
-                    .run(stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, new Date().toISOString(), id);
+                const now = new Date().toISOString();
+                db.prepare('UPDATE sites SET username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?, cookie_status = 0 WHERE id = ?')
+                    .run(stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now, id);
                 return stats;
             }
 
@@ -169,10 +170,23 @@ class SiteService {
             });
 
             html = response.data;
+
+            // Check if actually logged in
+            const isLogin = html.includes('login.php') ||
+                html.includes('id="login"') ||
+                html.includes('name="login"') ||
+                (html.includes('登录') && !html.includes('退出')) ||
+                (html.includes('Login') && !html.includes('Logout'));
+
+            if (isLogin) {
+                db.prepare('UPDATE sites SET cookie_status = 1, last_checked_at = ? WHERE id = ?')
+                    .run(new Date().toISOString(), id);
+                return null;
+            }
+
             const stats = siteParsers.parseUserStats(html, site.type);
 
             if (stats) {
-                const db = this._getDB();
                 const now = new Date().toISOString();
                 const today = new Date().toISOString().split('T')[0];
 
@@ -181,8 +195,8 @@ class SiteService {
                 const oldUploadBytes = SiteService.parseSizeToBytes(oldSite.upload);
                 const newUploadBytes = SiteService.parseSizeToBytes(stats.upload);
 
-                let sql = 'UPDATE sites SET username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?';
-                const params = [stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now];
+                let sql = 'UPDATE sites SET cookie_status = 0, username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?, last_checked_at = ?';
+                const params = [stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now, now];
 
                 if (stats.isCheckedIn) {
                     sql += ', last_checkin_at = ?';

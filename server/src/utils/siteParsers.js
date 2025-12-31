@@ -227,11 +227,13 @@ const parseUserStats = (html, type) => {
         const alreadyCheckedIn = text.includes('已经签到') ||
             text.includes('今日已签到') ||
             text.includes('签到成功') ||
+            text.includes('已签到') ||
             text.includes('Attendance successful') ||
-            text.includes('You have already attended');
+            text.includes('You have already attended') ||
+            text.includes('You have already earned');
 
-        const checkinLink = $('a[href*="attendance.php"], a[href*="add_bonus"]');
-        stats.isCheckedIn = alreadyCheckedIn || !checkinLink.length;
+        const checkinLink = $('a[href*="attendance.php"], a[href*="add_bonus"], a[href*="checkin"], button:contains("签到")');
+        stats.isCheckedIn = alreadyCheckedIn || (!checkinLink.length && (text.includes('退出') || text.includes('Logout')));
 
         return stats;
     }

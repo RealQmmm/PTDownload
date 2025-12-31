@@ -188,13 +188,13 @@ const SitesPage = () => {
 
     const syncSingleSiteData = async (id) => {
         try {
-            const res = await authenticatedFetch(`/api/sites/${id}/check-cookie`);
+            const res = await authenticatedFetch(`/api/sites/${id}/refresh-stats`);
             const data = await res.json();
-            if (data.isValid) {
+            if (data.stats) {
                 await fetchSites();
                 alert('站点数据已同步！');
             } else {
-                alert('Cookie 已失效，请更新！');
+                alert('同步失败，请检查 Cookie 是否有效');
                 await fetchSites();
             }
         } catch (err) {
@@ -220,9 +220,8 @@ const SitesPage = () => {
     const isToday = (dateStr) => {
         if (!dateStr) return false;
         try {
-            // Handle both ISO and SQLite default format (YYYY-MM-DD HH:MM:SS)
-            const normalizedStr = dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T') + 'Z';
-            const date = new Date(normalizedStr);
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return false; // Invalid date
             return date.toDateString() === new Date().toDateString();
         } catch (e) {
             return false;
