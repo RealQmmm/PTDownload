@@ -15,6 +15,22 @@ const formatSpeed = (bytesPerSecond) => {
     return formatBytes(bytesPerSecond) + '/s';
 };
 
+// Format ETA (seconds)
+const formatETA = (seconds) => {
+    if (seconds === undefined || seconds === null || seconds < 0 || seconds >= 8640000) return '∞';
+    if (seconds === 0) return '0s';
+
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    if (minutes > 0) return `${minutes}m ${secs}s`;
+    return `${secs}s`;
+};
+
 // Sub-component for flow chart
 const HistoryChart = ({ data, textSecondary }) => {
     if (!data || !Array.isArray(data) || data.length === 0) return null;
@@ -324,10 +340,13 @@ const DashboardPage = ({ setActiveTab }) => {
                                                         <p className={`text-sm font-medium ${textPrimary} line-clamp-2 leading-snug group-hover:text-blue-500 transition-colors overflow-hidden`} title={task.name || 'Unknown'}>
                                                             {task.name || 'Unknown'}
                                                         </p>
-                                                        <div className="flex items-center mt-1 text-[10px] text-gray-400">
-                                                            <span className="font-mono opacity-60">
-                                                                大小: {formatBytes(task.size || 0)}
-                                                            </span>
+                                                        <div className="flex items-center mt-1 text-[10px] text-gray-400 font-mono opacity-80">
+                                                            <span>大小: {formatBytes(task.size || 0)}</span>
+                                                            {task.state === 'downloading' && (
+                                                                <span className="ml-3 text-blue-500 font-medium">
+                                                                    剩余: {formatETA(task.eta)}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </td>

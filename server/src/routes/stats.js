@@ -77,28 +77,17 @@ router.get('/', async (req, res) => {
             }
         );
 
-        // Fetch today's actual traffic delta from DB
-        const db = require('../db').getDB();
-        const todayStr = statsService.getLocalDateString();
-        const todayTraffic = db.prepare('SELECT * FROM daily_stats WHERE date = ?').get(todayStr) || { downloaded_bytes: 0, uploaded_bytes: 0 };
+        const memStats = statsService.getStats();
 
-        // Also calculate from task_history as a fallback/hybrid
-        const completedToday = db.prepare(`
-            SELECT SUM(item_size) as total_size 
-            FROM task_history 
-            WHERE is_finished = 1 AND date(finish_time, 'localtime') = date(?)
-        `).get(todayStr);
-        const totalCompletedSize = completedToday ? (completedToday.total_size || 0) : 0;
-
-        // Use the maximum of delta traffic and completed items to be most accurate
-        const displayedDownload = Math.max(todayTraffic.downloaded_bytes, totalCompletedSize);
+        // Fetch today's actual traffic delta (now from memory)
+        const displayedDownload = memStats.todayDownloaded;
 
         res.json({
             success: true,
             stats: {
                 ...aggregatedStats,
                 totalDownloaded: displayedDownload,
-                totalUploaded: todayTraffic.uploaded_bytes
+                totalUploaded: memStats.todayUploaded
             },
             clients: validClientStats
         });
@@ -184,17 +173,8 @@ router.get('/dashboard', async (req, res) => {
             { totalDownloadSpeed: 0, totalUploadSpeed: 0, activeTorrents: 0, totalTorrents: 0 }
         );
 
-        // Today's traffic & completed size
-        const todayTraffic = db.prepare('SELECT * FROM daily_stats WHERE date = ?').get(todayStr) || { downloaded_bytes: 0, uploaded_bytes: 0 };
-        const completedToday = db.prepare(`SELECT SUM(item_size) as total_size FROM task_history WHERE is_finished = 1 AND date(finish_time, 'localtime') = date(?)`).get(todayStr);
-        const totalCompletedSize = completedToday ? (completedToday.total_size || 0) : 0;
-        const displayedDownload = Math.max(todayTraffic.downloaded_bytes, totalCompletedSize);
-
-        // History
+        const memStats = statsService.getStats();
         const history = statsService.getHistory(7);
-
-        // Historical Totals from checkpoint
-        const checkpoint = db.prepare('SELECT historical_total_downloaded, historical_total_uploaded FROM stats_checkpoint WHERE id = 1').get();
 
         // Detailed Today's Downloads
         const downloads = db.prepare(`
@@ -209,10 +189,10 @@ router.get('/dashboard', async (req, res) => {
             success: true,
             stats: {
                 ...aggregatedStats,
-                totalDownloaded: displayedDownload,
-                totalUploaded: todayTraffic.uploaded_bytes,
-                histDownloaded: checkpoint ? checkpoint.historical_total_downloaded : 0,
-                histUploaded: checkpoint ? checkpoint.historical_total_uploaded : 0
+                totalDownloaded: memStats.todayDownloaded,
+                totalUploaded: memStats.todayUploaded,
+                histDownloaded: memStats.histDownloaded,
+                histUploaded: memStats.histUploaded
             },
             clients: validClientStats,
             history,

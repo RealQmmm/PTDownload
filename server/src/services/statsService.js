@@ -12,132 +12,185 @@ class StatsService {
         return `${year}-${month}-${day}`;
     }
 
-    async updateDailyStats() {
+    constructor() {
+        this.memoryStats = {
+            todayDownloaded: 0,
+            todayUploaded: 0,
+            histDownloaded: 0,
+            histUploaded: 0,
+            lastTotalDownloaded: 0,
+            lastTotalUploaded: 0
+        };
+        this.initialized = false;
+        this.clientsData = []; // Cache for torrent list to avoid redundant calls
+    }
+
+    async init() {
         const db = getDB();
-        // Check log setting
+        const today = this.getLocalDateString();
+
+        // 1. Load checkpoint
+        const checkpoint = db.prepare('SELECT * FROM stats_checkpoint WHERE id = 1').get();
+        if (checkpoint) {
+            this.memoryStats.lastTotalDownloaded = checkpoint.last_total_downloaded || 0;
+            this.memoryStats.lastTotalUploaded = checkpoint.last_total_uploaded || 0;
+            this.memoryStats.histDownloaded = checkpoint.historical_total_downloaded || 0;
+            this.memoryStats.histUploaded = checkpoint.historical_total_uploaded || 0;
+        }
+
+        // 2. Load today's stats
+        const todayStats = db.prepare('SELECT * FROM daily_stats WHERE date = ?').get(today);
+        if (todayStats) {
+            this.memoryStats.todayDownloaded = todayStats.downloaded_bytes || 0;
+            this.memoryStats.todayUploaded = todayStats.uploaded_bytes || 0;
+        }
+
+        this.initialized = true;
+        console.log('[Stats] Service initialized with memory cache');
+    }
+
+    async collectStats() {
+        if (!this.initialized) await this.init();
+
+        const db = getDB();
         const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
         const enableLogs = logSetting && logSetting.value === 'true';
 
-        await this.checkCompletion();
         try {
             const clients = clientService.getAllClients();
-
             if (clients.length === 0) return;
 
-            // Fetch current totals from all clients
+            // Fetch current totals and torrents from all clients
             const clientResults = await Promise.all(
                 clients.map(async (client) => {
                     try {
                         const result = await downloaderService.getTorrents(client);
                         if (result.success) {
-                            // Sum up individual torrent values as a reliable alternative to global counters
                             const torrentSumDL = (result.torrents || []).reduce((sum, t) => sum + (Number(t.downloaded) || 0), 0);
                             const torrentSumUL = (result.torrents || []).reduce((sum, t) => sum + (Number(t.uploaded) || 0), 0);
 
-                            // Use the larger value between the global counter and the sum of torrents
-                            // Some clients might return session-only totals in stats, while torrents keep their lifetime totals
                             return {
+                                success: true,
                                 downloaded: Math.max(result.stats.totalDownloaded || 0, torrentSumDL),
-                                uploaded: Math.max(result.stats.totalUploaded || 0, torrentSumUL)
+                                uploaded: Math.max(result.stats.totalUploaded || 0, torrentSumUL),
+                                torrents: result.torrents
                             };
                         }
-                        return null;
+                        return { success: false };
                     } catch (err) {
-                        return null;
+                        return { success: false };
                     }
                 })
             );
 
-            const validResults = clientResults.filter(r => r !== null);
+            const validResults = clientResults.filter(r => r.success);
             const currentTotalDownloaded = validResults.reduce((acc, r) => acc + r.downloaded, 0);
             const currentTotalUploaded = validResults.reduce((acc, r) => acc + r.uploaded, 0);
 
-            // Get checkpoint
-            const checkpoint = db.prepare('SELECT * FROM stats_checkpoint WHERE id = 1').get();
+            // Cache torrents for checkCompletion and other uses
+            this.clientsData = validResults.flatMap(r => r.torrents || []);
 
-            // Use local date string
-            const today = this.getLocalDateString();
+            // Calculate Deltas
+            if (this.memoryStats.lastTotalDownloaded > 0 || this.memoryStats.lastTotalUploaded > 0) {
+                let diffDL = currentTotalDownloaded - this.memoryStats.lastTotalDownloaded;
+                let diffUL = currentTotalUploaded - this.memoryStats.lastTotalUploaded;
 
-            let histDl = checkpoint.historical_total_downloaded || 0;
-            let histUl = checkpoint.historical_total_uploaded || 0;
+                // Handle Reset
+                if (diffDL < 0) diffDL = currentTotalDownloaded;
+                if (diffUL < 0) diffUL = currentTotalUploaded;
 
-            // Ensure historical stats are initialized from current totals if they are empty
-            // or if the current total is significantly larger than what we have (first-run sync)
-            if (histDl === 0 && currentTotalDownloaded > 0) histDl = currentTotalDownloaded;
-            if (histUl === 0 && currentTotalUploaded > 0) histUl = currentTotalUploaded;
+                if (diffDL > 0 || diffUL > 0) {
+                    this.memoryStats.todayDownloaded += diffDL;
+                    this.memoryStats.todayUploaded += diffUL;
+                    this.memoryStats.histDownloaded += diffDL;
+                    this.memoryStats.histUploaded += diffUL;
 
-            if (checkpoint && (checkpoint.last_total_downloaded > 0 || checkpoint.last_total_uploaded > 0)) {
-                let diffDownloaded = currentTotalDownloaded - checkpoint.last_total_downloaded;
-                let diffUploaded = currentTotalUploaded - checkpoint.last_total_uploaded;
-
-                // Handle reset for download/upload (e.g. client restart or clearing stats)
-                if (diffDownloaded < 0) {
-                    if (enableLogs) console.log(`[Stats] Download counter reset detected. New session starts at: ${currentTotalDownloaded}`);
-                    diffDownloaded = currentTotalDownloaded;
-                }
-                if (diffUploaded < 0) {
-                    if (enableLogs) console.log(`[Stats] Upload counter reset detected. New session starts at: ${currentTotalUploaded}`);
-                    diffUploaded = currentTotalUploaded;
-                }
-
-                if (diffDownloaded > 0 || diffUploaded > 0) {
-                    if (enableLogs) console.log(`[Stats] Recorded new traffic: DL +${diffDownloaded}, UP +${diffUploaded}`);
-                    histDl += diffDownloaded;
-                    histUl += diffUploaded;
-                }
-
-                // Update today's stats record (incremental for both)
-                const existingToday = db.prepare('SELECT * FROM daily_stats WHERE date = ?').get(today);
-                if (existingToday) {
-                    db.prepare('UPDATE daily_stats SET downloaded_bytes = downloaded_bytes + ?, uploaded_bytes = uploaded_bytes + ? WHERE date = ?')
-                        .run(diffDownloaded, diffUploaded, today);
-                } else {
-                    db.prepare('INSERT INTO daily_stats (date, downloaded_bytes, uploaded_bytes) VALUES (?, ?, ?)')
-                        .run(today, diffDownloaded, diffUploaded);
+                    if (enableLogs) {
+                        console.log(`[Stats] Memory Update: DL +${diffDL}, UP +${diffUL}`);
+                    }
                 }
             } else {
-                if (enableLogs) console.log(`[Stats] Initializing stats checkpoint with DL:${currentTotalDownloaded}, UP:${currentTotalUploaded}`);
-                // Initial run: Use current client totals as historical start point
-                histDl = currentTotalDownloaded;
-                histUl = currentTotalUploaded;
+                // First run after empty DB or init
+                if (this.memoryStats.histDownloaded === 0) this.memoryStats.histDownloaded = currentTotalDownloaded;
+                if (this.memoryStats.histUploaded === 0) this.memoryStats.histUploaded = currentTotalUploaded;
             }
 
-            // Update checkpoint
-            db.prepare('UPDATE stats_checkpoint SET last_total_downloaded = ?, last_total_uploaded = ?, historical_total_downloaded = ?, historical_total_uploaded = ?, last_updated = CURRENT_TIMESTAMP WHERE id = 1')
-                .run(currentTotalDownloaded, currentTotalUploaded, histDl, histUl);
+            this.memoryStats.lastTotalDownloaded = currentTotalDownloaded;
+            this.memoryStats.lastTotalUploaded = currentTotalUploaded;
 
-            // Periodically log heartbeat if something was recorded
-            if (checkpoint && (checkpoint.last_total_downloaded > 0 || checkpoint.last_total_uploaded > 0)) {
-                let diffDownloaded = currentTotalDownloaded - checkpoint.last_total_downloaded;
-                let diffUploaded = currentTotalUploaded - checkpoint.last_total_uploaded;
-                if (diffDownloaded > 0 || diffUploaded > 0) {
-                    loggerService.log(`数据采集：新增下载 ${(diffDownloaded / 1024 / 1024).toFixed(2)}MB, 新增上传 ${(diffUploaded / 1024 / 1024).toFixed(2)}MB`, 'success');
-                }
-            }
+            // Check completion using cached torrents
+            await this.checkCompletionInternal(this.clientsData);
 
         } catch (err) {
-            console.error('Failed to update daily stats:', err);
+            console.error('[Stats] Collection failed:', err);
         }
     }
 
-    async checkCompletion() {
+    async persistStats() {
+        if (!this.initialized) return;
+
         const db = getDB();
-        // Check log setting
+        const today = this.getLocalDateString();
+
+        try {
+            // 1. Update daily_stats
+            const existingToday = db.prepare('SELECT * FROM daily_stats WHERE date = ?').get(today);
+            if (existingToday) {
+                db.prepare('UPDATE daily_stats SET downloaded_bytes = ?, uploaded_bytes = ? WHERE date = ?')
+                    .run(this.memoryStats.todayDownloaded, this.memoryStats.todayUploaded, today);
+            } else {
+                // If it's a new day, we need to reset today's counters in memory
+                // This usually happens at midnight. The 5-min persist should handle it.
+                // But wait, if getLocalDateString() changes, we should reset memory today stats.
+                db.prepare('INSERT INTO daily_stats (date, downloaded_bytes, uploaded_bytes) VALUES (?, ?, ?)')
+                    .run(today, this.memoryStats.todayDownloaded, this.memoryStats.todayUploaded);
+            }
+
+            // 2. Update checkpoint
+            db.prepare(`
+                UPDATE stats_checkpoint 
+                SET last_total_downloaded = ?, 
+                    last_total_uploaded = ?, 
+                    historical_total_downloaded = ?, 
+                    historical_total_uploaded = ?, 
+                    last_updated = CURRENT_TIMESTAMP 
+                WHERE id = 1
+            `).run(
+                this.memoryStats.lastTotalDownloaded,
+                this.memoryStats.lastTotalUploaded,
+                this.memoryStats.histDownloaded,
+                this.memoryStats.histUploaded
+            );
+
+            console.log(`[Stats] Persisted to DB: Today DL: ${(this.memoryStats.todayDownloaded / 1024 / 1024).toFixed(2)}MB`);
+
+            // Handle day rollover in logic
+            const lastPersistedDate = this.lastPersistedDate || today;
+            if (lastPersistedDate !== today) {
+                // New day detected! Reset today stats in memory for next cycle
+                this.memoryStats.todayDownloaded = 0;
+                this.memoryStats.todayUploaded = 0;
+            }
+            this.lastPersistedDate = today;
+
+        } catch (err) {
+            console.error('[Stats] Persistence failed:', err);
+        }
+    }
+
+    getStats() {
+        return { ...this.memoryStats };
+    }
+
+    // Renamed for internal use
+    async checkCompletionInternal(allTorrents) {
+        if (!allTorrents || allTorrents.length === 0) return;
+
+        const db = getDB();
         const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
         const enableLogs = logSetting && logSetting.value === 'true';
 
         try {
-            const clients = clientService.getAllClients();
-            if (clients.length === 0) return;
-
-            // 1. Fetch all torrents from all clients
-            const allTorrents = [];
-            for (const client of clients) {
-                const result = await downloaderService.getTorrents(client);
-                if (result.success && result.torrents) {
-                    allTorrents.push(...result.torrents);
-                }
-            }
 
             if (allTorrents.length === 0) {
                 if (enableLogs) console.log('[Stats] No torrents found in clients.');
@@ -282,6 +335,17 @@ class StatsService {
             const d = new Date(now);
             d.setDate(d.getDate() - i);
             const dateStr = this.getLocalDateString(d);
+
+            if (dateStr === today) {
+                // Use in-memory stats for today
+                result.push({
+                    date: dateStr,
+                    downloaded_bytes: this.memoryStats.todayDownloaded,
+                    uploaded_bytes: this.memoryStats.todayUploaded
+                });
+                continue;
+            }
+
             const existing = history.find(h => h.date === dateStr);
             if (existing) {
                 result.push(existing);

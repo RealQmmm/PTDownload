@@ -44,10 +44,20 @@ schedulerService.init();
 // Initialize Stats Collection
 const statsService = require('./services/statsService');
 
-// Update stats immediately on start and then every 5 minutes
-statsService.updateDailyStats();
+// Update stats immediately on start (initial collect and regular intervals)
+(async () => {
+  await statsService.init();
+  await statsService.collectStats();
+})();
+
+// Collect every 5 seconds (Memory only)
 setInterval(() => {
-  statsService.updateDailyStats();
+  statsService.collectStats();
+}, 5 * 1000);
+
+// Persist to DB every 5 minutes
+setInterval(() => {
+  statsService.persistStats();
 }, 5 * 60 * 1000);
 
 // Basic Route

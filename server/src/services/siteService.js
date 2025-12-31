@@ -72,6 +72,26 @@ class SiteService {
         return db.prepare('UPDATE sites SET enabled = ? WHERE id = ?').run(enabled, id);
     }
 
+    _updateHeatmapData(siteId, currentUploadStr, newUploadStr) {
+        const currentBytes = SiteService.parseSizeToBytes(currentUploadStr);
+        const newBytes = SiteService.parseSizeToBytes(newUploadStr);
+
+        if (newBytes > currentBytes && currentBytes > 0) {
+            const db = this._getDB();
+            const delta = newBytes - currentBytes;
+            const today = new Date().toISOString().split('T')[0];
+
+            db.prepare(`
+                INSERT INTO site_daily_stats (site_id, date, uploaded_bytes)
+                VALUES (?, ?, ?)
+                ON CONFLICT(site_id, date) DO UPDATE SET
+                uploaded_bytes = uploaded_bytes + ?
+            `).run(siteId, today, delta, delta);
+
+            console.log(`[Heatmap] Updated site ${siteId} with delta: ${delta} bytes`);
+        }
+    }
+
     async checkCookie(id) {
         const site = this.getSiteById(id);
         if (!site || !site.url || site.type === 'Mock') return true;
@@ -91,7 +111,7 @@ class SiteService {
                 maxRedirects: 5,
                 validateStatus: (status) => status < 400
             });
-            html = response.data;
+            const html = response.data;
 
             const isLogin = html.includes('login.php') ||
                 html.includes('id="login"') ||
@@ -108,6 +128,9 @@ class SiteService {
                 const stats = siteParsers.parseUserStats(html, site.type);
 
                 if (stats) {
+                    // Update heatmap if there's an increase
+                    this._updateHeatmapData(id, site.upload, stats.upload);
+
                     let sql = 'UPDATE sites SET cookie_status = 0, last_checked_at = ?, username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?';
                     const params = [now, stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now];
 
@@ -199,12 +222,9 @@ class SiteService {
 
             if (stats) {
                 const now = new Date().toISOString();
-                const today = new Date().toISOString().split('T')[0];
 
-                // 1. Get old stats to calculate delta
-                const oldSite = this.getSiteById(id);
-                const oldUploadBytes = SiteService.parseSizeToBytes(oldSite.upload);
-                const newUploadBytes = SiteService.parseSizeToBytes(stats.upload);
+                // Update heatmap if there's an increase
+                this._updateHeatmapData(id, site.upload, stats.upload);
 
                 let sql = 'UPDATE sites SET cookie_status = 0, username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?, last_checked_at = ?';
                 const params = [stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now, now];
@@ -217,17 +237,6 @@ class SiteService {
                 sql += ' WHERE id = ?';
                 params.push(id);
                 db.prepare(sql).run(...params);
-
-                // 2. Update heatmap data if there is an increase
-                if (newUploadBytes > oldUploadBytes && oldUploadBytes > 0) {
-                    const delta = newUploadBytes - oldUploadBytes;
-                    db.prepare(`
-                        INSERT INTO site_daily_stats (site_id, date, uploaded_bytes)
-                        VALUES (?, ?, ?)
-                        ON CONFLICT(site_id, date) DO UPDATE SET
-                        uploaded_bytes = uploaded_bytes + ?
-                    `).run(id, today, delta, delta);
-                }
 
                 return stats;
             }

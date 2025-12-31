@@ -36,10 +36,10 @@ const SiteHeatmap = memo(({ siteId, darkMode, borderColor, textSecondary, authen
     }, [data]);
 
     const getColor = (value) => {
-        if (value === 0) return darkMode ? 'bg-gray-800' : 'bg-gray-100';
-        if (value < 1024 * 1024 * 1024) return 'bg-blue-900/40'; // < 1GB
-        if (value < 10 * 1024 * 1024 * 1024) return 'bg-blue-700/60'; // < 10GB
-        if (value < 50 * 1024 * 1024 * 1024) return 'bg-blue-500/80'; // < 50GB
+        if (value === 0) return darkMode ? 'bg-gray-700/30' : 'bg-gray-100';
+        if (value < 1024 * 1024 * 1024) return 'bg-blue-500/30'; // < 1GB
+        if (value < 10 * 1024 * 1024 * 1024) return 'bg-blue-500/60'; // < 10GB
+        if (value < 50 * 1024 * 1024 * 1024) return 'bg-blue-500'; // < 50GB
         return 'bg-blue-400'; // > 50GB
     }
 
