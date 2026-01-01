@@ -95,9 +95,12 @@ class StatsService {
                 let diffDL = currentTotalDownloaded - this.memoryStats.lastTotalDownloaded;
                 let diffUL = currentTotalUploaded - this.memoryStats.lastTotalUploaded;
 
-                // Handle Reset
-                if (diffDL < 0) diffDL = currentTotalDownloaded;
-                if (diffUL < 0) diffUL = currentTotalUploaded;
+                // Handle Reset or Deletion
+                // If diff is negative, it means a torrent was removed or stats were reset.
+                // We should NOT count this as negative traffic, nor should we jump to the total value.
+                // We just accept the new lower baseline.
+                if (diffDL < 0) diffDL = 0;
+                if (diffUL < 0) diffUL = 0;
 
                 if (diffDL > 0 || diffUL > 0) {
                     this.memoryStats.todayDownloaded += diffDL;
@@ -218,14 +221,15 @@ class StatsService {
 
                 // If we haven't seen this hash before, import it
                 if (!knownHashes.has(tHash)) {
+                    // Comprehensive finished check: progress is 100% OR in done states
                     const isFinished = t.progress >= 1 ||
-                        ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished'].includes(t.state);
+                        ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished', 'checkingUP', 'forcedUP', 'moving'].includes(t.state);
 
                     const downloadTime = t.added_on || new Date().toISOString();
+                    // CRITICAL: Ensure finishTime is NEVER null if finished
                     const finishTime = isFinished ? (t.completion_on || new Date().toISOString()) : null;
 
                     try {
-                        // Use hash as guid for external torrents (task_id is NULL)
                         insertStmt.run(
                             null,
                             tHash,
@@ -239,7 +243,6 @@ class StatsService {
                         knownHashes.add(tHash);
                         newImportCount++;
                     } catch (err) {
-                        // Ignore UNIQUE constraint errors
                         if (!err.message.includes('UNIQUE constraint failed')) {
                             console.error('[Stats] Failed to import torrent:', t.name, err.message);
                         }
@@ -285,21 +288,19 @@ class StatsService {
                 });
 
                 if (torrent) {
-                    // Link hash if missing
+                    // Update metadata
                     if (!item.item_hash && torrent.hash) {
                         db.prepare('UPDATE task_history SET item_hash = ? WHERE id = ?').run(torrent.hash, item.id);
                         item.item_hash = torrent.hash;
                     }
-
-                    // Update size if missing
                     if ((!item.item_size || item.item_size === 0) && torrent.size > 0) {
                         db.prepare('UPDATE task_history SET item_size = ? WHERE id = ?').run(torrent.size, item.id);
                         item.item_size = torrent.size;
                     }
 
-                    // Check if finished (progress is 1 or 100%)
+                    // Check if finished
                     const isFinished = torrent.progress >= 1 ||
-                        ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished'].includes(torrent.state);
+                        ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished', 'checkingUP', 'forcedUP', 'moving'].includes(torrent.state);
 
                     if (isFinished) {
                         const finishTime = torrent.completion_on || new Date().toISOString();
@@ -309,6 +310,14 @@ class StatsService {
                             .run(finishTime, downloadTime, item.id);
                         if (enableLogs) console.log(`[Stats] Marked item as finished: "${item.item_title}"`);
                     }
+                } else {
+                    // LOOPHOLE FIX: If torrent is MISSING from client but was in our unfinished list
+                    // It was likely deleted or moved. In PT usage, this usually means it finished.
+                    // We mark it as finished to avoid it being stuck in "Downloading" forever.
+                    const now = new Date().toISOString();
+                    db.prepare('UPDATE task_history SET is_finished = 1, finish_time = ? WHERE id = ?')
+                        .run(now, item.id);
+                    if (enableLogs) console.log(`[Stats] Marked missing torrent as finished (cleanup): "${item.item_title}"`);
                 }
             }
         } catch (err) {
@@ -403,9 +412,9 @@ class StatsService {
 
                 if (torrent) {
                     const isFinished = torrent.progress >= 1 ||
-                        ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished'].includes(torrent.state);
+                        ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished', 'checkingUP', 'forcedUP', 'moving'].includes(torrent.state);
 
-                    const finishTime = torrent.completion_on || item.finish_time;
+                    const finishTime = torrent.completion_on || (isFinished ? (item.finish_time || new Date().toISOString()) : null);
                     const downloadTime = torrent.added_on || item.download_time;
                     const itemHash = torrent.hash || item.item_hash;
                     const itemSize = torrent.size || item.item_size;

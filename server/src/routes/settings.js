@@ -65,7 +65,7 @@ router.post('/', (req, res) => {
 router.get('/export', (req, res) => {
     try {
         const db = getDB();
-        const tables = ['sites', 'clients', 'tasks', 'rss_sources', 'settings', 'daily_stats', 'task_history', 'task_logs', 'stats_checkpoint'];
+        const tables = ['sites', 'clients', 'tasks', 'rss_sources', 'settings', 'daily_stats', 'task_history', 'task_logs', 'stats_checkpoint', 'site_daily_stats', 'users'];
         const data = {};
 
         tables.forEach(table => {
@@ -82,7 +82,7 @@ router.get('/export', (req, res) => {
 });
 
 // Import data
-router.post('/import', (req, res) => {
+router.post('/import', async (req, res) => {
     const data = req.body;
     if (!data || typeof data !== 'object') {
         return res.status(400).json({ error: 'Invalid backup data' });
@@ -90,7 +90,7 @@ router.post('/import', (req, res) => {
 
     try {
         const db = getDB();
-        const tables = ['sites', 'clients', 'tasks', 'rss_sources', 'settings', 'daily_stats', 'task_history', 'task_logs', 'stats_checkpoint'];
+        const tables = ['sites', 'clients', 'tasks', 'rss_sources', 'settings', 'daily_stats', 'task_history', 'task_logs', 'stats_checkpoint', 'site_daily_stats', 'users'];
 
         const importTransaction = db.transaction((backupContent) => {
             // Disable foreign keys temporarily to avoid issues during deletion/insertion
@@ -126,7 +126,16 @@ router.post('/import', (req, res) => {
         });
 
         importTransaction(data);
-        res.json({ success: true, message: '数据导入成功，建议重启应用以确保配置生效。' });
+
+        // RE-INITIALIZE STATS SERVICE to reload memory stats from DB
+        try {
+            const statsService = require('../services/statsService');
+            await statsService.init();
+        } catch (e) {
+            console.error('Failed to re-init stats service after import:', e);
+        }
+
+        res.json({ success: true, message: '数据导入成功，统计数据已重载。' });
     } catch (err) {
         console.error('Import failed:', err);
         res.status(500).json({ error: err.message });
