@@ -265,7 +265,7 @@ const TasksPage = () => {
                 <div className="flex space-x-3 w-full sm:w-auto">
                     <button
                         onClick={() => setShowRSSModal(true)}
-                        className={`px-6 py-3 border ${borderColor} ${textSecondary} hover:${textPrimary} hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg font-medium transition-all`}
+                        className={`px-6 py-3 border ${borderColor} ${textSecondary} hover:${textPrimary} ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} rounded-lg font-medium transition-all`}
                     >
                         订阅源维护
                     </button>
@@ -311,7 +311,7 @@ const TasksPage = () => {
                                     <div className="flex items-center mt-4 md:mt-0 space-x-3 w-full md:w-auto justify-end">
                                         <button
                                             onClick={() => viewLogs(task)}
-                                            className={`px-4 py-2 rounded-lg text-sm font-medium border ${borderColor} text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors`}
+                                            className={`px-4 py-2 rounded-lg text-sm font-medium border ${borderColor} text-blue-500 ${darkMode ? 'hover:bg-blue-900/20' : 'hover:bg-blue-50'} transition-colors`}
                                         >
                                             任务日志
                                         </button>
@@ -332,7 +332,7 @@ const TasksPage = () => {
                                         </button>
                                         <button
                                             onClick={() => handleEdit(task)}
-                                            className={`px-4 py-2 rounded-lg text-sm font-medium border ${borderColor} ${textSecondary} hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
+                                            className={`px-4 py-2 rounded-lg text-sm font-medium border ${borderColor} ${textSecondary} ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition-colors`}
                                         >
                                             编辑
                                         </button>
@@ -376,7 +376,7 @@ const TasksPage = () => {
             {showModal && (
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                     <div className={`${bgMain} rounded-2xl w-full max-w-2xl border ${borderColor} shadow-2xl overflow-hidden max-h-[90vh] flex flex-col`}>
-                        <div className={`p-6 border-b ${borderColor} flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50`}>
+                        <div className={`p-6 border-b ${borderColor} flex justify-between items-center ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50/50'}`}>
                             <h2 className={`text-xl font-bold ${textPrimary}`}>
                                 {editingTask ? '编辑自动任务' : '创建新 RSS 任务'}
                             </h2>
@@ -569,7 +569,7 @@ const TasksPage = () => {
                                 </div>
                             </div>
 
-                            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <div className={`flex justify-end space-x-3 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
                                 <button type="button" onClick={() => setShowModal(false)} className={`px-6 py-2 rounded-lg ${textSecondary} hover:${textPrimary} transition-colors`}>取消</button>
                                 <button type="submit" className="px-10 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-all shadow-lg shadow-blue-600/20">
                                     {editingTask ? '保存更改' : '创建任务'}
@@ -584,7 +584,7 @@ const TasksPage = () => {
             {showRSSModal && (
                 <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                     <div className={`${bgMain} rounded-2xl w-full max-w-3xl border ${borderColor} shadow-2xl overflow-hidden max-h-[85vh] flex flex-col`}>
-                        <div className={`p-6 border-b ${borderColor} flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50`}>
+                        <div className={`p-6 border-b ${borderColor} flex justify-between items-center ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50/50'}`}>
                             <h2 className={`text-xl font-bold ${textPrimary}`}>RSS 订阅源维护</h2>
                             <button onClick={() => { setShowRSSModal(false); cancelRSSEdit(); }} className={`${textSecondary} hover:${textPrimary}`}>✕</button>
                         </div>
@@ -657,7 +657,7 @@ const TasksPage = () => {
                                         <div key={source.id} className={`flex items-center justify-between p-3 border ${borderColor} rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors`}>
                                             <div className="flex-1 min-w-0 mr-4">
                                                 <div className="flex items-center space-x-2">
-                                                    <span className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-[10px] font-bold text-gray-500 uppercase border border-gray-200 dark:border-gray-600">
+                                                    <span className={`px-1.5 py-0.5 rounded ${darkMode ? 'bg-gray-800 text-gray-500 border-gray-600' : 'bg-gray-100 text-gray-500 border-gray-200'} text-[10px] font-bold uppercase border`}>
                                                         {source.site_name}
                                                     </span>
                                                     <span className={`font-bold text-sm ${textPrimary}`}>{source.name}</span>
@@ -692,7 +692,7 @@ const TasksPage = () => {
                             </div>
                         </div>
 
-                        <div className={`p-4 border-t ${borderColor} bg-gray-50/50 dark:bg-gray-900/50 flex justify-end`}>
+                        <div className={`p-4 border-t ${borderColor} ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50/50'} flex justify-end`}>
                             <button onClick={() => { setShowRSSModal(false); cancelRSSEdit(); }} className={`px-6 py-2 rounded-lg ${textSecondary} hover:${textPrimary} font-bold`}>关闭</button>
                         </div>
                     </div>
@@ -704,7 +704,7 @@ const TasksPage = () => {
                 showLogsModal && (
                     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
                         <div className={`${bgMain} rounded-2xl w-full max-w-4xl border ${borderColor} shadow-2xl overflow-hidden max-h-[85vh] flex flex-col`}>
-                            <div className={`p-6 border-b ${borderColor} flex justify-between items-center bg-gray-50/50 dark:bg-gray-900/50`}>
+                            <div className={`p-6 border-b ${borderColor} flex justify-between items-center ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50/50'}`}>
                                 <h2 className={`text-xl font-bold ${textPrimary}`}>任务执行日志: {editingTask?.name}</h2>
                                 <button onClick={() => setShowLogsModal(false)} className={`${textSecondary} hover:${textPrimary}`}>✕</button>
                             </div>
@@ -724,9 +724,9 @@ const TasksPage = () => {
                                                 <th className="py-3 px-4 font-bold">消息</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                                        <tbody className={`divide-y ${darkMode ? 'divide-gray-700/50' : 'divide-gray-100'}`}>
                                             {selectedTaskLogs.map((log) => (
-                                                <tr key={log.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
+                                                <tr key={log.id} className={`${darkMode ? 'hover:bg-gray-700/20' : 'hover:bg-gray-50/50'} transition-colors`}>
                                                     <td className="py-3 px-6 text-xs font-mono text-gray-400">
                                                         {new Date(log.run_time).toLocaleString()}
                                                     </td>
@@ -758,7 +758,7 @@ const TasksPage = () => {
                                 )}
                             </div>
 
-                            <div className={`p-4 border-t ${borderColor} bg-gray-50/50 dark:bg-gray-900/50 flex justify-end`}>
+                            <div className={`p-4 border-t ${borderColor} ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50/50'} flex justify-end`}>
                                 <button onClick={() => setShowLogsModal(false)} className={`px-6 py-2 rounded-lg ${textSecondary} hover:${textPrimary} font-bold`}>关闭</button>
                             </div>
                         </div>

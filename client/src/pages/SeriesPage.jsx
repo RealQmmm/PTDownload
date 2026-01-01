@@ -157,9 +157,9 @@ const SeriesPage = () => {
                                 </div>
                             </div>
 
-                            <div className={`text-xs ${textSecondary} bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg font-mono mb-4 break-all`}>
+                            <div className={`text-xs ${textSecondary} ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'} p-3 rounded-lg font-mono mb-4 break-all`}>
                                 Regex: {sub.smart_regex}
-                                <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                                <div className={`mt-2 pt-2 border-t ${borderColor} flex justify-between items-center`}>
                                     <span className="text-blue-500 font-bold">已下载: {sub.episode_count || 0} 集</span>
                                 </div>
                             </div>
@@ -249,7 +249,7 @@ const SeriesPage = () => {
                                 <button
                                     type="button"
                                     onClick={() => setShowModal(false)}
-                                    className={`px-5 py-2.5 rounded-xl font-medium ${textSecondary} hover:bg-gray-100 dark:hover:bg-gray-700`}
+                                    className={`px-5 py-2.5 rounded-xl font-medium ${textSecondary} ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
                                 >
                                     取消
                                 </button>

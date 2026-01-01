@@ -74,6 +74,8 @@ const SitesPage = () => {
     const [loading, setLoading] = useState(true);
     const [showModal, setShowModal] = useState(false);
     const [editingSite, setEditingSite] = useState(null);
+    const [refreshingId, setRefreshingId] = useState(null);
+    const [checkingId, setCheckingId] = useState(null);
 
     // Theme-aware classes
     const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
@@ -187,22 +189,25 @@ const SitesPage = () => {
     };
 
     const syncSingleSiteData = async (id) => {
+        setRefreshingId(id);
         try {
             const res = await authenticatedFetch(`/api/sites/${id}/refresh-stats`);
             const data = await res.json();
             if (data.stats) {
                 await fetchSites();
-                alert('站点数据已同步！');
             } else {
                 alert('同步失败，请检查 Cookie 是否有效');
                 await fetchSites();
             }
         } catch (err) {
             alert('同步失败');
+        } finally {
+            setRefreshingId(null);
         }
     };
 
     const manualCheckin = async (id, notifySuccess = false) => {
+        setCheckingId(id);
         try {
             const res = await authenticatedFetch(`/api/sites/${id}/checkin`, { method: 'POST' });
             const data = await res.json();
@@ -214,6 +219,8 @@ const SitesPage = () => {
             }
         } catch (err) {
             alert('请求出错');
+        } finally {
+            setCheckingId(null);
         }
     };
 
@@ -285,8 +292,9 @@ const SitesPage = () => {
                                             <h3 className={`font-bold text-lg ${textPrimary} truncate`} title={site.name}>{site.name}</h3>
                                             {site.enabled && (
                                                 <button
-                                                    onClick={() => manualCheckin(site.id, true)}
-                                                    className={`text-sm transition-all hover:scale-125 ${site.auto_checkin === 1 ? 'grayscale-0' : 'grayscale opacity-40 hover:opacity-100'}`}
+                                                    onClick={() => !checkingId && manualCheckin(site.id, true)}
+                                                    disabled={checkingId === site.id}
+                                                    className={`text-sm transition-all ${checkingId === site.id ? 'animate-bounce' : 'hover:scale-125'} ${site.auto_checkin === 1 ? 'grayscale-0' : 'grayscale opacity-40 hover:opacity-100'} ${checkingId === site.id ? 'opacity-100 cursor-not-allowed' : ''}`}
                                                     title={site.auto_checkin === 1 ? "已开启每日自动签到 - 点击手动签到" : "自动签到已关闭 - 点击手动签到"}
                                                 >
                                                     ⏰
@@ -308,11 +316,12 @@ const SitesPage = () => {
                                     {site.enabled && (
                                         <>
                                             <button
-                                                onClick={() => syncSingleSiteData(site.id)}
-                                                className={`${textSecondary} hover:text-blue-400 transition-colors p-1.5 rounded-lg ${hoverBg}`}
+                                                onClick={() => !refreshingId && syncSingleSiteData(site.id)}
+                                                disabled={refreshingId === site.id}
+                                                className={`${textSecondary} hover:text-blue-400 transition-colors p-1.5 rounded-lg ${hoverBg} ${refreshingId === site.id ? 'cursor-not-allowed' : ''}`}
                                                 title="手动刷新站点数据与状态"
                                             >
-                                                <span className="text-sm">🔄</span>
+                                                <span className={`text-sm inline-block ${refreshingId === site.id ? 'animate-spin' : ''}`}>🔄</span>
                                             </button>
                                         </>
                                     )}
@@ -325,7 +334,14 @@ const SitesPage = () => {
                                 </div>
                             </div>
 
-                            <p className={`${textSecondary} text-xs truncate mb-4`}>{site.url}</p>
+                            <div className="flex items-center justify-between mb-4 min-w-0">
+                                <p className={`${textSecondary} text-xs truncate flex-1`}>{site.url}</p>
+                                {isToday(site.last_checkin_at) && (
+                                    <span className="text-[10px] text-green-500 font-bold flex items-center ml-2 shrink-0">
+                                        <span className="mr-1">✅</span> 今日已签到
+                                    </span>
+                                )}
+                            </div>
 
                             {/* User Stats Overview */}
                             {site.enabled && (
@@ -346,14 +362,6 @@ const SitesPage = () => {
                                     </div>
                                 </div>
                             )}
-
-                            <div className="flex flex-col space-y-1 mb-4">
-                                {isToday(site.last_checkin_at) && (
-                                    <p className="text-[10px] text-green-500 font-bold flex items-center">
-                                        <span className="mr-1">✅</span> 今日已签到
-                                    </p>
-                                )}
-                            </div>
 
                             {site.enabled && (
                                 <SiteHeatmap
