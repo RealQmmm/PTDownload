@@ -85,16 +85,8 @@ router.post('/', async (req, res) => {
                     const db = getDB();
 
                     // Parse size string (e.g., "4.5 GB") to bytes
-                    let sizeBytes = 0;
-                    if (size) {
-                        const match = size.match(/([\d.]+)\s*(GB|MB|KB|B|TB)/i);
-                        if (match) {
-                            const val = parseFloat(match[1]);
-                            const unit = match[2].toUpperCase();
-                            const multiplier = { B: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3, TB: 1024 ** 4 };
-                            sizeBytes = Math.floor(val * (multiplier[unit] || 1));
-                        }
-                    }
+                    const FormatUtils = require('../utils/formatUtils');
+                    const sizeBytes = FormatUtils.parseSizeToBytes(size);
 
                     // For manual downloads, task_id is NULL
                     db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, download_time) VALUES (?, ?, ?, ?, ?)')

@@ -43,12 +43,11 @@ class RSSService {
                 let size = parseInt(sizeStr) || 0;
                 if (!size) {
                     const desc = $(el).find('description').text();
-                    const sizeMatch = desc.match(/Size:\s*([\d\.]+)\s*(GB|MB|KB|TB)/i);
+                    const sizeMatch = desc.match(/Size:\s*([\d\.]+)\s*([KMGT]B?)/i);
                     if (sizeMatch) {
-                        const val = parseFloat(sizeMatch[1]);
-                        const unit = sizeMatch[2].toUpperCase();
-                        const multiplier = { KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3, TB: 1024 ** 4 };
-                        size = val * (multiplier[unit] || 1);
+                        // Use unified util to parse "1.5 GB" etc
+                        const FormatUtils = require('../utils/formatUtils');
+                        size = FormatUtils.parseSizeToBytes(`${sizeMatch[1]} ${sizeMatch[2]}`);
                     }
                 }
 
@@ -84,14 +83,8 @@ class RSSService {
 
                             // Send notification
                             try {
-                                const formatBytes = (bytes) => {
-                                    if (!bytes) return '0 B';
-                                    const k = 1024;
-                                    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-                                    const i = Math.floor(Math.log(bytes) / Math.log(k));
-                                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-                                };
-                                await notificationService.notifyNewTorrent(task.name, item.title, formatBytes(item.size));
+                                const FormatUtils = require('../utils/formatUtils');
+                                await notificationService.notifyNewTorrent(task.name, item.title, FormatUtils.formatBytes(item.size));
                             } catch (notifyErr) {
                                 console.error('[RSS] Notification failed:', notifyErr.message);
                             }

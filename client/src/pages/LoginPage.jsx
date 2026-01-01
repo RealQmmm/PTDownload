@@ -65,7 +65,7 @@ export default function LoginPage({ onLogin, siteName, themeMode, setThemeMode, 
             <div className={`max-w-md w-full space-y-8 ${cardBg} p-10 rounded-3xl shadow-2xl border ${borderClass} transition-all`}>
                 <div className="text-center">
                     <div className="inline-block p-4 rounded-2xl bg-blue-600/10 mb-4">
-                        <span className="text-4xl text-blue-500">📁</span>
+                        <img src="/login-logo.png" alt="Logo" className="w-20 h-20 object-contain" />
                     </div>
                     <h2 className={`text-3xl font-black ${textPrimary} tracking-tight`}>
                         {siteName}

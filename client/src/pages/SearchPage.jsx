@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
+import { FormatUtils } from '../utils/formatUtils';
 
 
 
@@ -13,6 +14,9 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const [searchMode, setSearchMode] = useState(searchState?.searchMode || 'keyword'); // 'keyword' or 'recent'
     const [downloading, setDownloading] = useState(null);
     const [clients, setClients] = useState([]);
+
+    // Sorting state
+    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
     // Client selection modal state
     const [showClientModal, setShowClientModal] = useState(false);
@@ -125,6 +129,46 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
     const inputBg = darkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900';
 
+    // Sorting Logic
+    const sortedResults = React.useMemo(() => {
+        if (!sortConfig.key) return results;
+        return [...results].sort((a, b) => {
+            let valA = a[sortConfig.key];
+            let valB = b[sortConfig.key];
+
+            if (sortConfig.key === 'size') {
+                valA = FormatUtils.parseSizeToBytes(valA);
+                valB = FormatUtils.parseSizeToBytes(valB);
+            } else if (sortConfig.key === 'seeders' || sortConfig.key === 'leechers') {
+                valA = Number(valA) || 0;
+                valB = Number(valB) || 0;
+            } else if (sortConfig.key === 'date') {
+                valA = new Date(valA).getTime();
+                valB = new Date(valB).getTime();
+            } else {
+                valA = (valA || '').toString().toLowerCase();
+                valB = (valB || '').toString().toLowerCase();
+            }
+
+            if (valA < valB) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [results, sortConfig]);
+
+    const requestSort = (key) => {
+        let direction = 'asc';
+        if (sortConfig.key === key && sortConfig.direction === 'asc') {
+            direction = 'desc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const SortIcon = ({ columnKey }) => {
+        if (sortConfig.key !== columnKey) return <span className="ml-1 opacity-30">↕</span>;
+        return <span className="ml-1 text-blue-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
+    };
+
     return (
         <div className="p-4 md:p-8 h-full flex flex-col">
             <div className="mb-6 md:mb-8">
@@ -172,16 +216,26 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                 <table className="w-full text-left border-collapse">
                                     <thead className={`${bgSecondary} ${textSecondary} sticky top-0 z-10`}>
                                         <tr>
-                                            <th className={`p-4 font-bold border-b ${borderColor} text-[11px] uppercase tracking-wider`}>站点</th>
-                                            <th className={`p-4 font-bold border-b ${borderColor}`}>资源标题</th>
-                                            <th className={`p-4 font-bold border-b ${borderColor} text-right`}>大小</th>
-                                            <th className={`p-4 font-bold border-b ${borderColor} text-right`}>做种/下载</th>
-                                            <th className={`p-4 font-bold border-b ${borderColor} text-center`}>发布时间</th>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-[11px] uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('siteName')}>
+                                                <div className="flex items-center">站点 <SortIcon columnKey="siteName" /></div>
+                                            </th>
+                                            <th className={`p-4 font-bold border-b ${borderColor} cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('name')}>
+                                                <div className="flex items-center">资源标题 <SortIcon columnKey="name" /></div>
+                                            </th>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('size')}>
+                                                <div className="flex items-center justify-end">大小 <SortIcon columnKey="size" /></div>
+                                            </th>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('seeders')}>
+                                                <div className="flex items-center justify-end">做种/下载 <SortIcon columnKey="seeders" /></div>
+                                            </th>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('date')}>
+                                                <div className="flex items-center justify-center">发布时间 <SortIcon columnKey="date" /></div>
+                                            </th>
                                             <th className={`p-4 font-bold border-b ${borderColor} text-right pr-6`}>操作</th>
                                         </tr>
                                     </thead>
                                     <tbody className={`divide-y ${darkMode ? 'divide-gray-700/50' : 'divide-gray-100'}`}>
-                                        {results.map((item, index) => (
+                                        {sortedResults.map((item, index) => (
                                             <tr key={index} className={`${darkMode ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50/50'} transition-colors group`}>
                                                 <td className="p-4">
                                                     <span className={`${darkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100'} border px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight`}>

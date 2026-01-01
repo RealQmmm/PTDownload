@@ -73,6 +73,53 @@ const HistoryChart = ({ data, textSecondary }) => {
     );
 };
 
+// Simple SVG Sparkline Component
+const SpeedSparkline = ({ data, color, height = 40, maxDataPoints = 60 }) => {
+    if (!data || data.length < 2) return null;
+
+    // Normalize data to fit height
+    const maxVal = Math.max(...data, 1024); // Minimum 1KB scale
+    const minVal = 0;
+    const range = maxVal - minVal;
+
+    // Create points for SVG polyline
+    const width = 100; // Use percentage width
+    const points = data.map((val, i) => {
+        const x = (i / (data.length - 1)) * width;
+        const normalizedVal = val - minVal;
+        const y = height - (normalizedVal / range) * height;
+        return `${x},${y}`;
+    }).join(' ');
+
+    return (
+        <svg viewBox={`0 0 100 ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
+            {/* Gradient definition */}
+            <defs>
+                <linearGradient id={`grad-${color}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stopColor={color} stopOpacity="0.2" />
+                    <stop offset="100%" stopColor={color} stopOpacity="0" />
+                </linearGradient>
+            </defs>
+            {/* Area fill */}
+            <path
+                d={`M0,${height} L${points} L100,${height} Z`}
+                fill={`url(#grad-${color})`}
+                stroke="none"
+            />
+            {/* Line */}
+            <polyline
+                points={points}
+                fill="none"
+                stroke={color}
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+            />
+        </svg>
+    );
+};
+
 const DashboardPage = ({ setActiveTab }) => {
     const { darkMode, authenticatedFetch } = useTheme();
     const [downloadStats, setDownloadStats] = useState({
@@ -88,6 +135,7 @@ const DashboardPage = ({ setActiveTab }) => {
     const [allTorrents, setAllTorrents] = useState([]);
     const [taskFilter, setTaskFilter] = useState('active'); // 'active' or 'all'
     const [historyData, setHistoryData] = useState([]);
+    const [speedHistory, setSpeedHistory] = useState({ downloads: [], uploads: [] });
     const [todayDownloads, setTodayDownloads] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
@@ -129,6 +177,13 @@ const DashboardPage = ({ setActiveTab }) => {
                     totalUploadSpeed: calculatedUpSpeed
                 });
 
+                // Update speed history
+                setSpeedHistory(prev => {
+                    const newDownloads = [...prev.downloads, calculatedDlSpeed].slice(-60); // Keep last 60 points
+                    const newUploads = [...prev.uploads, calculatedUpSpeed].slice(-60);
+                    return { downloads: newDownloads, uploads: newUploads };
+                });
+
                 setAllTorrents(allTorrents);
                 setHistoryData(Array.isArray(data.history) ? data.history : []);
                 setTodayDownloads(Array.isArray(data.todayDownloads) ? data.todayDownloads : []);
@@ -163,7 +218,6 @@ const DashboardPage = ({ setActiveTab }) => {
         <div className="p-4 md:p-8 space-y-6">
             <div className="mb-6">
                 <h1 className={`text-2xl md:text-3xl font-bold ${textPrimary}`}>仪表盘</h1>
-                <p className={`${textSecondary} mt-1 text-sm`}>无人值守下载站运行概况</p>
             </div>
 
             {/* Stats Overview */}
@@ -197,16 +251,29 @@ const DashboardPage = ({ setActiveTab }) => {
                 </div>
 
                 {/* Speed Card */}
-                <div className={`${bgMain} border ${borderColor} rounded-2xl p-5 shadow-sm flex flex-col`}>
-                    <p className={`${textSecondary} text-sm font-bold uppercase mb-3`}>即时速率</p>
-                    <div className="flex-1 flex flex-col justify-around py-1">
-                        <div className="flex justify-between items-center">
-                            <span className={`${textSecondary} text-base`}>下载速度</span>
-                            <span className={`text-xl font-bold text-green-500`}>{formatSpeed(downloadStats.totalDownloadSpeed || 0)}</span>
+                <div className={`${bgMain} border ${borderColor} rounded-2xl p-5 shadow-sm flex flex-col justify-between`}>
+                    <div>
+                        <p className={`${textSecondary} text-sm font-bold uppercase mb-3`}>即时速率</p>
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center">
+                                <span className={`${textSecondary} text-base`}>下载速度</span>
+                                <span className={`text-xl font-bold text-green-500`}>{formatSpeed(downloadStats.totalDownloadSpeed || 0)}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className={`${textSecondary} text-base`}>上传速度</span>
+                                <span className={`text-xl font-bold text-blue-500`}>{formatSpeed(downloadStats.totalUploadSpeed || 0)}</span>
+                            </div>
                         </div>
-                        <div className="flex justify-between items-center">
-                            <span className={`${textSecondary} text-base`}>上传速度</span>
-                            <span className={`text-xl font-bold text-blue-500`}>{formatSpeed(downloadStats.totalUploadSpeed || 0)}</span>
+                    </div>
+
+                    <div className={`mt-4 pt-4 border-t ${borderColor} h-16 relative`}>
+                        <div className="absolute inset-x-0 bottom-0 h-14 flex items-end space-x-2">
+                            <div className="flex-1 h-full relative">
+                                <SpeedSparkline data={speedHistory.downloads} color="#22C55E" height={50} />
+                            </div>
+                            <div className="flex-1 h-full relative">
+                                <SpeedSparkline data={speedHistory.uploads} color="#3B82F6" height={50} />
+                            </div>
                         </div>
                     </div>
                 </div>

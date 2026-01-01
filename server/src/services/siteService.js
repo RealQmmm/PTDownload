@@ -15,20 +15,7 @@ class SiteService {
         return this.db;
     }
 
-    // Helper to parse size strings like "1.23 GB" into bytes
-    static parseSizeToBytes(sizeStr) {
-        if (!sizeStr) return 0;
-        const match = sizeStr.match(/^([\d.]+)\s*([MGT]B)$/i);
-        if (!match) return 0;
-        const value = parseFloat(match[1]);
-        const unit = match[2].toUpperCase();
-        const multiplier = {
-            'MB': 1024 * 1024,
-            'GB': 1024 * 1024 * 1024,
-            'TB': 1024 * 1024 * 1024 * 1024
-        };
-        return Math.floor(value * (multiplier[unit] || 0));
-    }
+
 
     getAllSites() {
         const db = this._getDB();
@@ -73,8 +60,9 @@ class SiteService {
     }
 
     _updateHeatmapData(siteId, currentUploadStr, newUploadStr) {
-        const currentBytes = SiteService.parseSizeToBytes(currentUploadStr);
-        const newBytes = SiteService.parseSizeToBytes(newUploadStr);
+        const FormatUtils = require('../utils/formatUtils');
+        const currentBytes = FormatUtils.parseSizeToBytes(currentUploadStr);
+        const newBytes = FormatUtils.parseSizeToBytes(newUploadStr);
 
         if (newBytes > currentBytes && currentBytes > 0) {
             const db = this._getDB();
