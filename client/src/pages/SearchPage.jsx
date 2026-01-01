@@ -14,6 +14,8 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const [searchMode, setSearchMode] = useState(searchState?.searchMode || 'keyword'); // 'keyword' or 'recent'
     const [downloading, setDownloading] = useState(null);
     const [clients, setClients] = useState([]);
+    const [sites, setSites] = useState([]);
+    const [selectedSite, setSelectedSite] = useState('');
 
     // Sorting state
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
@@ -28,6 +30,11 @@ const SearchPage = ({ searchState, setSearchState }) => {
             .then(res => res.json())
             .then(data => setClients(data))
             .catch(err => console.error('Failed to fetch clients:', err));
+
+        authenticatedFetch('/api/sites')
+            .then(res => res.json())
+            .then(data => setSites(data))
+            .catch(err => console.error('Failed to fetch sites:', err));
     }, []);
 
     // Save state to parent when it changes
@@ -50,8 +57,8 @@ const SearchPage = ({ searchState, setSearchState }) => {
 
         try {
             const url = trimmedQuery
-                ? `/api/search?q=${encodeURIComponent(trimmedQuery)}`
-                : `/api/search?days=1`;
+                ? `/api/search?q=${encodeURIComponent(trimmedQuery)}&site=${encodeURIComponent(selectedSite)}`
+                : `/api/search?days=1&site=${encodeURIComponent(selectedSite)}`;
             const res = await authenticatedFetch(url);
             const data = await res.json();
 
@@ -186,7 +193,23 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                 className={`w-full border rounded-xl py-2.5 pl-10 pr-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm ${inputBg}`}
                             />
                         </div>
-                        <div className="flex items-center">
+                        <div className="flex items-center gap-2">
+                            <select
+                                value={selectedSite}
+                                onChange={(e) => setSelectedSite(e.target.value)}
+                                className={`border rounded-xl py-2.5 px-3 pr-8 focus:outline-none focus:border-blue-500 transition-all text-sm ${inputBg} appearance-none cursor-pointer`}
+                                style={{
+                                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                                    backgroundPosition: `right 0.5rem center`,
+                                    backgroundRepeat: `no-repeat`,
+                                    backgroundSize: `1.5em 1.5em`
+                                }}
+                            >
+                                <option value="">全部站点</option>
+                                {sites.filter(s => s.enabled === 1 || s.enabled === true || s.enabled === '1').map(site => (
+                                    <option key={site.id} value={site.name}>{site.name}</option>
+                                ))}
+                            </select>
                             <button
                                 type="submit"
                                 disabled={loading}

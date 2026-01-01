@@ -144,6 +144,7 @@ const SettingsPage = () => {
     const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
     const hoverBg = darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100';
     const inputBg = darkMode ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900';
+    const activeSelectionClass = darkMode ? 'border-blue-500 bg-blue-900/20' : 'border-blue-500 bg-blue-50';
 
     const handleSaveGeneral = async () => {
         setSaving(true);
@@ -542,7 +543,7 @@ const SettingsPage = () => {
                                     <div>
                                         <label className={`block text-sm font-medium ${textSecondary} mb-2`}>搜索模式</label>
                                         <div className="flex space-x-4">
-                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'browse' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : borderColor}`}>
+                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'browse' ? activeSelectionClass : borderColor}`}>
                                                 <input
                                                     type="radio"
                                                     name="search_mode"
@@ -556,7 +557,7 @@ const SettingsPage = () => {
                                                     <div className="text-xs text-gray-500">模拟浏览器访问搜索页面解析结果</div>
                                                 </div>
                                             </label>
-                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'rss' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : borderColor}`}>
+                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'rss' ? activeSelectionClass : borderColor}`}>
                                                 <input
                                                     type="radio"
                                                     name="search_mode"

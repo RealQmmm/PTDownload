@@ -7,12 +7,16 @@ const FormatUtils = require('../utils/formatUtils');
 const { getDB } = require('../db');
 
 class SearchService {
-    async search(query, days = null, page = null) {
+    async search(query, days = null, page = null, siteName = null) {
         const sites = siteService.getAllSites();
-        const enabledSites = sites.filter(s => {
+        let enabledSites = sites.filter(s => {
             const isEnabled = s.enabled === 1 || s.enabled === true || s.enabled === '1';
             return isEnabled && s.url;
         });
+
+        if (siteName) {
+            enabledSites = enabledSites.filter(s => s.name === siteName);
+        }
 
         if (enabledSites.length === 0) {
             console.warn(`Search requested but no enabled sites found. Total sites: ${sites.length}`);
