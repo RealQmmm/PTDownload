@@ -39,7 +39,9 @@ function createTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       url TEXT NOT NULL,
+      url TEXT NOT NULL,
       cookies TEXT,
+      default_rss_url TEXT,
       type TEXT DEFAULT 'NexusPHP',
       enabled INTEGER DEFAULT 1,
       cookie_status INTEGER DEFAULT 0,
@@ -184,7 +186,9 @@ function createTables() {
     { key: 'cleanup_enabled', value: 'false' },
     { key: 'cleanup_min_ratio', value: '2.0' },
     { key: 'cleanup_max_seeding_time', value: '336' }, // 14 days in hours
-    { key: 'cleanup_delete_files', value: 'true' }
+    { key: 'cleanup_max_seeding_time', value: '336' }, // 14 days in hours
+    { key: 'cleanup_delete_files', value: 'true' },
+    { key: 'search_mode', value: 'browse' } // 'browse' or 'rss'
   ];
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
@@ -212,7 +216,11 @@ function createTables() {
     'ALTER TABLE task_history ADD COLUMN finish_time DATETIME',
     'ALTER TABLE stats_checkpoint ADD COLUMN historical_total_downloaded INTEGER DEFAULT 0',
     'ALTER TABLE stats_checkpoint ADD COLUMN historical_total_uploaded INTEGER DEFAULT 0',
-    'ALTER TABLE clients ADD COLUMN name TEXT'
+    'ALTER TABLE task_history ADD COLUMN finish_time DATETIME',
+    'ALTER TABLE stats_checkpoint ADD COLUMN historical_total_downloaded INTEGER DEFAULT 0',
+    'ALTER TABLE stats_checkpoint ADD COLUMN historical_total_uploaded INTEGER DEFAULT 0',
+    'ALTER TABLE clients ADD COLUMN name TEXT',
+    'ALTER TABLE sites ADD COLUMN default_rss_url TEXT'
   ];
 
   migrations.forEach(sql => {

@@ -60,19 +60,19 @@ class SiteService {
 
     createSite(site) {
         const db = this._getDB();
-        const { name, url, cookies, type, enabled = 1, auto_checkin = 0 } = site;
+        const { name, url, cookies, default_rss_url, type, enabled = 1, auto_checkin = 0 } = site;
 
         const encryptedCookies = cryptoUtils.encrypt(cookies);
 
         const info = db.prepare(
-            'INSERT INTO sites (name, url, cookies, type, enabled, auto_checkin, cookie_status, last_checked_at) VALUES (?, ?, ?, ?, ?, ?, 0, NULL)'
-        ).run(name, url, encryptedCookies, type, enabled, auto_checkin);
+            'INSERT INTO sites (name, url, cookies, default_rss_url, type, enabled, auto_checkin, cookie_status, last_checked_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL)'
+        ).run(name, url, encryptedCookies, default_rss_url || null, type, enabled, auto_checkin);
         return info.lastInsertRowid;
     }
 
     updateSite(id, site) {
         const db = this._getDB();
-        const { name, url, cookies, type, enabled, auto_checkin, cookie_status } = site;
+        const { name, url, cookies, default_rss_url, type, enabled, auto_checkin, cookie_status } = site;
 
         // If cookies are changed, reset cookie_status to 0 (assume ok until checked)
         // Note: we must compare against current DB value (decrypted) or handle logic carefully.
@@ -85,8 +85,8 @@ class SiteService {
         const encryptedCookies = cryptoUtils.encrypt(cookies);
 
         return db.prepare(
-            'UPDATE sites SET name = ?, url = ?, cookies = ?, type = ?, enabled = ?, auto_checkin = ?, cookie_status = ? WHERE id = ?'
-        ).run(name, url, encryptedCookies, type, enabled, auto_checkin, status, id);
+            'UPDATE sites SET name = ?, url = ?, cookies = ?, default_rss_url = ?, type = ?, enabled = ?, auto_checkin = ?, cookie_status = ? WHERE id = ?'
+        ).run(name, url, encryptedCookies, default_rss_url || null, type, enabled, auto_checkin, status, id);
     }
 
     deleteSite(id) {

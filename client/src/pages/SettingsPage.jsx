@@ -17,6 +17,7 @@ const SettingsPage = () => {
         confirmPassword: ''
     });
     const [searchLimit, setSearchLimit] = useState('1');
+    const [searchMode, setSearchMode] = useState('browse');
 
     const handleSavePassword = async () => {
         if (!passwordData.oldPassword || !passwordData.newPassword) {
@@ -91,6 +92,7 @@ const SettingsPage = () => {
                 enable_system_logs: data.enable_system_logs === 'true'
             });
             setSearchLimit(data.search_page_limit || '1');
+            setSearchMode(data.search_mode || 'browse');
             setNotifySettings({
                 notify_on_download_start: data.notify_on_download_start === 'true'
             });
@@ -153,6 +155,7 @@ const SettingsPage = () => {
                 body: JSON.stringify({
                     site_name: tempSiteName,
                     search_page_limit: searchLimit,
+                    search_mode: searchMode,
                     cookie_check_interval: cookieCheckInterval,
                     checkin_time: checkinTime,
                     ...logSettings,
@@ -432,21 +435,7 @@ const SettingsPage = () => {
                                     </select>
                                 </div>
                             </div>
-                            <div>
-                                <label className={`block text-xs font-bold ${textSecondary} mb-2 uppercase tracking-wider`}>搜索抓取页数</label>
-                                <div className="flex space-x-2">
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="50"
-                                        value={searchLimit}
-                                        onChange={(e) => setSearchLimit(e.target.value)}
-                                        className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1.5 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
-                                        title="每次搜索时抓取的最大页数"
-                                    />
-                                </div>
-                                <p className={`text-[10px] ${textSecondary} mt-1`}>每次搜索请求抓取的页面数量 (1-50)</p>
-                            </div>
+
 
                             <hr className={borderColor} />
 
@@ -526,6 +515,62 @@ const SettingsPage = () => {
                                             onChange={(e) => setSecuritySettings({ ...securitySettings, security_login_limit: e.target.value })}
                                             className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
                                         />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr className={borderColor} />
+
+                            {/* Section: Search Mode */}
+                            <div>
+                                <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>搜索模式</label>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className={`block text-sm font-medium ${textSecondary} mb-2`}>搜索结果最大页数 (1-10)</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="10"
+                                            value={searchLimit}
+                                            onChange={(e) => setSearchLimit(e.target.value)}
+                                            disabled={searchMode === 'rss'}
+                                            className={`w-full ${inputBg} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none ${searchMode === 'rss' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        />
+                                        {searchMode === 'rss' && <p className="text-xs text-yellow-500 mt-1">RSS 模式下不支持分页限制，默认返回前 50 条</p>}
+                                    </div>
+
+                                    <div>
+                                        <label className={`block text-sm font-medium ${textSecondary} mb-2`}>搜索模式</label>
+                                        <div className="flex space-x-4">
+                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'browse' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : borderColor}`}>
+                                                <input
+                                                    type="radio"
+                                                    name="search_mode"
+                                                    value="browse"
+                                                    checked={searchMode === 'browse'}
+                                                    onChange={(e) => setSearchMode(e.target.value)}
+                                                    className="text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <div>
+                                                    <div className={`font-medium ${textPrimary}`}>网页解析 (默认)</div>
+                                                    <div className="text-xs text-gray-500">模拟浏览器访问搜索页面解析结果</div>
+                                                </div>
+                                            </label>
+                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'rss' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : borderColor}`}>
+                                                <input
+                                                    type="radio"
+                                                    name="search_mode"
+                                                    value="rss"
+                                                    checked={searchMode === 'rss'}
+                                                    onChange={(e) => setSearchMode(e.target.value)}
+                                                    className="text-blue-600 focus:ring-blue-500"
+                                                />
+                                                <div>
+                                                    <div className={`font-medium ${textPrimary}`}>RSS 订阅源</div>
+                                                    <div className="text-xs text-gray-500">使用 RSS 接口搜索，兼容性更好</div>
+                                                </div>
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

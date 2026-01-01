@@ -90,7 +90,9 @@ const SitesPage = () => {
     const [formData, setFormData] = useState({
         name: '',
         url: '',
+        url: '',
         cookies: '',
+        default_rss_url: '',
         type: 'NexusPHP',
         enabled: 1,
         auto_checkin: 0
@@ -127,7 +129,8 @@ const SitesPage = () => {
             });
             setShowModal(false);
             setEditingSite(null);
-            setFormData({ name: '', url: '', cookies: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0 });
+
+            setFormData({ name: '', url: '', cookies: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0 });
             fetchSites();
         } catch (err) {
             alert('保存失败: ' + err.message);
@@ -146,21 +149,28 @@ const SitesPage = () => {
 
     const handleAdd = () => {
         setEditingSite(null);
-        setFormData({ name: '', url: '', cookies: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0 });
+        setFormData({ name: '', url: '', cookies: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0 });
         setShowModal(true);
     };
 
     const openEdit = (site) => {
-        setEditingSite(site);
-        setFormData({
-            name: site.name,
-            url: site.url,
-            cookies: site.cookies || '',
-            type: site.type,
-            enabled: site.enabled,
-            auto_checkin: site.auto_checkin
-        });
-        setShowModal(true);
+        if (site) {
+            setEditingSite(site);
+            setFormData({
+                name: site.name,
+                url: site.url,
+                cookies: site.cookies || '',
+                default_rss_url: site.default_rss_url || '',
+                type: site.type || 'NexusPHP',
+                enabled: site.enabled,
+                auto_checkin: site.auto_checkin || 0
+            });
+            setShowModal(true);
+        } else {
+            setEditingSite(null);
+            setFormData({ name: '', url: '', cookies: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0 });
+            setShowModal(true);
+        }
     };
 
     const toggleStatus = async (site) => {
@@ -418,15 +428,26 @@ const SitesPage = () => {
                                 />
                             </div>
                             <div>
-                                <label className={`block text-sm font-medium ${textSecondary} mb-1`}>站点 URL</label>
+                                <label className={`block text-sm font-medium ${textSecondary} mb-1`}>站点地址 (URL)</label>
                                 <input
-                                    required
                                     type="url"
+                                    required
                                     value={formData.url}
                                     onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                                    placeholder="https://kp.m-team.cc"
                                     className={`w-full ${inputBg} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
+                                    placeholder="https://kp.m-team.cc"
                                 />
+                            </div>
+                            <div>
+                                <label className={`block text-sm font-medium ${textSecondary} mb-1`}>默认 RSS 地址 (用于 RSS 搜索)</label>
+                                <input
+                                    type="url"
+                                    value={formData.default_rss_url}
+                                    onChange={(e) => setFormData({ ...formData, default_rss_url: e.target.value })}
+                                    className={`w-full ${inputBg} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
+                                    placeholder="https://example.com/torrentrss.php?..."
+                                />
+                                <p className="text-xs text-gray-500 mt-1">留空则自动尝试构造 /torrentrss.php</p>
                             </div>
                             <div>
                                 <label className={`block text-sm font-medium ${textSecondary} mb-1`}>站点类型</label>
