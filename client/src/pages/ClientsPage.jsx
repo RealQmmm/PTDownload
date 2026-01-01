@@ -22,7 +22,8 @@ const ClientsPage = () => {
         host: 'localhost',
         port: 8080,
         username: '',
-        password: ''
+        password: '',
+        is_default: false
     });
 
     const [testingId, setTestingId] = useState(null);
@@ -68,7 +69,9 @@ const ClientsPage = () => {
             host: client.host,
             port: client.port,
             username: client.username || '',
-            password: client.password || ''
+            username: client.username || '',
+            password: client.password || '',
+            is_default: !!client.is_default
         });
         setShowModal(true);
     };
@@ -81,7 +84,9 @@ const ClientsPage = () => {
             host: 'localhost',
             port: 8080,
             username: '',
-            password: ''
+            username: '',
+            password: '',
+            is_default: false
         });
         setShowModal(true);
     };
@@ -140,7 +145,12 @@ const ClientsPage = () => {
                                     <div className={`text-2xl mr-3 w-12 h-12 ${darkMode ? 'bg-green-900/30' : 'bg-green-100'} rounded-lg flex items-center justify-center`}>📥</div>
                                     <div>
                                         <h3 className={`font-bold ${textPrimary}`}>{client.name || client.type}</h3>
-                                        <p className={`text-sm ${textSecondary}`}>{client.host}:{client.port}</p>
+                                        <p className={`text-sm ${textSecondary}`}>
+                                            {client.host}:{client.port}
+                                            {!!client.is_default && (
+                                                <span className="ml-2 bg-blue-100 text-blue-800 text-xs font-semibold mr-2 px-2.5 py-0.5 rounded dark:bg-blue-200 dark:text-blue-800">默认</span>
+                                            )}
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="flex space-x-2">
@@ -244,6 +254,16 @@ const ClientsPage = () => {
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                     className={`w-full ${inputBg} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
                                 />
+                            </div>
+                            <div className="flex items-center">
+                                <input
+                                    id="is_default"
+                                    type="checkbox"
+                                    checked={formData.is_default}
+                                    onChange={(e) => setFormData({ ...formData, is_default: e.target.checked })}
+                                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <label htmlFor="is_default" className={`ml-2 text-sm font-medium ${textSecondary}`}>设为默认下载器</label>
                             </div>
                             <div className="flex justify-end space-x-3 mt-6">
                                 <button type="button" onClick={() => setShowModal(false)} className={`px-4 py-2 ${textSecondary} hover:${textPrimary} transition-colors`}>取消</button>

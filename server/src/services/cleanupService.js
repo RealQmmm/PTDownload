@@ -27,7 +27,12 @@ class CleanupService {
             if (s.key === 'cleanup_enabled') config.enabled = s.value === 'true';
             if (s.key === 'cleanup_min_ratio') config.minRatio = parseFloat(s.value);
             if (s.key === 'cleanup_max_seeding_time') config.maxSeedingTime = parseInt(s.value, 10);
+            if (s.key === 'cleanup_min_ratio') config.minRatio = parseFloat(s.value);
+            if (s.key === 'cleanup_max_seeding_time') config.maxSeedingTime = parseInt(s.value, 10);
+            if (s.key === 'cleanup_delete_files') config.deleteFiles = s.value === 'true';
         });
+
+        if (config.deleteFiles === undefined) config.deleteFiles = true; // Default true
 
         return config;
     }
@@ -89,8 +94,8 @@ class CleanupService {
                         }
 
                         if (shouldDelete) {
-                            console.log(`[Cleanup] Deleting ${torrent.name} (${reason})`);
-                            await downloaderService.deleteTorrent(client, torrent.hash, true); // true = delete files
+                            console.log(`[Cleanup] Deleting ${torrent.name} (${reason}) - Delete Files: ${config.deleteFiles}`);
+                            await downloaderService.deleteTorrent(client, torrent.hash, config.deleteFiles);
                             loggerService.log(`自动清理: ${torrent.name} (${reason})`, 'success');
                         }
                     }

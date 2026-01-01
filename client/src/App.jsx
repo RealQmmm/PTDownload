@@ -8,6 +8,7 @@ import ClientsPage from './pages/ClientsPage'
 import TasksPage from './pages/TasksPage'
 import HelpPage from './pages/HelpPage'
 import LoginPage from './pages/LoginPage'
+import SeriesPage from './pages/SeriesPage'
 
 // Create Theme Context
 export const ThemeContext = createContext();
@@ -189,6 +190,8 @@ function App() {
                 return <SearchPage searchState={searchState} setSearchState={setSearchState} authenticatedFetch={authenticatedFetch} />
             case 'settings':
                 return <SettingsPage authenticatedFetch={authenticatedFetch} />
+            case 'series':
+                return <SeriesPage />
             case 'help':
                 return <HelpPage />
             default:

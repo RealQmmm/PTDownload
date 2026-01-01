@@ -66,7 +66,8 @@ const SettingsPage = () => {
     const [cleanupSettings, setCleanupSettings] = useState({
         cleanup_enabled: false,
         cleanup_min_ratio: '2.0',
-        cleanup_max_seeding_time: '336'
+        cleanup_max_seeding_time: '336',
+        cleanup_delete_files: true
     });
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState(null);
@@ -98,7 +99,8 @@ const SettingsPage = () => {
             setCleanupSettings({
                 cleanup_enabled: data.cleanup_enabled === 'true',
                 cleanup_min_ratio: data.cleanup_min_ratio || '2.0',
-                cleanup_max_seeding_time: data.cleanup_max_seeding_time || '336'
+                cleanup_max_seeding_time: data.cleanup_max_seeding_time || '336',
+                cleanup_delete_files: data.cleanup_delete_files === undefined || data.cleanup_delete_files === 'true'
             });
             setCookieCheckInterval(data.cookie_check_interval || '60');
             setCheckinTime(data.checkin_time || '09:00');
@@ -313,7 +315,7 @@ const SettingsPage = () => {
 
     const handleSaveCleanup = async (newValue) => {
         // If enabling, show warning
-        if (newValue && !confirm('⚠️ 严重警告 ⚠️\n\n开启此功能后，系统将自动删除满足条件的种子和已下载的资源！\n\n请务必确认：\n1. 您已设置了合理的“最小分享率”和“最长做种时间”。\n2. 您了解此操作是不可逆的。\n\n是否确认开启？')) {
+        if (newValue && !confirm('⚠️ 严重警告 ⚠️\n\n开启此功能后，系统将自动删除满足条件的种子和已下载的资源(根据设置的选项)！\n\n请务必确认：\n1. 您已设置了合理的“最小分享率”和“最长做种时间”。\n2. 您了解此操作是不可逆的。\n\n是否确认开启？')) {
             return;
         }
 
@@ -762,6 +764,20 @@ const SettingsPage = () => {
                                             <span className={`text-xs ${textSecondary}`}>Hours</span>
                                         </div>
                                         <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此做种时间时删除 ({(cleanupSettings.cleanup_max_seeding_time / 24).toFixed(1)} 天)</p>
+                                    </div>
+                                    <div className="md:col-span-2 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <label className={`block text-xs font-bold ${textSecondary} uppercase`}>同时删除文件</label>
+                                                <p className={`text-[10px] ${textSecondary}`}>如果关闭，仅移除下载器中的任务，保留硬盘上的文件</p>
+                                            </div>
+                                            <button
+                                                onClick={() => setCleanupSettings({ ...cleanupSettings, cleanup_delete_files: !cleanupSettings.cleanup_delete_files })}
+                                                className={`relative inline-block w-10 h-5 transition duration-200 ease-in-out rounded-full cursor-pointer ${cleanupSettings.cleanup_delete_files ? 'bg-red-500' : 'bg-gray-300'}`}
+                                            >
+                                                <span className={`absolute top-0.5 inline-block w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${cleanupSettings.cleanup_delete_files ? 'left-5.5' : 'left-0.5'}`} />
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="md:col-span-2 pt-2">
                                         <button

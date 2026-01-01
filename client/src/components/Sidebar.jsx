@@ -7,6 +7,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
     const menus = [
         { id: 'dashboard', name: '仪表盘', icon: '📊' },
         { id: 'search', name: '资源搜索', icon: '🔍' },
+        { id: 'series', name: '我的追剧', icon: '📺' },
         { id: 'sites', name: '站点管理', icon: '🌐', badge: expiredCookiesCount > 0 ? expiredCookiesCount : null },
         { id: 'clients', name: '下载客户端', icon: '📥' },
         { id: 'tasks', name: '自动任务', icon: '⏰' },

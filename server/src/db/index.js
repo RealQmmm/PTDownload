@@ -17,6 +17,17 @@ function initDB() {
     db = new Database(dbPath, { verbose: console.log });
     console.log(`Connected to SQLite database at ${dbPath}`);
     createTables();
+
+    // Migration: Add is_default to clients if not exists
+    try {
+      const columns = db.prepare("PRAGMA table_info(clients)").all();
+      if (!columns.find(c => c.name === 'is_default')) {
+        db.prepare("ALTER TABLE clients ADD COLUMN is_default INTEGER DEFAULT 0").run();
+        console.log("Migrated: Added is_default to clients table");
+      }
+    } catch (migErr) {
+      console.error("Migration error:", migErr);
+    }
   } catch (err) {
     console.error('Error connecting to database:', err);
   }
@@ -62,6 +73,7 @@ function createTables() {
       port INTEGER NOT NULL,
       username TEXT,
       password TEXT,
+      is_default INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     
@@ -142,6 +154,19 @@ function createTables() {
       password TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS series_subscriptions (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       name TEXT NOT NULL,
+       season TEXT,
+       quality TEXT,
+       smart_regex TEXT,
+       rss_source_id INTEGER,
+       task_id INTEGER,
+       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       FOREIGN KEY(rss_source_id) REFERENCES rss_sources(id),
+       FOREIGN KEY(task_id) REFERENCES tasks(id)
+    );
   `;
 
   db.exec(schema);
@@ -158,7 +183,8 @@ function createTables() {
     { key: 'enable_system_logs', value: 'false' },
     { key: 'cleanup_enabled', value: 'false' },
     { key: 'cleanup_min_ratio', value: '2.0' },
-    { key: 'cleanup_max_seeding_time', value: '336' } // 14 days in hours
+    { key: 'cleanup_max_seeding_time', value: '336' }, // 14 days in hours
+    { key: 'cleanup_delete_files', value: 'true' }
   ];
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

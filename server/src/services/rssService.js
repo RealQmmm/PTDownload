@@ -58,8 +58,19 @@ class RSSService {
 
             // 4. Filter and Process
             const filterConfig = JSON.parse(task.filter_config || '{}');
-            const targetClient = clientService.getClientById(task.client_id);
-            if (!targetClient) throw new Error('Target client not found');
+            let targetClient = null;
+
+            if (task.client_id) {
+                targetClient = clientService.getClientById(task.client_id);
+            }
+
+            // Fallback to default client if no specific client or specific client not found
+            if (!targetClient) {
+                if (enableLogs) console.log(`[RSS] No specific client found (ID: ${task.client_id}), trying default client...`);
+                targetClient = clientService.getDefaultClient();
+            }
+
+            if (!targetClient) throw new Error('No available download client (neither specific nor default)');
 
             let matchCount = 0;
             for (const item of items) {
