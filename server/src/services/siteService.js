@@ -2,6 +2,7 @@ const { getDB } = require('../db');
 const axios = require('axios');
 const loggerService = require('./loggerService');
 const notificationService = require('./notificationService');
+const cryptoUtils = require('../utils/cryptoUtils');
 
 class SiteService {
     constructor() {
@@ -19,20 +20,53 @@ class SiteService {
 
     getAllSites() {
         const db = this._getDB();
-        return db.prepare('SELECT * FROM sites ORDER BY created_at DESC').all();
+        const sites = db.prepare('SELECT * FROM sites ORDER BY created_at DESC').all();
+
+        // Decrypt cookies and check for migration
+        let migrationNeeded = false;
+        const decryptedSites = sites.map(site => {
+            if (site.cookies && !cryptoUtils.isEncrypted(site.cookies)) {
+                // Determine if migration is needed (silent update logic moved to separate method or here)
+                // We'll migrate on-the-fly or have a dedicated migration call? 
+                // Let's migrate immediately if plaintext found to ensure security
+                try {
+                    const encrypted = cryptoUtils.encrypt(site.cookies);
+                    db.prepare('UPDATE sites SET cookies = ? WHERE id = ?').run(encrypted, site.id);
+                    console.log(`[Security] Migrated plaintext cookie for site: ${site.name}`);
+                    site.cookies = encrypted; // Update object to be consistent
+                } catch (err) {
+                    console.error('Migration failed for site:', site.id);
+                }
+            }
+
+            // Return decrypted for application use
+            return {
+                ...site,
+                cookies: cryptoUtils.decrypt(site.cookies)
+            };
+        });
+
+        return decryptedSites;
     }
 
     getSiteById(id) {
         const db = this._getDB();
-        return db.prepare('SELECT * FROM sites WHERE id = ?').get(id);
+        const site = db.prepare('SELECT * FROM sites WHERE id = ?').get(id);
+        if (site && site.cookies) {
+            site.cookies = cryptoUtils.decrypt(site.cookies);
+        }
+        return site;
     }
 
     createSite(site) {
         const db = this._getDB();
         const { name, url, cookies, type, enabled = 1, auto_checkin = 0 } = site;
+
+        const encryptedCookies = cryptoUtils.encrypt(cookies);
+
         const info = db.prepare(
             'INSERT INTO sites (name, url, cookies, type, enabled, auto_checkin, cookie_status, last_checked_at) VALUES (?, ?, ?, ?, ?, ?, 0, NULL)'
-        ).run(name, url, cookies, type, enabled, auto_checkin);
+        ).run(name, url, encryptedCookies, type, enabled, auto_checkin);
         return info.lastInsertRowid;
     }
 
@@ -41,12 +75,18 @@ class SiteService {
         const { name, url, cookies, type, enabled, auto_checkin, cookie_status } = site;
 
         // If cookies are changed, reset cookie_status to 0 (assume ok until checked)
-        const oldSite = this.getSiteById(id);
+        // Note: we must compare against current DB value (decrypted) or handle logic carefully.
+        // Since 'site' comes from UI (plaintext), and we want to encrypt.
+
+        const oldSite = this.getSiteById(id); // Returns decrypted
         const status = cookies !== oldSite.cookies ? 0 : (cookie_status ?? oldSite.cookie_status);
+
+        // Encrypt new value
+        const encryptedCookies = cryptoUtils.encrypt(cookies);
 
         return db.prepare(
             'UPDATE sites SET name = ?, url = ?, cookies = ?, type = ?, enabled = ?, auto_checkin = ?, cookie_status = ? WHERE id = ?'
-        ).run(name, url, cookies, type, enabled, auto_checkin, status, id);
+        ).run(name, url, encryptedCookies, type, enabled, auto_checkin, status, id);
     }
 
     deleteSite(id) {
