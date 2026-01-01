@@ -239,35 +239,35 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                 <table className="w-full text-left border-collapse">
                                     <thead className={`${bgSecondary} ${textSecondary} sticky top-0 z-10`}>
                                         <tr>
-                                            <th className={`p-4 font-bold border-b ${borderColor} text-[11px] uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('siteName')}>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-xs uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('siteName')}>
                                                 <div className="flex items-center">站点 <SortIcon columnKey="siteName" /></div>
                                             </th>
-                                            <th className={`p-4 font-bold border-b ${borderColor} cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('name')}>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('name')}>
                                                 <div className="flex items-center">资源标题 <SortIcon columnKey="name" /></div>
                                             </th>
-                                            <th className={`p-4 font-bold border-b ${borderColor} text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('size')}>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-xs text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('size')}>
                                                 <div className="flex items-center justify-end">大小 <SortIcon columnKey="size" /></div>
                                             </th>
-                                            <th className={`p-4 font-bold border-b ${borderColor} text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('seeders')}>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-xs text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('seeders')}>
                                                 <div className="flex items-center justify-end">做种/下载 <SortIcon columnKey="seeders" /></div>
                                             </th>
-                                            <th className={`p-4 font-bold border-b ${borderColor} text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('date')}>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-xs text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('date')}>
                                                 <div className="flex items-center justify-center">发布时间 <SortIcon columnKey="date" /></div>
                                             </th>
-                                            <th className={`p-4 font-bold border-b ${borderColor} text-right pr-6`}>操作</th>
+                                            <th className={`p-4 font-bold border-b ${borderColor} text-xs text-right pr-6`}>操作</th>
                                         </tr>
                                     </thead>
                                     <tbody className={`divide-y ${darkMode ? 'divide-gray-700/50' : 'divide-gray-100'}`}>
                                         {sortedResults.map((item, index) => (
                                             <tr key={index} className={`${darkMode ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50/50'} transition-colors group`}>
                                                 <td className="p-4">
-                                                    <span className={`${darkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100'} border px-2 py-1 rounded text-[10px] font-bold uppercase tracking-tight`}>
+                                                    <span className={`${darkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100'} border px-2 py-1 rounded text-xs font-bold uppercase tracking-tight`}>
                                                         {item.siteName}
                                                     </span>
                                                 </td>
-                                                <td className="p-4 py-5 max-w-md xl:max-w-xl">
+                                                <td className="p-4 py-5 max-w-xs md:max-w-sm lg:max-w-md">
                                                     <div className="flex flex-col space-y-1.5">
-                                                        <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} group-hover:text-blue-500 font-bold text-sm leading-snug line-clamp-2 transition-colors`} title={item.name}>
+                                                        <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} group-hover:text-blue-500 font-bold text-xs leading-snug line-clamp-2 transition-colors`} title={item.name}>
                                                             {item.name}
                                                         </a>
                                                         <div className="flex items-center gap-3 flex-wrap">
@@ -281,15 +281,15 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                                     </div>
                                                 </td>
                                                 <td className="p-4 text-right align-middle">
-                                                    <span className={`text-xs font-mono font-bold ${textPrimary}`}>{item.size}</span>
+                                                    <span className={`text-[11px] font-mono font-bold ${textPrimary}`}>{item.size}</span>
                                                 </td>
                                                 <td className="p-4 text-right align-middle">
                                                     <div className="flex flex-col items-end font-mono">
-                                                        <span className="text-green-500 text-xs font-bold">↑ {item.seeders}</span>
+                                                        <span className="text-green-500 text-[11px] font-bold">↑ {item.seeders}</span>
                                                         <span className="text-red-400 text-[10px]">↓ {item.leechers}</span>
                                                     </div>
                                                 </td>
-                                                <td className={`p-4 ${textSecondary} text-[11px] font-mono text-center align-middle whitespace-nowrap`}>
+                                                <td className={`p-4 ${textSecondary} text-[10px] font-mono text-center align-middle whitespace-nowrap`}>
                                                     {item.date}
                                                 </td>
                                                 <td className="p-4 text-right pr-6 align-middle">
