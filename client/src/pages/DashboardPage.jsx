@@ -135,7 +135,20 @@ const DashboardPage = ({ setActiveTab }) => {
     const [allTorrents, setAllTorrents] = useState([]);
     const [taskFilter, setTaskFilter] = useState('active'); // 'active' or 'all'
     const [historyData, setHistoryData] = useState([]);
-    const [speedHistory, setSpeedHistory] = useState({ downloads: [], uploads: [] });
+    const [speedHistory, setSpeedHistory] = useState(() => {
+        try {
+            const cached = localStorage.getItem('speedHistory');
+            if (cached) {
+                const parsed = JSON.parse(cached);
+                if (parsed.downloads && parsed.uploads) {
+                    return parsed;
+                }
+            }
+        } catch (e) {
+            console.error('Failed to parse speedHistory cache:', e);
+        }
+        return { downloads: [], uploads: [] };
+    });
     const [todayDownloads, setTodayDownloads] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
@@ -177,11 +190,17 @@ const DashboardPage = ({ setActiveTab }) => {
                     totalUploadSpeed: calculatedUpSpeed
                 });
 
-                // Update speed history
+                // Update speed history and save to localStorage
                 setSpeedHistory(prev => {
                     const newDownloads = [...prev.downloads, calculatedDlSpeed].slice(-60); // Keep last 60 points
                     const newUploads = [...prev.uploads, calculatedUpSpeed].slice(-60);
-                    return { downloads: newDownloads, uploads: newUploads };
+                    const newHistory = { downloads: newDownloads, uploads: newUploads };
+                    try {
+                        localStorage.setItem('speedHistory', JSON.stringify(newHistory));
+                    } catch (e) {
+                        console.error('Failed to save speedHistory to localStorage:', e);
+                    }
+                    return newHistory;
                 });
 
                 setAllTorrents(allTorrents);
