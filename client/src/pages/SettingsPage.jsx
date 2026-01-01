@@ -93,9 +93,6 @@ const SettingsPage = () => {
             });
             setSearchLimit(data.search_page_limit || '1');
             setSearchMode(data.search_mode || 'browse');
-            setNotifySettings({
-                notify_on_download_start: data.notify_on_download_start === 'true'
-            });
             setSecuritySettings({
                 security_login_limit: data.security_login_limit || '5'
             });

@@ -277,7 +277,7 @@ class SiteService {
 
     async getSiteHeatmap(id) {
         const db = this._getDB();
-        return db.prepare('SELECT date, uploaded_bytes FROM site_daily_stats WHERE site_id = ? AND date > date("now", "-90 days") ORDER BY date ASC').all(id);
+        return db.prepare("SELECT date, uploaded_bytes FROM site_daily_stats WHERE site_id = ? AND date > date('now', '-90 days') ORDER BY date ASC").all(id);
     }
 
     async checkAllCookies() {
