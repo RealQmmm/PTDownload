@@ -39,7 +39,7 @@ function createTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       url TEXT NOT NULL,
-      url TEXT NOT NULL,
+
       cookies TEXT,
       default_rss_url TEXT,
       type TEXT DEFAULT 'NexusPHP',

@@ -4,6 +4,7 @@ const axios = require('axios');
 const clientService = require('../services/clientService');
 const siteService = require('../services/siteService');
 const downloaderService = require('../services/downloaderService');
+const parseTorrent = require('parse-torrent');
 
 // Add torrent to client
 router.post('/', async (req, res) => {
@@ -49,6 +50,7 @@ router.post('/', async (req, res) => {
         // They will fetch it themselves, but we need to check if cookies are needed
 
         let result;
+        let torrentHash = null;
 
         // If cookies are required, we need to download the torrent first and send as base64
         if (siteCookies) {
@@ -64,7 +66,16 @@ router.post('/', async (req, res) => {
                 });
 
                 // Convert to base64 for sending to the downloader
-                const torrentBase64 = Buffer.from(torrentResponse.data).toString('base64');
+                const buffer = Buffer.from(torrentResponse.data);
+
+                try {
+                    const parsed = parseTorrent(buffer);
+                    torrentHash = parsed.infoHash;
+                } catch (e) {
+                    console.warn('Failed to parse torrent hash from buffer:', e.message);
+                }
+
+                const torrentBase64 = buffer.toString('base64');
                 result = await downloaderService.addTorrentFromData(client, torrentBase64);
             } catch (fetchErr) {
                 console.error('Failed to fetch torrent:', fetchErr.message);
@@ -72,6 +83,15 @@ router.post('/', async (req, res) => {
                 result = await downloaderService.addTorrent(client, torrentUrl);
             }
         } else {
+            // Check magnet hash if applicable
+            if (torrentUrl.startsWith('magnet:')) {
+                try {
+                    const parsed = parseTorrent(torrentUrl);
+                    torrentHash = parsed.infoHash;
+                } catch (e) {
+                    // ignore
+                }
+            }
             // No cookies needed, send URL directly
             result = await downloaderService.addTorrent(client, torrentUrl);
         }
@@ -89,8 +109,8 @@ router.post('/', async (req, res) => {
                     const sizeBytes = FormatUtils.parseSizeToBytes(size);
 
                     // For manual downloads, task_id is NULL
-                    db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, download_time) VALUES (?, ?, ?, ?, ?)')
-                        .run(null, torrentUrl, title, sizeBytes, new Date().toISOString());
+                    db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, download_time, item_hash) VALUES (?, ?, ?, ?, ?, ?)')
+                        .run(null, torrentUrl, title, sizeBytes, new Date().toISOString(), torrentHash);
 
                     // Send notification
                     const notificationService = require('../services/notificationService');
@@ -112,4 +132,3 @@ router.post('/', async (req, res) => {
 });
 
 module.exports = router;
-
