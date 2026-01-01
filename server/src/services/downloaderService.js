@@ -110,7 +110,7 @@ class DownloaderService {
                 return {
                     success: true,
                     clientType: 'qBittorrent',
-                    clientName: `${host}:${port}`,
+                    clientName: client.name || `${host}:${port}`,
                     torrents,
                     stats: {
                         dlSpeed: transferRes.data.dl_info_speed || 0,
@@ -191,7 +191,7 @@ class DownloaderService {
                 return {
                     success: true,
                     clientType: 'Transmission',
-                    clientName: `${host}:${port}`,
+                    clientName: client.name || `${host}:${port}`,
                     torrents,
                     stats: {
                         dlSpeed: statsRes.data.arguments.downloadSpeed || 0,
@@ -207,7 +207,7 @@ class DownloaderService {
                 result = {
                     success: true,
                     clientType: 'Mock',
-                    clientName: `${host}:${port}`,
+                    clientName: client.name || `${host}:${port}`,
                     torrents: [
                         { hash: '8f7d9a1c2e3b4f5a6b7c8d9e0f1a2b3c4d5e6f7g', name: '[Mock] Ubuntu 24.04 LTS', size: 4500000000, progress: 1, state: 'seeding', dlspeed: 0, upspeed: 1500000, downloaded: 4500000000, uploaded: 9800000000, ratio: 2.17, eta: -1, added_on: new Date(Date.now() - 86400000).toISOString(), completion_on: new Date(Date.now() - 43200000).toISOString(), seeding_time: 43200 },
                         { hash: '1a2b3c4d5e6f7g8h9i0j1k2l3m4n5o6p7q8r9s0t', name: '[Mock] Avatar 2160p HDR', size: 25600000000, progress: 0.75, state: 'downloading', dlspeed: 12500000, upspeed: 500000, downloaded: 19200000000, uploaded: 2500000000, ratio: 0.13, eta: 512, added_on: new Date(Date.now() - 3600000).toISOString(), completion_on: null, seeding_time: 0 },

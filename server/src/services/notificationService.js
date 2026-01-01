@@ -5,74 +5,125 @@ class NotificationService {
     async getSettings() {
         const db = getDB();
         try {
-            const settings = db.prepare("SELECT * FROM settings WHERE key LIKE 'notify_%'").all();
+            const settings = db.prepare("SELECT * FROM settings WHERE key LIKE 'notify_%' OR key = 'notification_receivers'").all();
             const settingsMap = {};
             settings.forEach(s => {
                 settingsMap[s.key] = s.value;
             });
+
+            // Parse receivers list
+            let receivers = [];
+            if (settingsMap['notification_receivers']) {
+                try {
+                    receivers = JSON.parse(settingsMap['notification_receivers']);
+                } catch (e) {
+                    console.error('[Notify] Failed to parse notification_receivers JSON:', e);
+                }
+            }
+
+            // Fallback for backward compatibility (Soft Migration)
+            // If no receivers defined but old keys exist, treat them as receivers
+            if (receivers.length === 0) {
+                if (settingsMap['notify_bark_url']) {
+                    receivers.push({
+                        id: 'legacy_bark',
+                        type: 'bark',
+                        name: 'Default Bark',
+                        url: settingsMap['notify_bark_url'],
+                        enabled: true
+                    });
+                }
+                if (settingsMap['notify_webhook_url']) {
+                    receivers.push({
+                        id: 'legacy_webhook',
+                        type: 'webhook',
+                        name: 'Default Webhook',
+                        url: settingsMap['notify_webhook_url'],
+                        method: settingsMap['notify_webhook_method'] || 'GET',
+                        enabled: true
+                    });
+                }
+            }
+
             return {
                 enabled: settingsMap['notify_enabled'] === 'true',
-                barkUrl: settingsMap['notify_bark_url'] || '',
-                webhookUrl: settingsMap['notify_webhook_url'] || '',
-                webhookMethod: settingsMap['notify_webhook_method'] || 'GET',
-                notifyOnDownloadStart: settingsMap['notify_on_download_start'] === 'true'
+                notifyOnDownloadStart: settingsMap['notify_on_download_start'] === 'true',
+                receivers: receivers.filter(r => r.enabled)
             };
         } catch (err) {
             console.error('[Notify] Failed to get settings:', err.message);
-            return { enabled: false, notifyOnDownloadStart: false };
+            return { enabled: false, notifyOnDownloadStart: false, receivers: [] };
         }
     }
 
     async send(title, message, overrideConfig = null) {
         const config = overrideConfig || await this.getSettings();
 
-        console.log(`[Notify] Sending notification: ${title}`);
-        const results = { bark: null, webhook: null };
+        // If specific receivers provided in overrideConfig (for test), use them, else use config.receivers
+        const receivers = config.receivers || []; // handle case where test passes different structure
 
-        // 1. Bark Notification
-        if (config.barkUrl) {
-            try {
-                const url = config.barkUrl.endsWith('/') ? config.barkUrl : `${config.barkUrl}/`;
-                const fullUrl = `${url}${encodeURIComponent(title)}/${encodeURIComponent(message)}`;
-                await axios.get(fullUrl, { timeout: 10000 });
-                results.bark = { success: true };
-                console.log('[Notify] Bark notification sent');
-            } catch (err) {
-                results.bark = { success: false, error: err.message };
-                console.error('[Notify] Bark failed:', err.message);
-            }
+        if (receivers.length === 0) {
+            // Check compatibility mode if overrideConfig has legacy fields (e.g. from older test payload)
+            if (config.barkUrl) receivers.push({ type: 'bark', url: config.barkUrl, enabled: true });
+            if (config.webhookUrl) receivers.push({ type: 'webhook', url: config.webhookUrl, method: config.webhookMethod, enabled: true });
         }
 
-        // 2. Custom Webhook
-        if (config.webhookUrl) {
+        if (receivers.length === 0) {
+            return { success: false, error: '未配置任何有效通知接收端' };
+        }
+
+        console.log(`[Notify] Sending notification "${title}" to ${receivers.length} receivers`);
+        const results = [];
+
+        // Send to all receivers in parallel
+        const promises = receivers.map(async (receiver) => {
+            if (!receiver.enabled) return null;
+
             try {
-                if (config.webhookMethod === 'POST') {
-                    await axios.post(config.webhookUrl, { title, message }, { timeout: 10000 });
-                } else {
-                    const url = new URL(config.webhookUrl);
-                    url.searchParams.append('title', title);
-                    url.searchParams.append('message', message);
-                    await axios.get(url.toString(), { timeout: 10000 });
+                if (receiver.type === 'bark') {
+                    const url = receiver.url.endsWith('/') ? receiver.url : `${receiver.url}/`;
+                    const fullUrl = `${url}${encodeURIComponent(title)}/${encodeURIComponent(message)}`;
+                    await axios.get(fullUrl, { timeout: 10000 });
+                    console.log(`[Notify] Sent to Bark: ${receiver.name || receiver.url}`);
+                    return { receiver: receiver.name || 'Bark', success: true };
                 }
-                results.webhook = { success: true };
-                console.log('[Notify] Webhook notification sent');
+                else if (receiver.type === 'webhook') {
+                    if (receiver.method === 'POST') {
+                        await axios.post(receiver.url, { title, message }, { timeout: 10000 });
+                    } else {
+                        const url = new URL(receiver.url);
+                        url.searchParams.append('title', title);
+                        url.searchParams.append('message', message);
+                        await axios.get(url.toString(), { timeout: 10000 });
+                    }
+                    console.log(`[Notify] Sent to Webhook: ${receiver.name || receiver.url}`);
+                    return { receiver: receiver.name || 'Webhook', success: true };
+                }
             } catch (err) {
-                results.webhook = { success: false, error: err.message };
-                console.error('[Notify] Webhook failed:', err.message);
+                console.error(`[Notify] Failed to send to ${receiver.name || receiver.type}:`, err.message);
+                return { receiver: receiver.name || receiver.type, success: false, error: err.message };
             }
-        }
+            return null; // Should not happen given types
+        });
 
-        const anySent = results.bark?.success || results.webhook?.success;
-        const anyFailed = (results.bark && !results.bark.success) || (results.webhook && !results.webhook.success);
+        const sendResults = (await Promise.all(promises)).filter(r => r !== null);
 
-        if (!config.barkUrl && !config.webhookUrl) {
-            return { success: false, error: '未配置任何通知地址' };
+        const successCount = sendResults.filter(r => r.success).length;
+        const failCount = sendResults.length - successCount;
+
+        if (successCount === 0 && failCount > 0) {
+            return {
+                success: false,
+                error: '所有通知发送失败',
+                results: sendResults
+            };
         }
 
         return {
-            success: anySent && !anyFailed,
-            partial: anySent && anyFailed,
-            results
+            success: true,
+            partial: failCount > 0,
+            message: `发送成功 ${successCount} 个` + (failCount > 0 ? `，失败 ${failCount} 个` : ''),
+            results: sendResults
         };
     }
 
@@ -81,7 +132,7 @@ class NotificationService {
      */
     async notifyNewTorrent(taskName, torrentTitle, sizeStr) {
         const config = await this.getSettings();
-        if (!config.notifyOnDownloadStart) return;
+        if (!config.enabled || !config.notifyOnDownloadStart) return;
 
         const title = `✨ RSS 匹配成功: ${taskName}`;
         const message = `${torrentTitle}\n体积: ${sizeStr}`;
@@ -93,7 +144,8 @@ class NotificationService {
      */
     async notifyDownloadStart(torrentTitle, sizeStr) {
         const config = await this.getSettings();
-        if (!config.notifyOnDownloadStart) return;
+        // Check global enable first
+        if (!config.enabled || !config.notifyOnDownloadStart) return;
 
         const title = `🚀 开始下载资源`;
         const message = `${torrentTitle}\n体积: ${sizeStr || '未知'}`;

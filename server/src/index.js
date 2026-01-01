@@ -25,7 +25,33 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-app.use(cors());
+// Stricter Rate Limiting for Login
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: (req, res) => {
+    try {
+      // Lazy load DB to avoid init issues
+      const { getDB } = require('./db');
+      const db = getDB();
+      const row = db.prepare("SELECT value FROM settings WHERE key = 'security_login_limit'").get();
+      return row ? parseInt(row.value) : 5;
+    } catch (e) {
+      console.warn('Rate limit DB check failed:', e.message);
+      return 5; // Fallback
+    }
+  },
+  message: { error: 'Too many login attempts, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/login', loginLimiter);
+
+// CORS Configuration
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || '*', // Use env var or allow all
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Initialize Database

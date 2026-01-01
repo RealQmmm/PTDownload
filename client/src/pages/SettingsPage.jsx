@@ -59,9 +59,11 @@ const SettingsPage = () => {
 
     const [notifySettings, setNotifySettings] = useState({
         notify_enabled: false,
-        notify_bark_url: '',
-        notify_webhook_url: '',
-        notify_webhook_method: 'GET'
+        notify_on_download_start: false,
+        notification_receivers: [] // JSONArray of {id, type, name, url, method, enabled}
+    });
+    const [securitySettings, setSecuritySettings] = useState({
+        security_login_limit: '5'
     });
     const [cleanupSettings, setCleanupSettings] = useState({
         cleanup_enabled: false,
@@ -90,12 +92,35 @@ const SettingsPage = () => {
             });
             setSearchLimit(data.search_page_limit || '1');
             setNotifySettings({
-                notify_enabled: data.notify_enabled === 'true',
-                notify_bark_url: data.notify_bark_url || '',
-                notify_webhook_url: data.notify_webhook_url || '',
-                notify_webhook_method: data.notify_webhook_method || 'GET',
                 notify_on_download_start: data.notify_on_download_start === 'true'
             });
+            setSecuritySettings({
+                security_login_limit: data.security_login_limit || '5'
+            });
+
+            const newNotifySettings = {
+                notify_enabled: data.notify_enabled === 'true',
+                notify_on_download_start: data.notify_on_download_start === 'true',
+                notification_receivers: []
+            };
+
+            if (data.notification_receivers) {
+                try {
+                    const receivers = JSON.parse(data.notification_receivers);
+                    newNotifySettings.notification_receivers = receivers;
+                } catch (e) { console.error('Parse error', e); }
+            } else if (data.notify_bark_url || data.notify_webhook_url) {
+                // Migration from old fields if new field is empty
+                const migrated = [];
+                if (data.notify_bark_url) {
+                    migrated.push({ id: crypto.randomUUID(), type: 'bark', name: '默认 Bark', url: data.notify_bark_url, enabled: true });
+                }
+                if (data.notify_webhook_url) {
+                    migrated.push({ id: crypto.randomUUID(), type: 'webhook', name: '默认 Webhook', url: data.notify_webhook_url, method: data.notify_webhook_method || 'GET', enabled: true });
+                }
+                newNotifySettings.notification_receivers = migrated;
+            }
+            setNotifySettings(newNotifySettings);
             setCleanupSettings({
                 cleanup_enabled: data.cleanup_enabled === 'true',
                 cleanup_min_ratio: data.cleanup_min_ratio || '2.0',
@@ -130,7 +155,8 @@ const SettingsPage = () => {
                     search_page_limit: searchLimit,
                     cookie_check_interval: cookieCheckInterval,
                     checkin_time: checkinTime,
-                    ...logSettings
+                    ...logSettings,
+                    ...securitySettings
                 })
             });
             if (res.ok) {
@@ -154,7 +180,10 @@ const SettingsPage = () => {
             const res = await authenticatedFetch('/api/settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(notifySettings)
+                body: JSON.stringify({
+                    ...notifySettings,
+                    notification_receivers: JSON.stringify(notifySettings.notification_receivers) // Send as JSON string for storage
+                })
             });
             if (res.ok) {
                 setMessage({ type: 'success', text: '通知设置已保存' });
@@ -181,9 +210,7 @@ const SettingsPage = () => {
                     message: '如果您收到了这条消息，说明您的通知配置工作正常。',
                     config: {
                         enabled: notifySettings.notify_enabled,
-                        barkUrl: notifySettings.notify_bark_url,
-                        webhookUrl: notifySettings.notify_webhook_url,
-                        webhookMethod: notifySettings.notify_webhook_method
+                        receivers: notifySettings.notification_receivers
                     }
                 })
             });
@@ -478,6 +505,30 @@ const SettingsPage = () => {
                                     </div>
                                 </div>
                             </div>
+
+
+                            <hr className={borderColor} />
+
+                            {/* Section: Security Settings */}
+                            <div>
+                                <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>安全设置</label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="flex-1">
+                                            <p className={`text-sm ${textPrimary} font-medium`}>登录限流 (次/分钟)</p>
+                                            <p className={`text-[10px] ${textSecondary}`}>同一 IP 每分钟允许的最大失败尝试次数(推荐: 3-5)</p>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="100"
+                                            value={securitySettings?.security_login_limit || '5'}
+                                            onChange={(e) => setSecuritySettings({ ...securitySettings, security_login_limit: e.target.value })}
+                                            className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <hr className={borderColor} />
@@ -547,37 +598,110 @@ const SettingsPage = () => {
 
                             <div className="space-y-6">
                                 <div>
-                                    <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>Bark 通知 (iOS 专用)</label>
-                                    <input
-                                        type="text"
-                                        value={notifySettings.notify_bark_url}
-                                        onChange={(e) => setNotifySettings({ ...notifySettings, notify_bark_url: e.target.value })}
-                                        className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-4 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
-                                        placeholder="例如: https://api.day.app/YourKey"
-                                    />
-                                    <p className={`text-[10px] ${textSecondary} mt-2`}>留空则不使用。推送内容将自动追加到 URL 后方。</p>
-                                </div>
-
-                                <div>
-                                    <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>自定义 Webhook</label>
-                                    <div className="flex space-x-2 mb-2">
-                                        <select
-                                            value={notifySettings.notify_webhook_method}
-                                            onChange={(e) => setNotifySettings({ ...notifySettings, notify_webhook_method: e.target.value })}
-                                            className={`w-24 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-2 text-sm ${textPrimary} outline-none focus:border-blue-500`}
+                                    <div className="flex justify-between items-center mb-3">
+                                        <label className={`block text-xs font-bold ${textSecondary} uppercase tracking-wider`}>通知接收端 ({notifySettings.notification_receivers.length})</label>
+                                        <button
+                                            onClick={() => {
+                                                const newReceiver = {
+                                                    id: crypto.randomUUID(),
+                                                    type: 'bark',
+                                                    name: '新接收端',
+                                                    url: '',
+                                                    enabled: true,
+                                                    method: 'GET'
+                                                };
+                                                setNotifySettings({
+                                                    ...notifySettings,
+                                                    notification_receivers: [...notifySettings.notification_receivers, newReceiver]
+                                                });
+                                            }}
+                                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded transition-colors"
                                         >
-                                            <option value="GET">GET</option>
-                                            <option value="POST">POST</option>
-                                        </select>
-                                        <input
-                                            type="text"
-                                            value={notifySettings.notify_webhook_url}
-                                            onChange={(e) => setNotifySettings({ ...notifySettings, notify_webhook_url: e.target.value })}
-                                            className={`flex-1 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-4 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
-                                            placeholder="https://example.com/api/notify"
-                                        />
+                                            + 添加接收端
+                                        </button>
                                     </div>
-                                    <p className={`text-[10px] ${textSecondary}`}>GET 方式将通过 Query 参数提交 title 和 message；POST 方式将发送 JSON Body。</p>
+
+                                    <div className="space-y-4">
+                                        {notifySettings.notification_receivers.map((receiver, index) => (
+                                            <div key={receiver.id} className={`p-4 rounded-lg border ${borderColor} ${darkMode ? 'bg-gray-800/50' : 'bg-gray-50'}`}>
+                                                <div className="flex items-center space-x-2 mb-2">
+                                                    <select
+                                                        value={receiver.type}
+                                                        onChange={(e) => {
+                                                            const updated = [...notifySettings.notification_receivers];
+                                                            updated[index].type = e.target.value;
+                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                        }}
+                                                        className={`w-28 ${inputBg} border rounded px-2 py-1 text-xs`}
+                                                    >
+                                                        <option value="bark">Bark</option>
+                                                        <option value="webhook">Webhook</option>
+                                                    </select>
+                                                    <input
+                                                        type="text"
+                                                        value={receiver.name}
+                                                        onChange={(e) => {
+                                                            const updated = [...notifySettings.notification_receivers];
+                                                            updated[index].name = e.target.value;
+                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                        }}
+                                                        className={`flex-1 ${inputBg} border rounded px-2 py-1 text-xs`}
+                                                        placeholder="备注名称"
+                                                    />
+                                                    <button
+                                                        onClick={() => {
+                                                            const updated = notifySettings.notification_receivers.filter((_, i) => i !== index);
+                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                        }}
+                                                        className="text-red-400 hover:text-red-500 p-1"
+                                                        title="删除"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    {receiver.type === 'webhook' && (
+                                                        <div className="flex items-center space-x-2">
+                                                            <span className={`text-xs ${textSecondary} w-10`}>Method:</span>
+                                                            <select
+                                                                value={receiver.method || 'GET'}
+                                                                onChange={(e) => {
+                                                                    const updated = [...notifySettings.notification_receivers];
+                                                                    updated[index].method = e.target.value;
+                                                                    setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                                }}
+                                                                className={`w-20 ${inputBg} border rounded px-2 py-1 text-xs`}
+                                                            >
+                                                                <option value="GET">GET</option>
+                                                                <option value="POST">POST</option>
+                                                            </select>
+                                                        </div>
+                                                    )}
+
+                                                    <div className="flex items-center space-x-2">
+                                                        <span className={`text-xs ${textSecondary} w-10`}>URL:</span>
+                                                        <input
+                                                            type="text"
+                                                            value={receiver.url}
+                                                            onChange={(e) => {
+                                                                const updated = [...notifySettings.notification_receivers];
+                                                                updated[index].url = e.target.value;
+                                                                setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                            }}
+                                                            className={`flex-1 ${inputBg} border rounded px-2 py-1 text-xs`}
+                                                            placeholder={receiver.type === 'bark' ? "https://api.day.app/Key" : "https://example.com/api"}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {notifySettings.notification_receivers.length === 0 && (
+                                            <div className={`text-center py-4 text-xs ${textSecondary} border border-dashed ${borderColor} rounded-lg`}>
+                                                暂无通知接收端，请点击上方“添加”按钮。
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 

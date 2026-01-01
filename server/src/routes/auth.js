@@ -9,6 +9,7 @@ router.post('/login', async (req, res) => {
         const result = await authService.login(username, password);
         res.json(result);
     } catch (err) {
+        console.warn(`[Security] Failed login attempt - User: ${username}, IP: ${req.ip}, Error: ${err.message}`);
         res.status(401).json({ error: err.message });
     }
 });
