@@ -129,6 +129,11 @@ class StatsService {
         }
     }
 
+    async updateDailyStats() {
+        await this.collectStats();
+        await this.persistStats();
+    }
+
     async persistStats() {
         if (!this.initialized) return;
 
