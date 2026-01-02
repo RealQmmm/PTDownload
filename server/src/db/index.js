@@ -179,6 +179,7 @@ function createTables() {
     CREATE TABLE IF NOT EXISTS series_subscriptions (
        id INTEGER PRIMARY KEY AUTOINCREMENT,
        name TEXT NOT NULL,
+       alias TEXT, -- Original name (e.g. English title) for matching
        season TEXT,
        quality TEXT,
        smart_regex TEXT,
@@ -219,8 +220,16 @@ function createTables() {
       db.prepare('ALTER TABLE series_subscriptions ADD COLUMN tmdb_id TEXT').run();
       db.prepare('ALTER TABLE series_subscriptions ADD COLUMN overview TEXT').run();
     }
+
+    // Migration for alias
+    const hasAlias = columns.some(c => c.name === 'alias');
+    if (!hasAlias) {
+      console.log('[Migration] Adding alias column to series_subscriptions');
+      db.prepare('ALTER TABLE series_subscriptions ADD COLUMN alias TEXT').run();
+    }
+
   } catch (e) {
-    console.error('[Migration] Failed to add metadata columns:', e.message);
+    console.error('[Migration] Failed to check/add columns:', e.message);
   }
 
   // Initialize default settings

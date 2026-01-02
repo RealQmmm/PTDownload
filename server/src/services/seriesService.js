@@ -53,7 +53,7 @@ class SeriesService {
         const existing = this.getSubscription(id);
         if (!existing) throw new Error('Subscription not found');
 
-        const { name, season, quality, rss_source_id } = data;
+        const { name, alias, season, quality, rss_source_id } = data;
 
         // Auto-refresh total_episodes if name or season changed
         let totalEpisodes = existing.total_episodes || 0;
@@ -86,9 +86,9 @@ class SeriesService {
         // 3. Update subscription record
         db.prepare(`
             UPDATE series_subscriptions 
-            SET name = ?, season = ?, quality = ?, smart_regex = ?, rss_source_id = ?, total_episodes = ?
+            SET name = ?, alias = ?, season = ?, quality = ?, smart_regex = ?, rss_source_id = ?, total_episodes = ?
             WHERE id = ?
-                `).run(name, season, quality, smartRegex, rss_source_id, totalEpisodes, id);
+        `).run(name, alias || null, season, quality, smartRegex, rss_source_id, totalEpisodes, id);
 
         // 4. Update associated task configuration
         // We construct the filter config JSON. 
@@ -199,10 +199,12 @@ class SeriesService {
 
         // 3. Save Subscription with Metadata
         const info = this._getDB().prepare(`
-            INSERT INTO series_subscriptions(name, season, quality, smart_regex, rss_source_id, task_id, poster_path, tmdb_id, overview, total_episodes)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO series_subscriptions(name, alias, season, quality, smart_regex, rss_source_id, task_id, poster_path, tmdb_id, overview, total_episodes)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
-            name, season, quality, smartRegex, rss_source_id, taskId,
+            name,
+            metadata ? metadata.original_name : null, // Save alias
+            season, quality, smartRegex, rss_source_id, taskId,
             metadata ? metadata.poster_path : null,
             metadata ? metadata.tmdb_id : null,
             metadata ? metadata.overview : null,
@@ -304,28 +306,51 @@ class SeriesService {
 
         const db = this._getDB();
         const seriesName = sub.name.toLowerCase().trim();
+        const seriesAlias = (sub.alias || '').toLowerCase().trim();
 
-        // 1. Find all finished torrents in history that match this series name
+        // 1. Find all finished torrents in history that match this series name or alias
         const allHistory = db.prepare('SELECT item_title, item_hash, download_time FROM task_history WHERE is_finished = 1').all();
+
+        console.log(`[DEBUG] Total finished history records: ${allHistory.length}`);
+        console.log(`[DEBUG] Looking for series: "${seriesName}" (Alias: "${seriesAlias}")`);
 
         const episodesToStore = []; // {season, episode, hash, title, time}
         const seasonPacksToScan = [];
 
+        let matchedCount = 0;
         allHistory.forEach(row => {
             const titleLower = (row.item_title || '').toLowerCase();
 
             // Flexible name matching
             let isMatch = titleLower.includes(seriesName);
+
+            // Try alias match if name fails
+            if (!isMatch && seriesAlias) {
+                isMatch = titleLower.includes(seriesAlias);
+            }
+
             if (!isMatch) {
                 const normalizedTitle = titleLower.replace(/[\s._\-\[\](){}+]/g, '');
                 const normalizedSeries = seriesName.replace(/[\s._\-\[\](){}+]/g, '');
                 isMatch = normalizedTitle.includes(normalizedSeries);
+
+                // Try normalized alias match
+                if (!isMatch && seriesAlias) {
+                    const normalizedAlias = seriesAlias.replace(/[\s._\-\[\](){}+]/g, '');
+                    isMatch = normalizedTitle.includes(normalizedAlias);
+                }
             }
 
             if (!isMatch) return;
 
+            matchedCount++;
+            console.log(`[DEBUG] Matched: "${row.item_title}"`);
+
             const parsed = episodeParser.parse(row.item_title);
-            if (!parsed) return;
+            if (!parsed) {
+                console.log(`[DEBUG] Failed to parse: "${row.item_title}"`);
+                return;
+            }
 
             if (parsed.episodes && parsed.episodes.length > 0) {
                 const season = parsed.season !== null ? parsed.season : (sub.season || 1);
@@ -398,6 +423,9 @@ class SeriesService {
             });
 
             transaction(episodesToStore);
+            console.log(`[DEBUG] Stored ${episodesToStore.length} episodes for subscription ${id}`);
+        } else {
+            console.log(`[DEBUG] No episodes found to store. Matched ${matchedCount} torrents from ${allHistory.length} total history records.`);
         }
 
         return await this.getEpisodes(id);
@@ -424,10 +452,17 @@ class SeriesService {
 
                 this._getDB().prepare(`
                     UPDATE series_subscriptions 
-                    SET poster_path = ?, tmdb_id = ?, overview = ?, total_episodes = ?
+                    SET poster_path = ?, tmdb_id = ?, overview = ?, total_episodes = ?, alias = ?
                     WHERE id = ?
-                `).run(metadata.poster_path, metadata.tmdb_id, metadata.overview, totalEpisodes, id);
-                return { ...sub, ...metadata, total_episodes: totalEpisodes };
+                `).run(
+                    metadata.poster_path,
+                    metadata.tmdb_id,
+                    metadata.overview,
+                    totalEpisodes,
+                    metadata.original_name, // Update alias
+                    id
+                );
+                return { ...sub, ...metadata, total_episodes: totalEpisodes, alias: metadata.original_name };
             }
         } catch (e) {
             console.error('Metadata refresh failed:', e);

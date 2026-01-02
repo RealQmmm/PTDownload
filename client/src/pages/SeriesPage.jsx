@@ -19,6 +19,7 @@ const SeriesPage = () => {
     const [showModal, setShowModal] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
+        alias: '',
         season: '',
         quality: '',
         rss_source_id: '',
@@ -153,7 +154,7 @@ const SeriesPage = () => {
             const data = await res.json();
             if (res.ok) {
                 setShowModal(false);
-                setFormData({ name: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', saved_path: '/downloads/series' });
+                setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', saved_path: '/downloads/series' });
                 setEditId(null);
                 fetchSubscriptions();
             } else {
@@ -169,6 +170,7 @@ const SeriesPage = () => {
     const handleEdit = (sub) => {
         setFormData({
             name: sub.name,
+            alias: sub.alias || '',
             season: sub.season || '',
             quality: sub.quality || '',
             rss_source_id: sub.rss_source_id || '',
@@ -179,7 +181,7 @@ const SeriesPage = () => {
     };
 
     const openCreateModal = () => {
-        setFormData({ name: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', saved_path: '/downloads/series' });
+        setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', saved_path: '/downloads/series' });
         setEditId(null);
         setShowModal(true);
     };
@@ -316,6 +318,17 @@ const SeriesPage = () => {
                                     placeholder="例如: 西部世界"
                                     className={`w-full p-3 rounded-xl border ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
                                 />
+                            </div>
+                            <div>
+                                <label className={`block text-xs font-bold uppercase ${textSecondary} mb-1`}>别名 / 英文名 (用于匹配种子)</label>
+                                <input
+                                    type="text"
+                                    value={formData.alias || ''}
+                                    onChange={e => setFormData({ ...formData, alias: e.target.value })}
+                                    placeholder="例如: Westworld"
+                                    className={`w-full p-3 rounded-xl border ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
+                                />
+                                <p className={`text-[10px] ${textSecondary} mt-1`}>如果种子名称是英文，请在此填写英文原名。刷新元数据时会自动尝试获取。</p>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
