@@ -15,18 +15,29 @@ class SeriesService {
         return this.db;
     }
 
-    getAllSubscriptions() {
-        // Get subscriptions and join with basic task info
-        return this._getDB().prepare(`
+    async getAllSubscriptions() {
+        // Get subscriptions with episode count
+        const subs = this._getDB().prepare(`
             SELECT s.*, 
                    t.enabled as task_enabled, 
-                   r.name as rss_source_name,
-                   (SELECT COUNT(*) FROM task_history th WHERE th.task_id = s.task_id AND th.is_finished = 1) as episode_count
+                   r.name as rss_source_name
             FROM series_subscriptions s
             LEFT JOIN tasks t ON s.task_id = t.id
             LEFT JOIN rss_sources r ON s.rss_source_id = r.id
             ORDER BY s.created_at DESC
         `).all();
+
+        // Calculate episode count for each subscription by matching torrent names
+        // Uses the database table for instant loading
+        for (const sub of subs) {
+            const episodes = await this.getEpisodes(sub.id);
+            // Count total unique episodes across all seasons
+            sub.episode_count = Object.values(episodes).reduce((total, seasonData) => {
+                return total + (seasonData.episodes ? seasonData.episodes.length : 0);
+            }, 0);
+        }
+
+        return subs;
     }
 
     getSubscription(id) {
@@ -37,12 +48,30 @@ class SeriesService {
      * Update an existing subscription
      * Regenerates regex and updates associated task
      */
-    updateSubscription(id, data) {
+    async updateSubscription(id, data) {
         const db = this._getDB();
         const existing = this.getSubscription(id);
         if (!existing) throw new Error('Subscription not found');
 
         const { name, season, quality, rss_source_id } = data;
+
+        // Auto-refresh total_episodes if name or season changed
+        let totalEpisodes = existing.total_episodes || 0;
+        if (name !== existing.name || season !== existing.season) {
+            try {
+                const metadataService = require('./metadataService');
+                const tmdbId = existing.tmdb_id; // Keep existing tmdb_id for now
+                if (tmdbId) {
+                    const seasonNum = parseInt(season) || 1;
+                    const seasonDetails = await metadataService.getSeasonDetails(tmdbId, seasonNum);
+                    if (seasonDetails) {
+                        totalEpisodes = seasonDetails.episode_count;
+                    }
+                }
+            } catch (e) {
+                console.error('Total episodes refresh failed on update:', e);
+            }
+        }
 
         // 1. Generate new regex
         const smartRegex = this._generateSmartRegex(name, season, quality);
@@ -57,9 +86,9 @@ class SeriesService {
         // 3. Update subscription record
         db.prepare(`
             UPDATE series_subscriptions 
-            SET name = ?, season = ?, quality = ?, smart_regex = ?, rss_source_id = ?
+            SET name = ?, season = ?, quality = ?, smart_regex = ?, rss_source_id = ?, total_episodes = ?
             WHERE id = ?
-                `).run(name, season, quality, smartRegex, rss_source_id, id);
+                `).run(name, season, quality, smartRegex, rss_source_id, totalEpisodes, id);
 
         // 4. Update associated task configuration
         // We construct the filter config JSON. 
@@ -104,27 +133,30 @@ class SeriesService {
      * 2. Create RSS Task
      * 3. Save Subscription
      */
-    createSubscription(data) {
+    async createSubscription(data) {
         const { name, season, quality, rss_source_id, save_path, client_id, category = 'Series' } = data;
+
+        // Auto-fetch metadata
+        let metadata = null;
+        let totalEpisodes = 0;
+        try {
+            const metadataService = require('./metadataService');
+            metadata = await metadataService.searchSeries(name);
+            if (metadata && metadata.tmdb_id) {
+                const seasonNum = parseInt(season) || 1;
+                const seasonDetails = await metadataService.getSeasonDetails(metadata.tmdb_id, seasonNum);
+                if (seasonDetails) {
+                    totalEpisodes = seasonDetails.episode_count;
+                }
+            }
+        } catch (e) {
+            console.error('Metadata fetch failed:', e);
+        }
 
         // 1. Generate Smart Regex
         const smartRegex = this._generateSmartRegex(name, season, quality);
 
         // 2. Create Task
-        // Use a generic cron (e.g., every 30 mins) or inherit from global settings
-        const taskData = {
-            name: `[Series] ${name} ${season ? 'S' + season : ''} `,
-            type: 'rss',
-            cron: '*/30 * * * *', // Default: every 30 mins
-            site_id: null, // Derived from RSS Source
-            rss_url: null, // Will fetch from RSS Source in rssService, but we need to link it
-            // Wait, RSS Task needs filtering config. 
-            // In existing logic, RSS Task usually links to a Site or RSS URL.
-            // Let's check rssService logic. Usually it uses `site_id` or `rss_url`.
-            // But here we have `rss_source_id`.
-            // We should look up the RSS Source URL.
-        };
-
         const rssSource = this._getDB().prepare('SELECT * FROM rss_sources WHERE id = ?').get(rss_source_id);
         if (!rssSource) throw new Error('Invalid RSS Source');
 
@@ -136,7 +168,7 @@ class SeriesService {
             size_max: 0
         };
 
-        // 2. Determine Save Path
+        // Determine Save Path
         let finalSavePath = save_path;
         if (!finalSavePath) {
             // Try to find default path for Series
@@ -149,11 +181,6 @@ class SeriesService {
         // Auto-append Series Name to path for unified directory structure
         if (finalSavePath) {
             const safeName = pathUtils.sanitizeFilename(name);
-            // Use path.join but ensure we use forward slashes for compatibility if running on Windows but docker is linux, etc.
-            // Actually, node path.join uses OS separator. 
-            // Docker container is Linux, so it uses /.
-            // If user input path uses \, we might normalize it?
-            // Let's rely on pathUtils.join which uses path module.
             finalSavePath = pathUtils.join(finalSavePath, safeName);
         }
 
@@ -170,11 +197,17 @@ class SeriesService {
             enabled: 1
         });
 
-        // 3. Save Subscription
+        // 3. Save Subscription with Metadata
         const info = this._getDB().prepare(`
-            INSERT INTO series_subscriptions(name, season, quality, smart_regex, rss_source_id, task_id)
-        VALUES(?, ?, ?, ?, ?, ?)
-        `).run(name, season, quality, smartRegex, rss_source_id, taskId);
+            INSERT INTO series_subscriptions(name, season, quality, smart_regex, rss_source_id, task_id, poster_path, tmdb_id, overview, total_episodes)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            name, season, quality, smartRegex, rss_source_id, taskId,
+            metadata ? metadata.poster_path : null,
+            metadata ? metadata.tmdb_id : null,
+            metadata ? metadata.overview : null,
+            totalEpisodes
+        );
 
         return info.lastInsertRowid;
     }
@@ -230,38 +263,177 @@ class SeriesService {
 
     /**
      * Get downloaded episodes for a subscription
-     * Returns: { "1": [1, 2, 3], "2": [1, 2] }
+     * @param {number} id - Subscription ID
+     * @param {boolean} skipFileScan - Not used anymore, kept for API compatibility
+     * Returns: { "1": {episodes: [1, 2, 3], isSeasonPack: false} }
      */
-    getEpisodes(id) {
-        const sub = this._getDB().prepare('SELECT task_id FROM series_subscriptions WHERE id = ?').get(id);
-        if (!sub || !sub.task_id) return {};
+    /**
+     * Get downloaded episodes for a subscription from the database (fast)
+     * @param {number} id - Subscription ID
+     * @returns {Promise<Object>} - Format: { "1": {episodes: [1, 2, 3], isSeasonPack: false} }
+     */
+    async getEpisodes(id) {
+        // Query episodes from database table
+        const episodes = this._getDB().prepare(`
+            SELECT season, episode 
+            FROM series_episodes 
+            WHERE subscription_id = ?
+            ORDER BY season, episode
+        `).all(id);
 
-        const history = this._getDB().prepare('SELECT item_title, created_at FROM task_history WHERE task_id = ? ORDER BY created_at DESC').all(sub.task_id);
-
+        // Group by season
         const resultMap = {};
+        episodes.forEach(ep => {
+            if (!resultMap[ep.season]) {
+                resultMap[ep.season] = { episodes: [], isSeasonPack: false };
+            }
+            resultMap[ep.season].episodes.push(ep.episode);
+        });
 
-        history.forEach(row => {
+        return resultMap;
+    }
+
+    /**
+     * Manually sync episodes from task history and downloader for a subscription
+     * This is the heavy lifting operation
+     */
+    async syncEpisodesFromHistory(id) {
+        console.log(`[DEBUG] Syncing episodes for subscription ID: ${id}`);
+        const sub = this.getSubscription(id);
+        if (!sub) throw new Error('Subscription not found');
+
+        const db = this._getDB();
+        const seriesName = sub.name.toLowerCase().trim();
+
+        // 1. Find all finished torrents in history that match this series name
+        const allHistory = db.prepare('SELECT item_title, item_hash, download_time FROM task_history WHERE is_finished = 1').all();
+
+        const episodesToStore = []; // {season, episode, hash, title, time}
+        const seasonPacksToScan = [];
+
+        allHistory.forEach(row => {
+            const titleLower = (row.item_title || '').toLowerCase();
+
+            // Flexible name matching
+            let isMatch = titleLower.includes(seriesName);
+            if (!isMatch) {
+                const normalizedTitle = titleLower.replace(/[\s._\-\[\](){}+]/g, '');
+                const normalizedSeries = seriesName.replace(/[\s._\-\[\](){}+]/g, '');
+                isMatch = normalizedTitle.includes(normalizedSeries);
+            }
+
+            if (!isMatch) return;
+
             const parsed = episodeParser.parse(row.item_title);
-            if (parsed && parsed.episodes && parsed.episodes.length > 0) {
-                // Default to Season 1 if not detected, or use subs.season? 
-                // Better to use parsed season. If null, maybe fallback to 'Unknown' or 1.
-                // Let's use parsed.season or '0' (Specials) or '1' as fallback if title has no season but has episodes.
-                const season = parsed.season !== null ? parsed.season : 1;
+            if (!parsed) return;
 
-                if (!resultMap[season]) {
-                    resultMap[season] = new Set();
-                }
-                parsed.episodes.forEach(ep => resultMap[season].add(ep));
+            if (parsed.episodes && parsed.episodes.length > 0) {
+                const season = parsed.season !== null ? parsed.season : (sub.season || 1);
+                parsed.episodes.forEach(ep => {
+                    episodesToStore.push({
+                        season,
+                        episode: ep,
+                        hash: row.item_hash,
+                        title: row.item_title,
+                        time: row.download_time
+                    });
+                });
+            } else if (parsed.season !== null) {
+                // Season pack detected
+                seasonPacksToScan.push({
+                    hash: row.item_hash,
+                    season: parsed.season,
+                    title: row.item_title,
+                    time: row.download_time
+                });
             }
         });
 
-        // Convert Sets to sorted Arrays
-        const sortedResult = {};
-        Object.keys(resultMap).forEach(s => {
-            sortedResult[s] = Array.from(resultMap[s]).sort((a, b) => a - b);
-        });
+        // 2. Scan files for season packs
+        if (seasonPacksToScan.length > 0) {
+            const clientService = require('./clientService');
+            const downloaderService = require('./downloaderService');
+            const clients = clientService.getAllClients();
 
-        return sortedResult;
+            for (const pack of seasonPacksToScan) {
+                if (!pack.hash) continue;
+
+                for (const client of clients) {
+                    try {
+                        const filesResult = await downloaderService.getTorrentFiles(client, pack.hash);
+                        if (filesResult.success && filesResult.files && filesResult.files.length > 0) {
+                            filesResult.files.forEach(file => {
+                                const fileParsed = episodeParser.parse(file.name);
+                                if (fileParsed && fileParsed.episodes && fileParsed.episodes.length > 0) {
+                                    fileParsed.episodes.forEach(ep => {
+                                        episodesToStore.push({
+                                            season: pack.season,
+                                            episode: ep,
+                                            hash: pack.hash,
+                                            title: pack.title,
+                                            time: pack.time
+                                        });
+                                    });
+                                }
+                            });
+                            break;
+                        }
+                    } catch (e) { }
+                }
+            }
+        }
+
+        // 3. Save unique episodes to database
+        if (episodesToStore.length > 0) {
+            const insertStmt = db.prepare(`
+                INSERT OR IGNORE INTO series_episodes 
+                (subscription_id, season, episode, torrent_hash, torrent_title, download_time)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `);
+
+            const transaction = db.transaction((eps) => {
+                for (const ep of eps) {
+                    insertStmt.run(id, ep.season, ep.episode, ep.hash, ep.title, ep.time || new Date().toISOString());
+                }
+            });
+
+            transaction(episodesToStore);
+        }
+
+        return await this.getEpisodes(id);
+    }
+    /**
+     * Refresh metadata for a subscription
+     */
+    async refreshMetadata(id) {
+        const sub = this.getSubscription(id);
+        if (!sub) throw new Error('Subscription not found');
+
+        try {
+            const metadataService = require('./metadataService');
+            const metadata = await metadataService.searchSeries(sub.name);
+            if (metadata) {
+                let totalEpisodes = sub.total_episodes || 0;
+                if (metadata.tmdb_id) {
+                    const seasonNum = parseInt(sub.season) || 1;
+                    const seasonDetails = await metadataService.getSeasonDetails(metadata.tmdb_id, seasonNum);
+                    if (seasonDetails) {
+                        totalEpisodes = seasonDetails.episode_count;
+                    }
+                }
+
+                this._getDB().prepare(`
+                    UPDATE series_subscriptions 
+                    SET poster_path = ?, tmdb_id = ?, overview = ?, total_episodes = ?
+                    WHERE id = ?
+                `).run(metadata.poster_path, metadata.tmdb_id, metadata.overview, totalEpisodes, id);
+                return { ...sub, ...metadata, total_episodes: totalEpisodes };
+            }
+        } catch (e) {
+            console.error('Metadata refresh failed:', e);
+            throw new Error('Failed to refresh metadata');
+        }
+        return sub;
     }
 }
 

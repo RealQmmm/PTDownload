@@ -28,6 +28,16 @@ function initDB() {
     } catch (migErr) {
       console.error("Migration error:", migErr);
     }
+    // Migration: Add total_episodes to series_subscriptions if not exists
+    try {
+      const columns = db.prepare("PRAGMA table_info(series_subscriptions)").all();
+      if (columns.length > 0 && !columns.find(c => c.name === 'total_episodes')) {
+        db.prepare("ALTER TABLE series_subscriptions ADD COLUMN total_episodes INTEGER DEFAULT 0").run();
+        console.log("Migrated: Added total_episodes to series_subscriptions table");
+      }
+    } catch (migErr) {
+      console.error("Migration error (series_subscriptions):", migErr);
+    }
   } catch (err) {
     console.error('Error connecting to database:', err);
   }
@@ -175,12 +185,43 @@ function createTables() {
        rss_source_id INTEGER,
        task_id INTEGER,
        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+       poster_path TEXT,
+       tmdb_id TEXT,
+       overview TEXT,
+       total_episodes INTEGER DEFAULT 0,
        FOREIGN KEY(rss_source_id) REFERENCES rss_sources(id),
-       FOREIGN KEY(task_id) REFERENCES tasks(id)
+       FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE SET NULL
     );
+
+    CREATE TABLE IF NOT EXISTS series_episodes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subscription_id INTEGER NOT NULL,
+      season INTEGER NOT NULL,
+      episode INTEGER NOT NULL,
+      torrent_hash TEXT,
+      torrent_title TEXT,
+      download_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(subscription_id, season, episode),
+      FOREIGN KEY(subscription_id) REFERENCES series_subscriptions(id) ON DELETE CASCADE
+    );
+
   `;
 
   db.exec(schema);
+
+  // Migration for Series Metadata
+  try {
+    const columns = db.prepare('PRAGMA table_info(series_subscriptions)').all();
+    const hasPosterPath = columns.some(c => c.name === 'poster_path');
+    if (!hasPosterPath) {
+      console.log('[Migration] Adding metadata columns to series_subscriptions');
+      db.prepare('ALTER TABLE series_subscriptions ADD COLUMN poster_path TEXT').run();
+      db.prepare('ALTER TABLE series_subscriptions ADD COLUMN tmdb_id TEXT').run();
+      db.prepare('ALTER TABLE series_subscriptions ADD COLUMN overview TEXT').run();
+    }
+  } catch (e) {
+    console.error('[Migration] Failed to add metadata columns:', e.message);
+  }
 
   // Initialize default settings
   const defaultSettings = [
@@ -197,7 +238,10 @@ function createTables() {
     { key: 'cleanup_max_seeding_time', value: '336' }, // 14 days in hours
     { key: 'cleanup_max_seeding_time', value: '336' }, // 14 days in hours
     { key: 'cleanup_delete_files', value: 'true' },
-    { key: 'search_mode', value: 'browse' } // 'browse' or 'rss'
+    { key: 'search_mode', value: 'browse' }, // 'browse' or 'rss'
+    { key: 'tmdb_api_key', value: '107492d807d58b01d0e5104d49af4081' },
+    { key: 'tmdb_base_url', value: 'https://api.themoviedb.org/3' },
+    { key: 'tmdb_image_base_url', value: 'https://image.tmdb.org/t/p/w300' }
   ];
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

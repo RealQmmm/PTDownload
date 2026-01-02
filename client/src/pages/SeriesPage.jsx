@@ -12,6 +12,8 @@ const SeriesPage = () => {
     const [episodesData, setEpisodesData] = useState({});
     const [loadingEpisodes, setLoadingEpisodes] = useState(false);
     const [currentSeriesName, setCurrentSeriesName] = useState('');
+    const [currentSeriesId, setCurrentSeriesId] = useState(null);
+    const [currentSubscription, setCurrentSubscription] = useState(null);
 
     // Modal State
     const [showModal, setShowModal] = useState(false);
@@ -34,12 +36,16 @@ const SeriesPage = () => {
     const inputBg = darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900';
 
     const handleShowDetails = async (sub) => {
+        setCurrentSubscription(sub);
         setCurrentSeriesName(sub.name);
+        setCurrentSeriesId(sub.id);
         setShowEpisodesModal(true);
         setLoadingEpisodes(true);
         try {
-            const res = await authenticatedFetch(`/api/series/${sub.id}/episodes`);
+            // Skip file scanning on initial load for fast opening
+            const res = await authenticatedFetch(`/api/series/${sub.id}/episodes?skipFileScan=true`);
             const data = await res.json();
+            console.log('[UI] Initial episodes data (no file scan):', data);
             if (res.ok && data && !data.error) {
                 setEpisodesData(data);
             } else {
@@ -47,6 +53,39 @@ const SeriesPage = () => {
             }
         } catch (err) {
             console.error('Fetch episodes failed:', err);
+            setEpisodesData({});
+        } finally {
+            setLoadingEpisodes(false);
+        }
+    };
+
+    const handleRefreshEpisodes = async () => {
+        if (!currentSeriesId) return;
+        console.log(`[UI] Manually refreshing episodes for series ID: ${currentSeriesId} with file scan`);
+        setLoadingEpisodes(true);
+        try {
+            // Do NOT skip file scan on manual refresh
+            const res = await authenticatedFetch(`/api/series/${currentSeriesId}/episodes`);
+            const data = await res.json();
+            console.log('[UI] Refreshed episodes data (with file scan):', data);
+            if (res.ok && data && !data.error) {
+                setEpisodesData(data);
+
+                // Also refresh the subscription data to get latest total_episodes
+                const subRes = await authenticatedFetch(`/api/series`);
+                const allSubs = await subRes.json();
+                if (subRes.ok && Array.isArray(allSubs)) {
+                    setSubscriptions(allSubs);
+                    const updatedSub = allSubs.find(s => s.id === currentSeriesId);
+                    if (updatedSub) {
+                        setCurrentSubscription(updatedSub);
+                    }
+                }
+            } else {
+                setEpisodesData({});
+            }
+        } catch (err) {
+            console.error('[UI] Fetch episodes failed:', err);
             setEpisodesData({});
         } finally {
             setLoadingEpisodes(false);
@@ -64,25 +103,40 @@ const SeriesPage = () => {
             </div>
         ) : (
             Object.keys(episodesData).sort((a, b) => parseInt(a) - parseInt(b)).map(season => {
-                // Defensive check: ensure the value is an array
-                if (!Array.isArray(episodesData[season])) return null;
+                const seasonData = episodesData[season];
+                // Handle both old format (array) and new format (object)
+                const episodes = Array.isArray(seasonData) ? seasonData : (seasonData.episodes || []);
+                const isSeasonPack = seasonData.isSeasonPack || false;
 
                 return (
                     <div key={season} className="mb-6 last:mb-0">
                         <h3 className={`text-sm font-bold ${textPrimary} mb-3 flex items-center`}>
                             <span className="w-1 h-4 bg-blue-500 rounded-full mr-2"></span>
                             第 {season} 季
-                            <span className={`ml-2 text-xs font-normal ${textSecondary} bg-gray-500/10 px-2 py-0.5 rounded-full`}>
-                                共 {episodesData[season].length} 集
-                            </span>
+                            {isSeasonPack && episodes.length === 0 ? (
+                                <span className={`ml-2 text-xs font-normal bg-purple-500/10 text-purple-500 px-2 py-0.5 rounded-full`}>
+                                    整季包
+                                </span>
+                            ) : (
+                                <span className={`ml-2 text-xs font-normal ${textSecondary} bg-gray-500/10 px-2 py-0.5 rounded-full`}>
+                                    共 {episodes.length} 集
+                                    {isSeasonPack && <span className="ml-1 text-purple-500">+ 整季包</span>}
+                                </span>
+                            )}
                         </h3>
-                        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
-                            {episodesData[season].map(ep => (
-                                <div key={ep} className={`aspect-square flex items-center justify-center rounded-lg font-mono text-sm font-bold bg-green-500/10 text-green-500 border border-green-500/20`}>
-                                    {ep < 10 ? `0${ep}` : ep}
-                                </div>
-                            ))}
-                        </div>
+                        {episodes.length > 0 ? (
+                            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                                {episodes.map(ep => (
+                                    <div key={ep} className={`aspect-square flex items-center justify-center rounded-lg font-mono text-sm font-bold bg-green-500/10 text-green-500 border border-green-500/20`}>
+                                        {ep < 10 ? `0${ep}` : ep}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : isSeasonPack ? (
+                            <div className={`text-center py-4 text-sm ${textSecondary} bg-purple-500/5 rounded-lg border border-purple-500/20`}>
+                                📦 已下载完整季度包（具体集数请查看下载器或本地文件）
+                            </div>
+                        ) : null}
                     </div>
                 );
             })
@@ -203,50 +257,85 @@ const SeriesPage = () => {
                     <p className={`${textSecondary} mb-6`}>点击右上角按钮开始您的智能追剧之旅</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
                     {subscriptions.map(sub => (
-                        <div key={sub.id} className={`${bgMain} rounded-2xl border ${borderColor} p-5 shadow-sm hover:shadow-md transition-all`}>
-                            <div className="flex justify-between items-start mb-3">
-                                <div>
-                                    <h3 className={`text-lg font-bold ${textPrimary} line-clamp-1`}>{sub.name}</h3>
-                                    <div className="flex gap-2 mt-1">
-                                        {sub.season && <span className="bg-purple-500/10 text-purple-500 px-2 py-0.5 rounded text-xs font-bold">S{sub.season}</span>}
-                                        {sub.quality && <span className="bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded text-xs font-bold">{sub.quality}</span>}
+                        <div key={sub.id} className={`${bgMain} rounded-2xl border ${borderColor} shadow-sm hover:shadow-md transition-all overflow-hidden flex`}>
+                            {/* Optional Poster Section */}
+                            {sub.poster_path && (
+                                <div className="w-24 sm:w-28 flex-shrink-0 bg-gray-200 dark:bg-gray-800">
+                                    <img
+                                        src={sub.poster_path}
+                                        alt={sub.name}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => { e.target.style.display = 'none' }}
+                                    />
+                                </div>
+                            )}
+
+                            <div className="flex-1 p-5 min-w-0">
+                                <div className="flex justify-between items-start mb-3">
+                                    <div className="min-w-0 flex-1 mr-2">
+                                        <h3 className={`text-lg font-bold ${textPrimary} truncate`} title={sub.name}>{sub.name}</h3>
+                                        <div className="flex gap-2 mt-1">
+                                            {sub.season && <span className="bg-purple-500/10 text-purple-500 px-2 py-0.5 rounded text-xs font-bold">S{sub.season}</span>}
+                                            {sub.quality && <span className="bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded text-xs font-bold">{sub.quality}</span>}
+                                        </div>
+                                    </div>
+                                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${sub.task_enabled ? 'bg-green-500/10 text-green-500' : 'bg-gray-500/10 text-gray-500'}`}>
+                                        {sub.task_enabled ? '▶' : '⏸'}
                                     </div>
                                 </div>
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${sub.task_enabled ? 'bg-green-500/10 text-green-500' : 'bg-gray-500/10 text-gray-500'}`}>
-                                    {sub.task_enabled ? '▶' : '⏸'}
-                                </div>
-                            </div>
 
-                            <div className={`text-xs ${textSecondary} ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'} p-3 rounded-lg font-mono mb-4 break-all`}>
-                                Regex: {sub.smart_regex}
-                                <div className={`mt-2 pt-2 border-t ${borderColor} flex justify-between items-center`}>
-                                    <span className="text-blue-500 font-bold">已下载: {sub.episode_count || 0} 集</span>
-                                    <button
-                                        onClick={() => handleShowDetails(sub)}
-                                        className={`text-xs px-2 py-1 rounded border ${borderColor} hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors`}
-                                    >
-                                        详情
-                                    </button>
+                                <div className={`text-xs ${textSecondary} ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'} p-3 rounded-lg font-mono mb-4 break-all`}>
+                                    Regex: {sub.smart_regex}
+                                    <div className={`mt-2 pt-2 border-t ${borderColor} flex justify-between items-center`}>
+                                        <span className="text-blue-500 font-bold">已下载: {sub.episode_count || 0} 集</span>
+                                        <button
+                                            onClick={() => handleShowDetails(sub)}
+                                            className={`text-xs px-2 py-1 rounded border ${borderColor} hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors whitespace-nowrap`}
+                                        >
+                                            详情
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <div className="flex justify-between items-center text-xs">
-                                <span className={textSecondary}>源: {sub.rss_source_name || 'Unknown'}</span>
-                                <div className="space-x-3">
-                                    <button
-                                        onClick={() => handleEdit(sub)}
-                                        className="text-blue-400 hover:text-blue-500 font-medium"
-                                    >
-                                        编辑
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(sub.id)}
-                                        className="text-red-400 hover:text-red-500 font-medium"
-                                    >
-                                        删除
-                                    </button>
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className={textSecondary}>源: {sub.rss_source_name || 'Unknown'}</span>
+                                    <div className="space-x-3 whitespace-nowrap">
+                                        <button
+                                            onClick={async () => {
+                                                if (confirm(`确定要更新 "${sub.name}" 的图片和简介吗？`)) {
+                                                    try {
+                                                        const res = await authenticatedFetch(`/api/series/${sub.id}/refresh-metadata`, { method: 'PUT' });
+                                                        if (res.ok) {
+                                                            alert('更新成功');
+                                                            fetchSubscriptions();
+                                                        } else {
+                                                            alert('更新失败');
+                                                        }
+                                                    } catch (e) {
+                                                        alert('更新出错: ' + e.message);
+                                                    }
+                                                }
+                                            }}
+                                            className="text-purple-400 hover:text-purple-500 font-medium"
+                                            title="重新刮削图片和简介"
+                                        >
+                                            ↻ 刷新
+                                        </button>
+                                        <button
+                                            onClick={() => handleEdit(sub)}
+                                            className="text-blue-400 hover:text-blue-500 font-medium"
+                                        >
+                                            编辑
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(sub.id)}
+                                            className="text-red-400 hover:text-red-500 font-medium"
+                                        >
+                                            删除
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -281,7 +370,7 @@ const SeriesPage = () => {
                                         value={formData.season}
                                         onChange={e => setFormData({ ...formData, season: e.target.value })}
                                         placeholder="例如: 1"
-                                        className={`w-full p-3 rounded-xl border ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
+                                        className={`w-full p-2 rounded-xl border ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
                                     />
                                 </div>
                                 <div>
@@ -289,7 +378,7 @@ const SeriesPage = () => {
                                     <select
                                         value={formData.quality}
                                         onChange={e => setFormData({ ...formData, quality: e.target.value })}
-                                        className={`w-full p-3 rounded-xl border ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
+                                        className={`w-full p-2.5 ounded-xl border ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
                                     >
                                         <option value="">不限 / Any</option>
                                         <option value="4K">4K / 2160p</option>
@@ -308,7 +397,9 @@ const SeriesPage = () => {
                                 >
                                     <option value="">请选择 RSS 源</option>
                                     {rssSources.map(src => (
-                                        <option key={src.id} value={src.id}>{src.name} - {src.url}</option>
+                                        <option key={src.id} value={src.id}>
+                                            {src.site_name ? `${src.site_name} - ${src.name}` : src.name}
+                                        </option>
                                     ))}
                                 </select>
                             </div>
@@ -342,7 +433,20 @@ const SeriesPage = () => {
                                 <h2 className={`text-xl font-bold ${textPrimary}`}>剧集详情</h2>
                                 <p className={`text-sm ${textSecondary} mt-1`}>已下载的集数概览</p>
                             </div>
-                            <button onClick={() => setShowEpisodesModal(false)} className={`p-2 rounded-full hover:bg-gray-700/50 ${textSecondary}`}>✕</button>
+                            <div className="flex items-center space-x-2">
+                                <button
+                                    onClick={handleRefreshEpisodes}
+                                    disabled={loadingEpisodes}
+                                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${loadingEpisodes
+                                        ? 'bg-gray-500/20 text-gray-500 cursor-not-allowed'
+                                        : 'bg-blue-500/20 text-blue-500 hover:bg-blue-500/30'
+                                        }`}
+                                    title="重新扫描集数信息"
+                                >
+                                    {loadingEpisodes ? '刷新中...' : '↻ 刷新'}
+                                </button>
+                                <button onClick={() => setShowEpisodesModal(false)} className={`p-2 rounded-full hover:bg-gray-700/50 ${textSecondary}`}>✕</button>
+                            </div>
                         </div>
                         <div className="p-6 overflow-y-auto flex-1">
                             {loadingEpisodes ? (
@@ -352,24 +456,47 @@ const SeriesPage = () => {
                                     暂无已下载的剧集记录
                                 </div>
                             ) : (
-                                Object.keys(episodesData).sort((a, b) => parseInt(a) - parseInt(b)).map(season => (
-                                    <div key={season} className="mb-6 last:mb-0">
-                                        <h3 className={`text-sm font-bold ${textPrimary} mb-3 flex items-center`}>
-                                            <span className="w-1 h-4 bg-blue-500 rounded-full mr-2"></span>
-                                            第 {season} 季
-                                            <span className={`ml-2 text-xs font-normal ${textSecondary} bg-gray-500/10 px-2 py-0.5 rounded-full`}>
-                                                共 {episodesData[season].length} 集
-                                            </span>
-                                        </h3>
-                                        <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
-                                            {episodesData[season].map(ep => (
-                                                <div key={ep} className={`aspect-square flex items-center justify-center rounded-lg font-mono text-sm font-bold bg-green-500/10 text-green-500 border border-green-500/20`}>
-                                                    {ep < 10 ? `0${ep}` : ep}
-                                                </div>
-                                            ))}
+                                Object.keys(episodesData).sort((a, b) => parseInt(a) - parseInt(b)).map(season => {
+                                    const seasonData = episodesData[season];
+                                    const episodes = seasonData.episodes || [];
+
+                                    return (
+                                        <div key={season} className="mb-6 last:mb-0">
+                                            <h3 className={`text-sm font-bold ${textPrimary} mb-3 flex items-center flex-wrap`}>
+                                                <span className="w-1 h-4 bg-blue-500 rounded-full mr-2"></span>
+                                                第 {season} 季
+                                                <span className={`ml-2 text-xs font-normal ${textSecondary} bg-gray-500/10 px-2 py-0.5 rounded-full`}>
+                                                    已下 {episodes.length} 集 {(currentSubscription?.total_episodes && parseInt(season) === parseInt(currentSubscription.season)) ? ` / 共 ${currentSubscription.total_episodes} 集` : ''}
+                                                </span>
+                                            </h3>
+                                            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                                                {(() => {
+                                                    // Generate full grid from 1 to max episode
+                                                    const isCurrentSeason = parseInt(season) === parseInt(currentSubscription?.season);
+                                                    const totalFromTMDB = isCurrentSeason ? (currentSubscription?.total_episodes || 0) : 0;
+                                                    const maxEp = Math.max(...episodes, totalFromTMDB, 10);
+                                                    const allEpisodes = Array.from({ length: maxEp }, (_, i) => i + 1);
+
+                                                    return allEpisodes.map(ep => {
+                                                        const isDownloaded = episodes.includes(ep);
+                                                        return (
+                                                            <div
+                                                                key={ep}
+                                                                className={`aspect-square flex items-center justify-center rounded-lg font-mono text-sm font-bold ${isDownloaded
+                                                                    ? 'bg-green-500/10 text-green-500 border border-green-500/20'
+                                                                    : 'bg-gray-500/5 text-gray-500/40 border border-gray-500/10'
+                                                                    }`}
+                                                                title={isDownloaded ? `已下载` : `未下载`}
+                                                            >
+                                                                {ep < 10 ? `0${ep}` : ep}
+                                                            </div>
+                                                        );
+                                                    });
+                                                })()}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </div>

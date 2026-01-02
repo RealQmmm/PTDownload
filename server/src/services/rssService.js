@@ -114,6 +114,7 @@ class RSSService {
 
                                 if (isRedundant) {
                                     if (enableLogs) console.log(`[RSS] Smart Skip: ${item.title} (Episodes ${candidateInfo.episodes.join(', ')} already downloaded)`);
+                                    loggerService.log(`匹配到资源但已存在: ${item.title} (原因: 剧集 ${candidateInfo.episodes.join(', ')} 已下载)`, 'info', task.id, items.length, matchCount);
                                     continue; // Skip processing this item
                                 }
                             }
@@ -160,6 +161,7 @@ class RSSService {
                                 const hashExistsInHistory = db.prepare('SELECT id, task_id FROM task_history WHERE item_hash = ?').get(torrentHash);
                                 if (hashExistsInHistory) {
                                     if (enableLogs) console.log(`[RSS] Hash already in task_history for ${item.title} (${torrentHash}). Skipping.`);
+                                    loggerService.log(`匹配到资源但已存在: ${item.title} (原因: Hash ${torrentHash} 已在历史记录)`, 'info', task.id, items.length, matchCount);
                                     continue;
                                 }
 
@@ -178,6 +180,7 @@ class RSSService {
                                                 if (existingTorrent) {
                                                     hashExistsInDownloader = true;
                                                     if (enableLogs) console.log(`[RSS] Hash already exists in downloader (${client.name || client.type}) for ${item.title} (${torrentHash}). Skipping.`);
+                                                    loggerService.log(`匹配到资源但已存在: ${item.title} (原因: Hash ${torrentHash.substring(0, 8)}... 已在下载器)`, 'info', task.id, items.length, matchCount);
                                                     break;
                                                 }
                                             }

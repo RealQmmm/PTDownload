@@ -81,11 +81,22 @@ const episodeParser = {
                 if (xMatch) {
                     season = parseInt(xMatch[1]);
                     episodes.push(parseInt(xMatch[2]));
+                } else {
+                    // Season pack detection: S01, Season 1, etc. (without episode numbers)
+                    // Match season followed by non-digit delimiter (., -, space, etc.)
+                    const seasonOnlyRegex = /(?:^|[\s\.\[\(])(?:S|Season)[\s\.]?(\d+)(?=[\s\.\-\]\)]|$)/i;
+                    const sOnlyMatch = cleanTitle.match(seasonOnlyRegex);
+                    if (sOnlyMatch) {
+                        season = parseInt(sOnlyMatch[1]);
+                        // episodes remains empty for season packs
+                    }
                 }
             }
         }
 
-        if (episodes.length === 0) return null;
+        // Allow returning season-only results for season packs
+        // Return null only if we found neither season nor episodes
+        if (season === null && episodes.length === 0) return null;
 
         return {
             season,

@@ -3,9 +3,9 @@ const router = express.Router();
 const seriesService = require('../services/seriesService');
 
 // Get all subscriptions
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
     try {
-        const subs = seriesService.getAllSubscriptions();
+        const subs = await seriesService.getAllSubscriptions();
         res.json(subs);
     } catch (err) {
         console.error(err);
@@ -14,9 +14,10 @@ router.get('/', (req, res) => {
 });
 
 // Create subscription
-router.post('/', (req, res) => {
+// Create subscription
+router.post('/', async (req, res) => {
     try {
-        const id = seriesService.createSubscription(req.body);
+        const id = await seriesService.createSubscription(req.body);
         res.json({ success: true, id });
     } catch (err) {
         console.error(err);
@@ -25,9 +26,9 @@ router.post('/', (req, res) => {
 });
 
 // Update subscription
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
     try {
-        const result = seriesService.updateSubscription(req.params.id, req.body);
+        const result = await seriesService.updateSubscription(req.params.id, req.body);
         res.json({ success: true, data: result });
     } catch (err) {
         console.error(err);
@@ -46,10 +47,30 @@ router.delete('/:id', (req, res) => {
     }
 });
 
-router.get('/:id/episodes', (req, res) => {
+router.get('/:id/episodes', async (req, res) => {
     try {
-        const episodes = seriesService.getEpisodes(req.params.id);
+        const skipFileScan = req.query.skipFileScan === 'true';
+        let episodes;
+
+        if (skipFileScan) {
+            episodes = await seriesService.getEpisodes(req.params.id);
+        } else {
+            // Full sync from history and downloader
+            episodes = await seriesService.syncEpisodesFromHistory(req.params.id);
+        }
+
         res.json(episodes);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Refresh metadata
+router.put('/:id/refresh-metadata', async (req, res) => {
+    try {
+        const result = await seriesService.refreshMetadata(req.params.id);
+        res.json({ success: true, data: result });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: err.message });

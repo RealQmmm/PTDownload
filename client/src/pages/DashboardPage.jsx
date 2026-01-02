@@ -247,12 +247,12 @@ const DashboardPage = ({ setActiveTab }) => {
                         <p className={`${textSecondary} text-sm font-bold uppercase mb-3`}>流量统计 (今日)</p>
                         <div className="space-y-3">
                             <div className="flex justify-between items-center">
-                                <span className={`${textSecondary} text-base`}>下载</span>
-                                <span className={`text-xl font-bold ${textPrimary}`}>{formatBytes(downloadStats.totalDownloaded || 0)}</span>
+                                <span className={`${textSecondary} text-sm`}>下载</span>
+                                <span className={`text-lg font-bold ${textPrimary}`}>{formatBytes(downloadStats.totalDownloaded || 0)}</span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className={`${textSecondary} text-base`}>上传</span>
-                                <span className={`text-xl font-bold text-blue-500`}>{formatBytes(downloadStats.totalUploaded || 0)}</span>
+                                <span className={`${textSecondary} text-sm`}>上传</span>
+                                <span className={`text-lg font-bold text-blue-500`}>{formatBytes(downloadStats.totalUploaded || 0)}</span>
                             </div>
                         </div>
                     </div>
@@ -275,12 +275,12 @@ const DashboardPage = ({ setActiveTab }) => {
                         <p className={`${textSecondary} text-sm font-bold uppercase mb-3`}>即时速率</p>
                         <div className="space-y-3">
                             <div className="flex justify-between items-center">
-                                <span className={`${textSecondary} text-base`}>下载速度</span>
-                                <span className={`text-xl font-bold text-green-500`}>{formatSpeed(downloadStats.totalDownloadSpeed || 0)}</span>
+                                <span className={`${textSecondary} text-sm`}>下载速度</span>
+                                <span className={`text-lg font-bold text-green-500`}>{formatSpeed(downloadStats.totalDownloadSpeed || 0)}</span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className={`${textSecondary} text-base`}>上传速度</span>
-                                <span className={`text-xl font-bold text-blue-500`}>{formatSpeed(downloadStats.totalUploadSpeed || 0)}</span>
+                                <span className={`${textSecondary} text-sm`}>上传速度</span>
+                                <span className={`text-lg font-bold text-blue-500`}>{formatSpeed(downloadStats.totalUploadSpeed || 0)}</span>
                             </div>
                         </div>
                     </div>

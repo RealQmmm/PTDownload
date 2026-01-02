@@ -65,7 +65,7 @@ router.post('/', (req, res) => {
 router.get('/export', (req, res) => {
     try {
         const db = getDB();
-        const tables = ['sites', 'clients', 'tasks', 'rss_sources', 'settings', 'daily_stats', 'task_history', 'stats_checkpoint', 'site_daily_stats', 'users', 'series_subscriptions', 'download_paths'];
+        const tables = ['sites', 'clients', 'tasks', 'rss_sources', 'settings', 'daily_stats', 'task_history', 'stats_checkpoint', 'site_daily_stats', 'users', 'series_subscriptions', 'series_episodes', 'download_paths'];
         const data = {};
 
         tables.forEach(table => {
@@ -109,7 +109,7 @@ router.post('/import', async (req, res) => {
 
     try {
         const db = getDB();
-        const tables = ['sites', 'clients', 'tasks', 'rss_sources', 'settings', 'daily_stats', 'task_history', 'task_logs', 'stats_checkpoint', 'site_daily_stats', 'users', 'series_subscriptions', 'download_paths'];
+        const tables = ['sites', 'clients', 'tasks', 'rss_sources', 'settings', 'daily_stats', 'task_history', 'stats_checkpoint', 'site_daily_stats', 'users', 'series_subscriptions', 'series_episodes', 'download_paths'];
 
         const importTransaction = db.transaction((backupContent) => {
             // Disable foreign keys temporarily to avoid issues during deletion/insertion

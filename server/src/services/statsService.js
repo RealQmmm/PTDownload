@@ -314,6 +314,9 @@ class StatsService {
                         db.prepare('UPDATE task_history SET is_finished = 1, finish_time = ?, download_time = ? WHERE id = ?')
                             .run(finishTime, downloadTime, item.id);
                         if (enableLogs) console.log(`[Stats] Marked item as finished: "${item.item_title}"`);
+
+                        // Parse and store episodes for series subscriptions
+                        await this._parseAndStoreEpisodes(item, torrent, db, enableLogs);
                     }
                 } else {
                     // LOOPHOLE FIX: If torrent is MISSING from client but was in our unfinished list
@@ -479,6 +482,96 @@ class StatsService {
         } catch (err) {
             console.error('[Stats] Bulk sync failed:', err.message);
             return { success: false, message: err.message };
+        }
+    }
+
+    /**
+     * Parse and store episodes when a series torrent completes
+     */
+    async _parseAndStoreEpisodes(item, torrent, db, enableLogs) {
+        try {
+            // Check if this is a series task
+            if (!item.task_id) return;
+
+            const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(item.task_id);
+            if (!task || task.type !== 'rss') return;
+
+            // Find the series subscription for this task
+            const subscription = db.prepare('SELECT * FROM series_subscriptions WHERE task_id = ?').get(item.task_id);
+            if (!subscription) return;
+
+            if (enableLogs) console.log(`[Stats] Parsing episodes for series: ${subscription.name}, torrent: ${item.item_title}`);
+
+            const episodeParser = require('../utils/episodeParser');
+            const parsed = episodeParser.parse(item.item_title);
+
+            const episodes = [];
+
+            // Parse from title
+            if (parsed && parsed.episodes && parsed.episodes.length > 0) {
+                const season = parsed.season || subscription.season || 1;
+                parsed.episodes.forEach(ep => {
+                    episodes.push({ season, episode: ep });
+                });
+            } else if (parsed && parsed.season !== null) {
+                // Season pack - need to scan files
+                const season = parsed.season;
+
+                if (enableLogs) console.log(`[Stats] Detected season pack, scanning files...`);
+
+                // Get torrent files
+                const downloaderService = require('./downloaderService');
+                const clientService = require('./clientService');
+                const clients = clientService.getAllClients();
+
+                for (const client of clients) {
+                    try {
+                        const filesResult = await downloaderService.getTorrentFiles(client, item.item_hash);
+                        if (filesResult.success && filesResult.files && filesResult.files.length > 0) {
+                            if (enableLogs) console.log(`[Stats] Found ${filesResult.files.length} files in season pack`);
+
+                            filesResult.files.forEach(file => {
+                                const fileParsed = episodeParser.parse(file.name);
+                                if (fileParsed && fileParsed.episodes && fileParsed.episodes.length > 0) {
+                                    fileParsed.episodes.forEach(ep => {
+                                        episodes.push({ season, episode: ep });
+                                    });
+                                }
+                            });
+                            break;
+                        }
+                    } catch (e) {
+                        // Try next client
+                    }
+                }
+            }
+
+            // Insert episodes into database
+            if (episodes.length > 0) {
+                const insertStmt = db.prepare(`
+                    INSERT OR IGNORE INTO series_episodes 
+                    (subscription_id, season, episode, torrent_hash, torrent_title, download_time)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                `);
+
+                let inserted = 0;
+                episodes.forEach(ep => {
+                    const result = insertStmt.run(
+                        subscription.id,
+                        ep.season,
+                        ep.episode,
+                        item.item_hash,
+                        item.item_title,
+                        item.download_time || new Date().toISOString()
+                    );
+                    if (result.changes > 0) inserted++;
+                });
+
+                if (enableLogs) console.log(`[Stats] Stored ${inserted} episodes for ${subscription.name}`);
+            }
+
+        } catch (err) {
+            console.error('[Stats] Failed to parse/store episodes:', err);
         }
     }
 }

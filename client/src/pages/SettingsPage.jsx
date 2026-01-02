@@ -18,6 +18,11 @@ const SettingsPage = () => {
     });
     const [searchLimit, setSearchLimit] = useState('1');
     const [searchMode, setSearchMode] = useState('browse');
+    const [tmdbSettings, setTmdbSettings] = useState({
+        tmdb_api_key: '',
+        tmdb_base_url: '',
+        tmdb_image_base_url: ''
+    });
 
     const handleSavePassword = async () => {
         if (!passwordData.oldPassword || !passwordData.newPassword) {
@@ -93,6 +98,11 @@ const SettingsPage = () => {
             });
             setSearchLimit(data.search_page_limit || '1');
             setSearchMode(data.search_mode || 'browse');
+            setTmdbSettings({
+                tmdb_api_key: data.tmdb_api_key || '',
+                tmdb_base_url: data.tmdb_base_url || '',
+                tmdb_image_base_url: data.tmdb_image_base_url || ''
+            });
             setSecuritySettings({
                 security_login_limit: data.security_login_limit || '5'
             });
@@ -156,8 +166,11 @@ const SettingsPage = () => {
                     search_mode: searchMode,
                     cookie_check_interval: cookieCheckInterval,
                     checkin_time: checkinTime,
+                    cookie_check_interval: cookieCheckInterval,
+                    checkin_time: checkinTime,
                     ...logSettings,
-                    ...securitySettings
+                    ...securitySettings,
+                    ...tmdbSettings
                 })
             });
             if (res.ok) {
@@ -572,6 +585,48 @@ const SettingsPage = () => {
                                     </div>
                                 </div>
                             </div>
+
+                            <hr className={borderColor} />
+
+                            {/* Section: TMDB Settings */}
+                            <div>
+                                <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>TMDB 刮削设置 (图片/元数据)</label>
+                                <div className="grid grid-cols-1 gap-4">
+                                    <div>
+                                        <label className={`block text-xs ${textSecondary} mb-1`}>API Key</label>
+                                        <input
+                                            type="text"
+                                            value={tmdbSettings.tmdb_api_key}
+                                            onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_api_key: e.target.value })}
+                                            className={`w-full ${inputBg} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
+                                            placeholder="例如: 107492d..."
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className={`block text-xs ${textSecondary} mb-1`}>API Base URL (可用于代理)</label>
+                                            <input
+                                                type="text"
+                                                value={tmdbSettings.tmdb_base_url}
+                                                onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_base_url: e.target.value })}
+                                                className={`w-full ${inputBg} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
+                                                placeholder="默认: https://api.themoviedb.org/3"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className={`block text-xs ${textSecondary} mb-1`}>Image Base URL</label>
+                                            <input
+                                                type="text"
+                                                value={tmdbSettings.tmdb_image_base_url}
+                                                onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_image_base_url: e.target.value })}
+                                                className={`w-full ${inputBg} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
+                                                placeholder="默认: https://image.tmdb.org/t/p/w300"
+                                            />
+                                        </div>
+                                    </div>
+                                    <p className={`text-[10px] ${textSecondary}`}>注意: 如果您在国内无法访问 TMDB，请修改 Base URL 为可用的镜像或反代地址。</p>
+                                </div>
+                            </div>
                         </div>
 
                         <hr className={borderColor} />
@@ -612,7 +667,7 @@ const SettingsPage = () => {
                                 {saving ? '保存中...' : '提交所有设置'}
                             </button>
                         </div>
-                    </div>
+                    </div >
                 );
             case 'notifications':
                 return (

@@ -433,6 +433,73 @@ class DownloaderService {
         }
     }
 
+    // Get files list for a specific torrent
+    async getTorrentFiles(client, hash) {
+        const { type, host, port, username, password } = client;
+        const baseUrl = `http://${host}:${port}`;
+
+        try {
+            if (type === 'qBittorrent') {
+                const loginRes = await axios.post(
+                    `${baseUrl}/api/v2/auth/login`,
+                    `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000 }
+                );
+                const cookie = loginRes.headers['set-cookie'];
+
+                const filesRes = await axios.get(
+                    `${baseUrl}/api/v2/torrents/files?hash=${hash}`,
+                    { headers: { 'Cookie': cookie }, timeout: 5000 }
+                );
+
+                return {
+                    success: true,
+                    files: (filesRes.data || []).map(f => ({ name: f.name, size: f.size }))
+                };
+            }
+
+            if (type === 'Transmission') {
+                const rpcUrl = `${baseUrl}/transmission/rpc`;
+                const auth = Buffer.from(`${username}:${password}`).toString('base64');
+                const headers = { 'Authorization': `Basic ${auth}` };
+
+                let sessionId = '';
+                try {
+                    await axios.get(rpcUrl, { headers, timeout: 5000 });
+                } catch (err) {
+                    if (err.response && err.response.status === 409) {
+                        sessionId = err.response.headers['x-transmission-session-id'];
+                    } else {
+                        throw err;
+                    }
+                }
+
+                const filesRes = await axios.post(
+                    rpcUrl,
+                    {
+                        method: 'torrent-get',
+                        arguments: {
+                            ids: [hash],
+                            fields: ['files']
+                        }
+                    },
+                    { headers: { ...headers, 'X-Transmission-Session-Id': sessionId }, timeout: 5000 }
+                );
+
+                const torrent = filesRes.data?.arguments?.torrents?.[0];
+                return {
+                    success: true,
+                    files: (torrent?.files || []).map(f => ({ name: f.name, size: f.length }))
+                };
+            }
+
+            return { success: false, message: '不支持的客户端类型', files: [] };
+        } catch (err) {
+            console.error(`Get torrent files failed:`, err.message);
+            return { success: false, message: err.message, files: [] };
+        }
+    }
+
     // Delete torrent
     async deleteTorrent(client, hash, deleteFiles = true) {
         const { type, host, port, username, password } = client;
