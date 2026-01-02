@@ -127,12 +127,16 @@ router.post('/import', async (req, res) => {
 
         importTransaction(data);
 
-        // RE-INITIALIZE STATS SERVICE to reload memory stats from DB
+        // RE-INITIALIZE SERVICES
         try {
             const statsService = require('../services/statsService');
             await statsService.init();
+
+            const schedulerService = require('../services/schedulerService');
+            schedulerService.reload();
+            console.log('Scheduler reloaded after import.');
         } catch (e) {
-            console.error('Failed to re-init stats service after import:', e);
+            console.error('Failed to re-init services after import:', e);
         }
 
         res.json({ success: true, message: '数据导入成功，统计数据已重载。' });

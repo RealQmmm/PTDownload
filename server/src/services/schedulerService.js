@@ -15,24 +15,45 @@ class SchedulerService {
 
     init() {
         if (this._isLogEnabled()) console.log('Initializing scheduler...');
+
+        // Init tasks
+        this.reloadTasks();
+
+        // Start system jobs
+        this.startCleanupJob();
+        this.startCookieCheckJob();
+        this.startCheckinJob();
+        this.startAutoCleanupJob();
+    }
+
+    reload() {
+        if (this._isLogEnabled()) console.log('Reloading scheduler...');
+
+        // Reload tasks
+        this.reloadTasks();
+
+        // Restart system jobs (settings might have changed)
+        this.startCleanupJob();
+        this.startCookieCheckJob();
+        this.startCheckinJob();
+        this.startAutoCleanupJob();
+    }
+
+    reloadTasks() {
+        // Cancel all existing task jobs
+        for (const [id, job] of this.jobs) {
+            job.cancel();
+        }
+        this.jobs.clear();
+
+        // Load tasks from DB
         const tasks = taskService.getAllTasks();
         tasks.forEach(task => {
             if (task.enabled) {
                 this.scheduleTask(task);
             }
         });
-
-        // Start daily cleanup job at 3:00 AM
-        this.startCleanupJob();
-
-        // Start cookie check job
-        this.startCookieCheckJob();
-
-        // Start checkin job
-        this.startCheckinJob();
-
-        // Start auto-cleanup job
-        this.startAutoCleanupJob();
+        if (this._isLogEnabled()) console.log(`Loaded and scheduled ${this.jobs.size} tasks.`);
     }
 
     startCookieCheckJob() {
