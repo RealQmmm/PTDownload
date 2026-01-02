@@ -81,6 +81,46 @@ class RSSService {
                     let exists = db.prepare('SELECT id FROM task_history WHERE task_id = ? AND item_guid = ?').get(task.id, item.guid);
 
                     if (!exists) {
+                        // Smart Series Filter: Check if episodes are already downloaded
+                        try {
+                            const episodeParser = require('../utils/episodeParser');
+                            const candidateInfo = episodeParser.parse(item.title);
+
+                            // Only apply if we detected valid episode info
+                            if (candidateInfo && candidateInfo.episodes.length > 0) {
+                                const historyItems = db.prepare('SELECT item_title FROM task_history WHERE task_id = ?').all(task.id);
+                                const downloadedEpisodes = new Set();
+                                const targetSeason = candidateInfo.season;
+
+                                historyItems.forEach(hItem => {
+                                    const hInfo = episodeParser.parse(hItem.item_title);
+                                    if (hInfo) {
+                                        // Strict Season Matching: Only consider history items from the same season
+                                        // If candidate has no season (unlikely for good PT), we match strictly or loosely?
+                                        // Logic: If candidate has season, history MUST match it.
+                                        // If candidate has NO season, we match anything (risky but okay for pure anime usage sometimes)
+                                        if (targetSeason !== null) {
+                                            if (hInfo.season === targetSeason) {
+                                                hInfo.episodes.forEach(ep => downloadedEpisodes.add(ep));
+                                            }
+                                        } else {
+                                            hInfo.episodes.forEach(ep => downloadedEpisodes.add(ep));
+                                        }
+                                    }
+                                });
+
+                                // Check if ALL candidate episodes exist in history
+                                const isRedundant = candidateInfo.episodes.every(ep => downloadedEpisodes.has(ep));
+
+                                if (isRedundant) {
+                                    if (enableLogs) console.log(`[RSS] Smart Skip: ${item.title} (Episodes ${candidateInfo.episodes.join(', ')} already downloaded)`);
+                                    continue; // Skip processing this item
+                                }
+                            }
+                        } catch (err) {
+                            if (enableLogs) console.warn(`[RSS] Smart check error: ${err.message}`);
+                        }
+
                         try {
                             // Check by Hash (slower, requires parsing)
                             let torrentHash = null;
@@ -223,24 +263,38 @@ class RSSService {
     }
 
     _itemMatches(item, config) {
-        const { keywords, exclude, size_min, size_max } = config;
-        const title = item.title.toLowerCase();
+        const { keywords, smart_regex, exclude, size_min, size_max } = config;
+        const title = item.title;
 
-        // Check include keywords (AND logic for all keywords if provided)
+        // 1. Check Smart Regex (if provided)
+        if (smart_regex) {
+            try {
+                const regex = new RegExp(smart_regex, 'i');
+                if (!regex.test(title)) return false;
+            } catch (e) {
+                console.error(`[RSS] Invalid Smart Regex: ${smart_regex}`, e);
+                // Return false on invalid regex? or ignore? Safest to return false (no match).
+                return false;
+            }
+        }
+
+        const titleLower = title.toLowerCase();
+
+        // 2. Check include keywords (AND logic for all keywords if provided)
         if (keywords && keywords.trim()) {
-            const includeList = keywords.toLowerCase().split(',').map(k => k.trim());
-            const matches = includeList.every(k => title.includes(k));
+            const includeList = keywords.toLowerCase().split(',').map(k => k.trim()).filter(k => k);
+            const matches = includeList.every(k => titleLower.includes(k));
             if (!matches) return false;
         }
 
-        // Check exclude keywords (OR logic)
+        // 3. Check exclude keywords (OR logic)
         if (exclude && exclude.trim()) {
-            const excludeList = exclude.toLowerCase().split(',').map(k => k.trim());
-            const isExcluded = excludeList.some(k => title.includes(k));
+            const excludeList = exclude.toLowerCase().split(',').map(k => k.trim()).filter(k => k);
+            const isExcluded = excludeList.some(k => titleLower.includes(k));
             if (isExcluded) return false;
         }
 
-        // Check size (size_min/max in MB)
+        // 4. Check size (size_min/max in MB)
         if (item.size > 0) {
             const sizeMB = item.size / (1024 * 1024);
             if (size_min && sizeMB < parseFloat(size_min)) return false;

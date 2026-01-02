@@ -189,6 +189,13 @@ const TasksPage = () => {
     };
 
     const deleteTask = async (id) => {
+        const task = tasks.find(t => t.id === id);
+
+        if (task && (task.name.startsWith('[追剧]') || task.name.startsWith('[Series]'))) {
+            alert("⚠️ 禁止删除\n\n该任务由【追剧订阅】自动生成，不能直接删除。\n请前往「追剧管理」页面删除对应的订阅，系统将自动清理该任务。");
+            return;
+        }
+
         if (!confirm('确定删除该自动化任务吗？')) return;
         try {
             console.log('Deleting task:', id);
@@ -582,6 +589,37 @@ const TasksPage = () => {
                                     <span className="mr-2">🔍</span> 过滤规则
                                 </h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="md:col-span-2">
+                                        <div className="flex items-center mb-1">
+                                            <label className={`block text-[10px] font-bold ${textSecondary} uppercase mr-2`}>智能正则匹配 (Smart Regex)</label>
+                                            <div className="relative group">
+                                                <button type="button" className="text-blue-500 hover:text-blue-600 transition-colors">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                </button>
+                                                {/* Tooltip */}
+                                                <div className="absolute left-0 bottom-full mb-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 pointer-events-none">
+                                                    <p className="font-bold mb-1">支持标准 JavaScript 正则表达式</p>
+                                                    <ul className="list-disc pl-3 space-y-1 text-[10px] text-gray-300">
+                                                        <li><code>.*</code> : 匹配任意字符</li>
+                                                        <li><code>S0?1</code> : 匹配 S1 或 S01</li>
+                                                        <li><code>(4k|1080p)</code> : 匹配其中之一</li>
+                                                        <li><code>House.*S01</code> : 匹配 House 开头且含 S01</li>
+                                                    </ul>
+                                                    <div className="absolute left-2 -bottom-1 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={formData.filter_config.smart_regex || ''}
+                                            onChange={(e) => setFormData({ ...formData, filter_config: { ...formData.filter_config, smart_regex: e.target.value } })}
+                                            className={`w-full ${inputBg} border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-500 font-mono`}
+                                            placeholder="例如: Game\.of\.Thrones.*S0?1.*(2160p|4k)"
+                                        />
+                                        <p className="text-[10px] text-gray-400 mt-1">设置此项后将优先使用正则匹配，关键词作为二次过滤。</p>
+                                    </div>
                                     <div className="md:col-span-2">
                                         <label className={`block text-[10px] font-bold ${textSecondary} mb-1 uppercase`}>包含关键词 (逗号分隔)</label>
                                         <input

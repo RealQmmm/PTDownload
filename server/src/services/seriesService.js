@@ -63,7 +63,8 @@ class SeriesService {
         // We construct the filter config JSON. 
         // Note: For RSS tasks, 'filter_config' is the JSON string.
         const filterConfig = {
-            keywords: smartRegex,
+            keywords: '',
+            smart_regex: smartRegex,
             exclude_keywords: '',
             size_min: 0,
             size_max: 0
@@ -126,15 +127,22 @@ class SeriesService {
         if (!rssSource) throw new Error('Invalid RSS Source');
 
         const filterConfig = {
-            keywords: smartRegex, // Use regex as keywords? rssService supports regex if formatted correctly?
-            // Actually existing rssService might expect plain keywords OR regex. 
-            // Let's wrap in specific format if needed, or assume keywords field supports simple regex.
-            // For now, let's assume putting regex in keywords works or update logic.
-            // Current rssService: "item.title.match(new RegExp(keyword, 'i'))" => YES.
+            keywords: '', // Clear keywords, use regex instead
+            smart_regex: smartRegex,
             exclude_keywords: '',
             size_min: 0,
             size_max: 0
         };
+
+        // 2. Determine Save Path
+        let finalSavePath = save_path;
+        if (!finalSavePath) {
+            // Try to find default path for Series
+            const defaultPath = this._getDB().prepare("SELECT path FROM download_paths WHERE name IN ('Series', '剧集') LIMIT 1").get();
+            if (defaultPath) {
+                finalSavePath = defaultPath.path;
+            }
+        }
 
         const taskId = taskService.createTask({
             name: `[追剧] ${name} ${season ? 'S' + season : ''} `,
@@ -144,7 +152,7 @@ class SeriesService {
             rss_url: rssSource.url,
             filter_config: JSON.stringify(filterConfig),
             client_id,
-            save_path,
+            save_path: finalSavePath,
             category,
             enabled: 1
         });
@@ -185,9 +193,9 @@ class SeriesService {
 
         if (season) {
             // Match S02, s2, S 2, Season 2
-            // Simplest robust match: S0?2
+            // Simplest robust match: S0?2 (Matches S02 or S2)
             const sNum = parseInt(season);
-            regex += `S0 ? ${sNum} `;
+            regex += `S0?${sNum}`;
         }
 
         if (quality) {
