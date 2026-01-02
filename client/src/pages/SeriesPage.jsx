@@ -275,10 +275,12 @@ const SeriesPage = () => {
                             <div className="flex-1 p-5 min-w-0">
                                 <div className="flex justify-between items-start mb-3">
                                     <div className="min-w-0 flex-1 mr-2">
-                                        <h3 className={`text-lg font-bold ${textPrimary} truncate`} title={sub.name}>{sub.name}</h3>
-                                        <div className="flex gap-2 mt-1">
-                                            {sub.season && <span className="bg-purple-500/10 text-purple-500 px-2 py-0.5 rounded text-xs font-bold">S{sub.season}</span>}
-                                            {sub.quality && <span className="bg-blue-500/10 text-blue-500 px-2 py-0.5 rounded text-xs font-bold">{sub.quality}</span>}
+                                        <div className="flex items-center gap-2 overflow-hidden">
+                                            <h3 className={`text-lg font-bold ${textPrimary} truncate`} title={sub.name}>{sub.name}</h3>
+                                            <div className="flex gap-1 flex-shrink-0">
+                                                {sub.season && <span className="bg-purple-500/10 text-purple-500 px-1.5 py-0.5 rounded text-[10px] font-bold">S{sub.season}</span>}
+                                                {sub.quality && <span className="bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded text-[10px] font-bold">{sub.quality}</span>}
+                                            </div>
                                         </div>
                                     </div>
                                     <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${sub.task_enabled ? 'bg-green-500/10 text-green-500' : 'bg-gray-500/10 text-gray-500'}`}>
@@ -286,8 +288,10 @@ const SeriesPage = () => {
                                     </div>
                                 </div>
 
-                                <div className={`text-xs ${textSecondary} ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'} p-3 rounded-lg font-mono mb-4 break-all`}>
-                                    Regex: {sub.smart_regex}
+                                <div className={`text-xs ${textSecondary} ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'} p-3 rounded-lg mb-4`}>
+                                    <div className="line-clamp-4 mb-2 min-h-[4.5rem] italic leading-relaxed" title={sub.overview}>
+                                        {sub.overview || '暂无简介，点击刷新尝试从 TMDB 获取'}
+                                    </div>
                                     <div className={`mt-2 pt-2 border-t ${borderColor} flex justify-between items-center`}>
                                         <span className="text-blue-500 font-bold">已下载: {sub.episode_count || 0} 集</span>
                                         <button
