@@ -255,17 +255,48 @@ const parseUserStats = (html, type) => {
         const levelMatch = text.match(/(等级|Class|Level)[:\s]+([^\s]+)/i);
         if (levelMatch) stats.level = levelMatch[2];
 
-        // Check-in status detection
+        // Check-in status detection - Enhanced with more keywords and debug logging
         const alreadyCheckedIn = text.includes('已经签到') ||
             text.includes('今日已签到') ||
             text.includes('签到成功') ||
             text.includes('已签到') ||
+            text.includes('今天已签') ||
+            text.includes('您今天已经签到') ||
+            text.includes('您已签到') ||
+            text.includes('连续签到') ||
+            text.includes('签到已得') ||
+            text.includes('这是您的第') ||  // "这是您的第X次签到"
+            text.includes('次签到') ||
             text.includes('Attendance successful') ||
             text.includes('You have already attended') ||
-            text.includes('You have already earned');
+            text.includes('You have already earned') ||
+            text.includes('Already checked in') ||
+            text.includes('already signed in') ||
+            text.includes('checked in today') ||
+            html.includes('已签到') ||
+            html.includes('signed_in') ||
+            html.includes('checked_in') ||
+            html.includes('attendance_yes') ||
+            // Check for disabled checkin button (common pattern)
+            html.includes('disabled') && (html.includes('签到') || html.includes('checkin') || html.includes('attendance'));
 
-        const checkinLink = $('a[href*="attendance.php"], a[href*="add_bonus"], a[href*="checkin"], button:contains("签到")');
-        stats.isCheckedIn = alreadyCheckedIn || (!checkinLink.length && (text.includes('退出') || text.includes('Logout')));
+        // Debug logging (only if system logs enabled)
+        const { getDB } = require('../db');
+        const db = getDB();
+        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
+        const enableLogs = logSetting && logSetting.value === 'true';
+
+        if (enableLogs) {
+            // Log relevant text snippets for debugging
+            const checkinRelatedText = text.match(/.{0,50}(签到|checkin|attendance).{0,50}/gi);
+            if (checkinRelatedText && checkinRelatedText.length > 0) {
+                console.log(`[Checkin Debug] Found checkin-related text:`, checkinRelatedText.slice(0, 3));
+            }
+            console.log(`[Checkin Debug] isCheckedIn: ${alreadyCheckedIn}`);
+        }
+
+        // Only mark as checked in if we have clear evidence
+        stats.isCheckedIn = alreadyCheckedIn;
 
         return stats;
     }

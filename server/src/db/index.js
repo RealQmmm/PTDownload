@@ -91,6 +91,7 @@ function createTables() {
       save_path TEXT,
       category TEXT,
       enabled INTEGER DEFAULT 1,
+      auto_disable_on_match INTEGER DEFAULT 0, -- Auto-disable after first match (for one-time tasks like movies)
       last_run DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(site_id) REFERENCES sites(id),
@@ -220,7 +221,8 @@ function createTables() {
     'ALTER TABLE stats_checkpoint ADD COLUMN historical_total_downloaded INTEGER DEFAULT 0',
     'ALTER TABLE stats_checkpoint ADD COLUMN historical_total_uploaded INTEGER DEFAULT 0',
     'ALTER TABLE clients ADD COLUMN name TEXT',
-    'ALTER TABLE sites ADD COLUMN default_rss_url TEXT'
+    'ALTER TABLE sites ADD COLUMN default_rss_url TEXT',
+    'ALTER TABLE tasks ADD COLUMN auto_disable_on_match INTEGER DEFAULT 0'
   ];
 
   migrations.forEach(sql => {

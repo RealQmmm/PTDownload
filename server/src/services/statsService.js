@@ -325,6 +325,47 @@ class StatsService {
                     if (enableLogs) console.log(`[Stats] Marked missing torrent as finished (cleanup): "${item.item_title}"`);
                 }
             }
+
+            // 4. DELETE ORPHANED RECORDS
+            // Check all task_history records and delete those not found in any downloader
+            const allHistory = db.prepare('SELECT * FROM task_history').all();
+            let deletedCount = 0;
+
+            for (const historyItem of allHistory) {
+                const existsInDownloader = allTorrents.find(t => {
+                    // Match by hash (most reliable)
+                    if (historyItem.item_hash && t.hash) {
+                        return t.hash.toLowerCase() === historyItem.item_hash.toLowerCase();
+                    }
+
+                    // Fallback to name + size match
+                    if (!t.name) return false;
+                    const historyTitleNorm = normalize(historyItem.item_title);
+                    const tNameNorm = normalize(t.name);
+                    const nameMatch = tNameNorm === historyTitleNorm ||
+                        tNameNorm.includes(historyTitleNorm) ||
+                        historyTitleNorm.includes(tNameNorm);
+
+                    if (nameMatch && historyItem.item_size > 0 && t.size > 0) {
+                        const sizeDiff = Math.abs(t.size - historyItem.item_size);
+                        return sizeDiff < (historyItem.item_size * 0.01);
+                    }
+
+                    return nameMatch;
+                });
+
+                // If not found in any downloader, delete it
+                if (!existsInDownloader) {
+                    db.prepare('DELETE FROM task_history WHERE id = ?').run(historyItem.id);
+                    deletedCount++;
+                    if (enableLogs) console.log(`[Stats] Deleted orphaned record: "${historyItem.item_title}" (not found in any downloader)`);
+                }
+            }
+
+            if (deletedCount > 0) {
+                console.log(`[Stats] Deleted ${deletedCount} orphaned task_history records to sync with downloaders.`);
+            }
+
         } catch (err) {
             console.error('[Stats] Check completion failed:', err.message);
         }

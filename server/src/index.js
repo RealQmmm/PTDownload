@@ -76,10 +76,10 @@ const statsService = require('./services/statsService');
   await statsService.collectStats();
 })();
 
-// Collect every 5 seconds (Memory only)
+// Collect every 10 seconds (Memory only)
 setInterval(() => {
   statsService.collectStats();
-}, 5 * 1000);
+}, 10 * 1000);
 
 // Persist to DB every 5 minutes
 setInterval(() => {

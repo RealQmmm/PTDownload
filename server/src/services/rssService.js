@@ -116,11 +116,43 @@ class RSSService {
                             }
 
                             if (torrentHash) {
-                                // Check if this hash has already been processed for this task
-                                const hashExists = db.prepare('SELECT id FROM task_history WHERE task_id = ? AND item_hash = ?').get(task.id, torrentHash);
-                                if (hashExists) {
-                                    if (enableLogs) console.log(`[RSS] Duplicate hash detected for ${item.title} (${torrentHash}). Skipping.`);
+                                // 1. Check if this hash has already been processed for ANY task (not just this task)
+                                const hashExistsInHistory = db.prepare('SELECT id, task_id FROM task_history WHERE item_hash = ?').get(torrentHash);
+                                if (hashExistsInHistory) {
+                                    if (enableLogs) console.log(`[RSS] Hash already in task_history for ${item.title} (${torrentHash}). Skipping.`);
                                     continue;
+                                }
+
+                                // 2. Check if this hash exists in any downloader client
+                                try {
+                                    const allClients = clientService.getAllClients();
+                                    let hashExistsInDownloader = false;
+
+                                    for (const client of allClients) {
+                                        try {
+                                            const result = await downloaderService.getTorrents(client);
+                                            if (result.success && result.torrents) {
+                                                const existingTorrent = result.torrents.find(t =>
+                                                    t.hash && t.hash.toLowerCase() === torrentHash.toLowerCase()
+                                                );
+                                                if (existingTorrent) {
+                                                    hashExistsInDownloader = true;
+                                                    if (enableLogs) console.log(`[RSS] Hash already exists in downloader (${client.name || client.type}) for ${item.title} (${torrentHash}). Skipping.`);
+                                                    break;
+                                                }
+                                            }
+                                        } catch (clientErr) {
+                                            // Skip this client if error, continue checking others
+                                            if (enableLogs) console.warn(`[RSS] Failed to check client ${client.id}: ${clientErr.message}`);
+                                        }
+                                    }
+
+                                    if (hashExistsInDownloader) {
+                                        continue;
+                                    }
+                                } catch (downloaderCheckErr) {
+                                    if (enableLogs) console.warn(`[RSS] Failed to check downloaders: ${downloaderCheckErr.message}`);
+                                    // Continue anyway - better to potentially duplicate than miss a download
                                 }
                             }
 
@@ -164,7 +196,21 @@ class RSSService {
                 }
             }
 
-            loggerService.log(`成功发现 ${items.length} 个资源，匹配 ${matchCount} 个`, 'success', task.id, items.length, matchCount);
+            // Check if task should be auto-disabled after match
+            if (matchCount > 0 && task.auto_disable_on_match) {
+                if (enableLogs) console.log(`[RSS] Task "${task.name}" matched ${matchCount} item(s). Auto-disabling as configured.`);
+
+                // Disable the task
+                db.prepare('UPDATE tasks SET enabled = 0 WHERE id = ?').run(task.id);
+
+                // Cancel the scheduled job
+                const schedulerService = require('./schedulerService');
+                schedulerService.cancelTask(task.id);
+
+                loggerService.log(`任务已完成匹配并自动禁用（匹配 ${matchCount} 个资源）`, 'success', task.id, items.length, matchCount);
+            } else {
+                loggerService.log(`成功发现 ${items.length} 个资源，匹配 ${matchCount} 个`, 'success', task.id, items.length, matchCount);
+            }
 
         } catch (err) {
             if (enableLogs) console.error(`[RSS] Task ${task.name} failed:`, err.message);

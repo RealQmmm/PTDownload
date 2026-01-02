@@ -165,6 +165,7 @@ class SiteService {
                     if (stats.isCheckedIn) {
                         sql += ', last_checkin_at = ?';
                         params.push(now);
+                        if (enableLogs) console.log(`[Checkin] ${site.name} detected as already checked in today`);
                     }
 
                     sql += ' WHERE id = ?';
@@ -260,6 +261,7 @@ class SiteService {
                 if (stats.isCheckedIn) {
                     sql += ', last_checkin_at = ?';
                     params.push(now);
+                    if (enableLogs) console.log(`[Checkin] ${site.name} detected as already checked in (via refresh)`);
                 }
 
                 sql += ' WHERE id = ?';

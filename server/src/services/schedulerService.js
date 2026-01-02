@@ -153,15 +153,35 @@ class SchedulerService {
             this.jobs.get(task.id).cancel();
         }
 
-        console.log(`Scheduling task: ${task.name} with cron: ${task.cron}`);
+        console.log(`Scheduling task: ${task.name} (ID: ${task.id}) with cron: ${task.cron}`);
 
         try {
-            const job = schedule.scheduleJob(task.cron, () => {
-                this.executeTask(task);
+            // Store task ID instead of task object to avoid stale data
+            const taskId = task.id;
+
+            const job = schedule.scheduleJob(task.cron, async () => {
+                // Fetch latest task info from database each time
+                const latestTask = taskService.getTaskById(taskId);
+
+                if (!latestTask) {
+                    if (this._isLogEnabled()) console.warn(`Task ${taskId} no longer exists. Cancelling job.`);
+                    this.cancelTask(taskId);
+                    return;
+                }
+
+                if (!latestTask.enabled) {
+                    if (this._isLogEnabled()) console.log(`Task ${taskId} is disabled. Skipping execution.`);
+                    return;
+                }
+
+                await this.executeTask(latestTask);
             });
 
             if (job) {
                 this.jobs.set(task.id, job);
+                if (this._isLogEnabled()) console.log(`Successfully scheduled task ${task.id}: ${task.name}`);
+            } else {
+                console.error(`Failed to create schedule job for task ${task.id}. Invalid cron: ${task.cron}`);
             }
         } catch (err) {
             console.error(`Failed to schedule task ${task.id}:`, err.message);

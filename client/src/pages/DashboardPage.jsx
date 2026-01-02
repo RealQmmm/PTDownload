@@ -467,7 +467,7 @@ const DashboardPage = ({ setActiveTab }) => {
                                                 </td>
                                                 <td className="py-3 pl-2 text-right">
                                                     <span className={`inline-block px-1.5 py-0.5 border border-gray-600/30 rounded text-gray-400 text-[9px] uppercase font-mono whitespace-nowrap`}>
-                                                        {task.clientType || 'N/A'}
+                                                        {task.clientName || task.clientType || 'N/A'}
                                                     </span>
                                                 </td>
                                             </tr>

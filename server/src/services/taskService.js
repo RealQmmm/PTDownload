@@ -21,18 +21,18 @@ class TaskService {
     }
 
     createTask(task) {
-        const { name, type = 'rss', cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled = 1 } = task;
+        const { name, type = 'rss', cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled = 1, auto_disable_on_match = 0 } = task;
         const info = this._getDB().prepare(
-            'INSERT INTO tasks (name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        ).run(name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled);
+            'INSERT INTO tasks (name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled, auto_disable_on_match) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled, auto_disable_on_match);
         return info.lastInsertRowid;
     }
 
     updateTask(id, task) {
-        const { name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled } = task;
+        const { name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled, auto_disable_on_match } = task;
         return this._getDB().prepare(
-            'UPDATE tasks SET name = ?, type = ?, cron = ?, site_id = ?, rss_url = ?, filter_config = ?, client_id = ?, save_path = ?, category = ?, enabled = ? WHERE id = ?'
-        ).run(name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled, id);
+            'UPDATE tasks SET name = ?, type = ?, cron = ?, site_id = ?, rss_url = ?, filter_config = ?, client_id = ?, save_path = ?, category = ?, enabled = ?, auto_disable_on_match = ? WHERE id = ?'
+        ).run(name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled, auto_disable_on_match, id);
     }
 
     deleteTask(id) {
