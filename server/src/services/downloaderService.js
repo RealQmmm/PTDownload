@@ -338,7 +338,7 @@ class DownloaderService {
     // Add torrent from base64 encoded torrent file data
     async addTorrentFromData(client, torrentBase64, options = {}) {
         const { type, host, port, username, password } = client;
-        const { savePath, category } = options;
+        const { savePath, category, fileIndices } = options;
         const baseUrl = `http://${host}:${port}`;
 
         try {
@@ -369,7 +369,7 @@ class DownloaderService {
                 if (category) form.append('category', category);
 
                 // 3. Upload torrent
-                await axios.post(
+                const addRes = await axios.post(
                     `${baseUrl}/api/v2/torrents/add`,
                     form,
                     {
@@ -380,6 +380,48 @@ class DownloaderService {
                         timeout: 30000
                     }
                 );
+
+                // 4. If fileIndices specified, set file priorities
+                if (fileIndices && Array.isArray(fileIndices) && fileIndices.length > 0) {
+                    // Parse torrent to get hash
+                    const parseTorrent = require('parse-torrent');
+                    const parsed = parseTorrent(torrentBuffer);
+                    const hash = parsed.infoHash;
+
+                    // Wait a bit for qBittorrent to process the torrent
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    // Get torrent files to determine total file count
+                    const filesRes = await axios.get(
+                        `${baseUrl}/api/v2/torrents/files?hash=${hash}`,
+                        {
+                            headers: { 'Cookie': cookie },
+                            timeout: 5000
+                        }
+                    );
+
+                    const files = filesRes.data;
+                    if (files && files.length > 0) {
+                        // Create priority array: 0 = do not download, 1 = normal priority
+                        const priorities = files.map((_, idx) => fileIndices.includes(idx) ? 1 : 0);
+
+                        // Set file priorities
+                        await axios.post(
+                            `${baseUrl}/api/v2/torrents/filePrio`,
+                            `hash=${hash}&id=${priorities.map((p, i) => `${i}`).join('|')}&priority=${priorities.join('|')}`,
+                            {
+                                headers: {
+                                    'Content-Type': 'application/x-www-form-urlencoded',
+                                    'Cookie': cookie
+                                },
+                                timeout: 5000
+                            }
+                        );
+
+                        console.log(`[qBittorrent] Set file priorities for ${hash}: downloading ${fileIndices.length}/${files.length} files`);
+                    }
+                }
+
                 return { success: true, message: '已添加至 qBittorrent' };
             }
 
@@ -404,6 +446,26 @@ class DownloaderService {
                 const args = { metainfo: torrentBase64 };
                 if (savePath) args['download-dir'] = savePath;
 
+                // If fileIndices specified, set files-wanted
+                if (fileIndices && Array.isArray(fileIndices) && fileIndices.length > 0) {
+                    args['files-wanted'] = fileIndices;
+
+                    // We need to know total file count to set unwanted files
+                    // Parse torrent to get file list
+                    const parseTorrent = require('parse-torrent');
+                    const torrentBuffer = Buffer.from(torrentBase64, 'base64');
+                    const parsed = parseTorrent(torrentBuffer);
+
+                    if (parsed.files && parsed.files.length > 0) {
+                        const allIndices = Array.from({ length: parsed.files.length }, (_, i) => i);
+                        const unwantedIndices = allIndices.filter(i => !fileIndices.includes(i));
+                        if (unwantedIndices.length > 0) {
+                            args['files-unwanted'] = unwantedIndices;
+                        }
+                        console.log(`[Transmission] Selecting ${fileIndices.length}/${parsed.files.length} files`);
+                    }
+                }
+
                 await axios.post(
                     rpcUrl,
                     {
@@ -421,7 +483,7 @@ class DownloaderService {
             }
 
             if (type === 'Mock') {
-                console.log(`[Mock] Adding torrent data to ${host}:${port} with savePath: ${savePath}, category: ${category}`);
+                console.log(`[Mock] Adding torrent data to ${host}:${port} with savePath: ${savePath}, category: ${category}, fileIndices: ${fileIndices}`);
                 return { success: true, message: '已添加至 Mock 客户端' };
             }
 

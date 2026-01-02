@@ -201,15 +201,66 @@ class RSSService {
 
                             if (enableLogs) console.log(`[RSS] Match found: ${item.title}. Adding to downloader...`);
 
+                            // Determine which files to download (for smart episode filtering)
+                            let fileIndices = null;
+                            if (torrentData && !item.link.startsWith('magnet:')) {
+                                try {
+                                    const parseTorrent = require('parse-torrent');
+                                    const torrentBuffer = Buffer.from(torrentData, 'base64');
+                                    const parsed = parseTorrent(torrentBuffer);
+
+                                    if (parsed.files && parsed.files.length > 1) {
+                                        // Multi-file torrent, apply smart file selection
+                                        const episodeParser = require('../utils/episodeParser');
+                                        const fileSelector = require('../utils/fileSelector');
+                                        const candidateInfo = episodeParser.parse(item.title);
+
+                                        if (candidateInfo && candidateInfo.season !== null) {
+                                            // Get downloaded episodes for this season
+                                            const historyItems = db.prepare('SELECT item_title FROM task_history WHERE task_id = ?').all(task.id);
+                                            const downloadedEpisodes = new Set();
+
+                                            historyItems.forEach(hItem => {
+                                                const hInfo = episodeParser.parse(hItem.item_title);
+                                                if (hInfo && hInfo.season === candidateInfo.season) {
+                                                    hInfo.episodes.forEach(ep => downloadedEpisodes.add(ep));
+                                                }
+                                            });
+
+                                            if (downloadedEpisodes.size > 0) {
+                                                // Select files based on episode history
+                                                fileIndices = fileSelector.selectFiles(
+                                                    parsed.files,
+                                                    Array.from(downloadedEpisodes),
+                                                    candidateInfo.season
+                                                );
+
+                                                if (fileIndices.length === 0) {
+                                                    if (enableLogs) console.log(`[RSS] All files in ${item.title} already downloaded. Skipping.`);
+                                                    loggerService.log(`匹配到资源但已存在: ${item.title} (原因: 所有文件已下载)`, 'success', task.id, items.length, matchCount);
+                                                    continue;
+                                                }
+
+                                                if (enableLogs) console.log(`[RSS] Smart file selection: ${fileIndices.length}/${parsed.files.length} files selected for ${item.title}`);
+                                            }
+                                        }
+                                    }
+                                } catch (parseErr) {
+                                    if (enableLogs) console.warn(`[RSS] Failed to parse torrent for file selection: ${parseErr.message}`);
+                                    // Continue with full download if parsing fails
+                                }
+                            }
+
                             let result;
                             if (torrentData && !item.link.startsWith('magnet:')) {
-                                // If we have the file data, pass it along with save path and category
+                                // If we have the file data, pass it along with save path, category, and file selection
                                 result = await downloaderService.addTorrentFromData(targetClient, torrentData, {
                                     savePath: task.save_path,
-                                    category: task.category
+                                    category: task.category,
+                                    fileIndices: fileIndices
                                 });
                             } else {
-                                // Magnet or fallback
+                                // Magnet or fallback (file selection not supported for magnets)
                                 result = await downloaderService.addTorrent(targetClient, item.link, {
                                     savePath: task.save_path,
                                     category: task.category
@@ -219,7 +270,12 @@ class RSSService {
                             if (result.success) {
                                 db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, item_hash) VALUES (?, ?, ?, ?, ?)')
                                     .run(task.id, item.guid, item.title, item.size, torrentHash);
-                                if (enableLogs) console.log(`[RSS] Successfully added: ${item.title}`);
+
+                                let successMsg = `[RSS] Successfully added: ${item.title}`;
+                                if (fileIndices && fileIndices.length > 0) {
+                                    successMsg += ` (${fileIndices.length} files selected)`;
+                                }
+                                if (enableLogs) console.log(successMsg);
 
                                 // Send notification
                                 try {
