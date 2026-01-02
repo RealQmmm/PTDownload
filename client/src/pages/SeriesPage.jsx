@@ -92,56 +92,7 @@ const SeriesPage = () => {
         }
     };
 
-    // ... (rendering logic) ...
 
-    {
-        loadingEpisodes ? (
-            <div className={`text-center py-10 ${textSecondary}`}>加载数据中...</div>
-        ) : (!episodesData || Object.keys(episodesData).length === 0) ? (
-            <div className={`text-center py-10 ${textSecondary}`}>
-                暂无已下载的剧集记录
-            </div>
-        ) : (
-            Object.keys(episodesData).sort((a, b) => parseInt(a) - parseInt(b)).map(season => {
-                const seasonData = episodesData[season];
-                // Handle both old format (array) and new format (object)
-                const episodes = Array.isArray(seasonData) ? seasonData : (seasonData.episodes || []);
-                const isSeasonPack = seasonData.isSeasonPack || false;
-
-                return (
-                    <div key={season} className="mb-6 last:mb-0">
-                        <h3 className={`text-sm font-bold ${textPrimary} mb-3 flex items-center`}>
-                            <span className="w-1 h-4 bg-blue-500 rounded-full mr-2"></span>
-                            第 {season} 季
-                            {isSeasonPack && episodes.length === 0 ? (
-                                <span className={`ml-2 text-xs font-normal bg-purple-500/10 text-purple-500 px-2 py-0.5 rounded-full`}>
-                                    整季包
-                                </span>
-                            ) : (
-                                <span className={`ml-2 text-xs font-normal ${textSecondary} bg-gray-500/10 px-2 py-0.5 rounded-full`}>
-                                    共 {episodes.length} 集
-                                    {isSeasonPack && <span className="ml-1 text-purple-500">+ 整季包</span>}
-                                </span>
-                            )}
-                        </h3>
-                        {episodes.length > 0 ? (
-                            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
-                                {episodes.map(ep => (
-                                    <div key={ep} className={`aspect-square flex items-center justify-center rounded-lg font-mono text-sm font-bold bg-green-500/10 text-green-500 border border-green-500/20`}>
-                                        {ep < 10 ? `0${ep}` : ep}
-                                    </div>
-                                ))}
-                            </div>
-                        ) : isSeasonPack ? (
-                            <div className={`text-center py-4 text-sm ${textSecondary} bg-purple-500/5 rounded-lg border border-purple-500/20`}>
-                                📦 已下载完整季度包（具体集数请查看下载器或本地文件）
-                            </div>
-                        ) : null}
-                    </div>
-                );
-            })
-        )
-    }
 
     const fetchSubscriptions = async () => {
         try {
@@ -455,52 +406,66 @@ const SeriesPage = () => {
                         <div className="p-6 overflow-y-auto flex-1">
                             {loadingEpisodes ? (
                                 <div className={`text-center py-10 ${textSecondary}`}>加载数据中...</div>
-                            ) : Object.keys(episodesData).length === 0 ? (
-                                <div className={`text-center py-10 ${textSecondary}`}>
-                                    暂无已下载的剧集记录
-                                </div>
                             ) : (
-                                Object.keys(episodesData).sort((a, b) => parseInt(a) - parseInt(b)).map(season => {
-                                    const seasonData = episodesData[season];
-                                    const episodes = seasonData.episodes || [];
+                                (() => {
+                                    // Ensure the subscribed season is always shown even if no episodes are downloaded
+                                    const displayData = { ...episodesData };
+                                    if (currentSubscription?.season && !displayData[currentSubscription.season]) {
+                                        displayData[currentSubscription.season] = { episodes: [], isSeasonPack: false };
+                                    }
 
-                                    return (
-                                        <div key={season} className="mb-6 last:mb-0">
-                                            <h3 className={`text-sm font-bold ${textPrimary} mb-3 flex items-center flex-wrap`}>
-                                                <span className="w-1 h-4 bg-blue-500 rounded-full mr-2"></span>
-                                                第 {season} 季
-                                                <span className={`ml-2 text-xs font-normal ${textSecondary} bg-gray-500/10 px-2 py-0.5 rounded-full`}>
-                                                    已下 {episodes.length} 集 {(currentSubscription?.total_episodes && parseInt(season) === parseInt(currentSubscription.season)) ? ` / 共 ${currentSubscription.total_episodes} 集` : ''}
-                                                </span>
-                                            </h3>
-                                            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
-                                                {(() => {
-                                                    // Generate full grid from 1 to max episode
-                                                    const isCurrentSeason = parseInt(season) === parseInt(currentSubscription?.season);
-                                                    const totalFromTMDB = isCurrentSeason ? (currentSubscription?.total_episodes || 0) : 0;
-                                                    const maxEp = Math.max(...episodes, totalFromTMDB, 10);
-                                                    const allEpisodes = Array.from({ length: maxEp }, (_, i) => i + 1);
+                                    const seasons = Object.keys(displayData).sort((a, b) => parseInt(a) - parseInt(b));
 
-                                                    return allEpisodes.map(ep => {
-                                                        const isDownloaded = episodes.includes(ep);
-                                                        return (
-                                                            <div
-                                                                key={ep}
-                                                                className={`aspect-square flex items-center justify-center rounded-lg font-mono text-sm font-bold ${isDownloaded
-                                                                    ? 'bg-green-500/10 text-green-500 border border-green-500/20'
-                                                                    : 'bg-gray-500/5 text-gray-500/40 border border-gray-500/10'
-                                                                    }`}
-                                                                title={isDownloaded ? `已下载` : `未下载`}
-                                                            >
-                                                                {ep < 10 ? `0${ep}` : ep}
-                                                            </div>
-                                                        );
-                                                    });
-                                                })()}
+                                    if (seasons.length === 0) {
+                                        return (
+                                            <div className={`text-center py-10 ${textSecondary}`}>
+                                                暂无已下载的剧集记录
                                             </div>
-                                        </div>
-                                    );
-                                })
+                                        );
+                                    }
+
+                                    return seasons.map(season => {
+                                        const seasonData = displayData[season];
+                                        const episodes = seasonData.episodes || [];
+
+                                        return (
+                                            <div key={season} className="mb-6 last:mb-0">
+                                                <h3 className={`text-sm font-bold ${textPrimary} mb-3 flex items-center flex-wrap`}>
+                                                    <span className="w-1 h-4 bg-blue-500 rounded-full mr-2"></span>
+                                                    第 {season} 季
+                                                    <span className={`ml-2 text-xs font-normal ${textSecondary} bg-gray-500/10 px-2 py-0.5 rounded-full`}>
+                                                        已下 {episodes.length} 集 {(currentSubscription?.total_episodes && parseInt(season) === parseInt(currentSubscription.season)) ? ` / 共 ${currentSubscription.total_episodes} 集` : ''}
+                                                    </span>
+                                                </h3>
+                                                <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                                                    {(() => {
+                                                        // Generate full grid from 1 to max episode
+                                                        const isCurrentSeason = parseInt(season) === parseInt(currentSubscription?.season);
+                                                        const totalFromTMDB = isCurrentSeason ? (currentSubscription?.total_episodes || 0) : 0;
+                                                        const maxEp = Math.max(...episodes, totalFromTMDB, 0);
+                                                        const allEpisodes = Array.from({ length: maxEp }, (_, i) => i + 1);
+
+                                                        return allEpisodes.map(ep => {
+                                                            const isDownloaded = episodes.includes(ep);
+                                                            return (
+                                                                <div
+                                                                    key={ep}
+                                                                    className={`aspect-square flex items-center justify-center rounded-lg font-mono text-sm font-bold ${isDownloaded
+                                                                        ? 'bg-green-500/10 text-green-500 border border-green-500/20'
+                                                                        : 'bg-gray-500/5 text-gray-500/40 border border-gray-500/10'
+                                                                        }`}
+                                                                    title={isDownloaded ? `已下载` : `未下载`}
+                                                                >
+                                                                    {ep < 10 ? `0${ep}` : ep}
+                                                                </div>
+                                                            );
+                                                        });
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()
                             )}
                         </div>
                     </div>

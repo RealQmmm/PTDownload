@@ -9,7 +9,8 @@ const parseTorrent = require('parse-torrent');
 // Add torrent to client
 router.post('/', async (req, res) => {
     try {
-        const { clientId, torrentUrl } = req.body;
+        const { clientId, torrentUrl, savePath, category } = req.body;
+        const options = { savePath, category };
 
         if (!torrentUrl) {
             return res.status(400).json({ success: false, message: 'Torrent URL is required' });
@@ -76,11 +77,11 @@ router.post('/', async (req, res) => {
                 }
 
                 const torrentBase64 = buffer.toString('base64');
-                result = await downloaderService.addTorrentFromData(client, torrentBase64);
+                result = await downloaderService.addTorrentFromData(client, torrentBase64, options);
             } catch (fetchErr) {
                 console.error('Failed to fetch torrent:', fetchErr.message);
                 // Fallback: try sending URL directly
-                result = await downloaderService.addTorrent(client, torrentUrl);
+                result = await downloaderService.addTorrent(client, torrentUrl, options);
             }
         } else {
             // Check magnet hash if applicable
@@ -93,7 +94,7 @@ router.post('/', async (req, res) => {
                 }
             }
             // No cookies needed, send URL directly
-            result = await downloaderService.addTorrent(client, torrentUrl);
+            result = await downloaderService.addTorrent(client, torrentUrl, options);
         }
 
         if (result.success) {

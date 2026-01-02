@@ -20,9 +20,12 @@ const SearchPage = ({ searchState, setSearchState }) => {
     // Sorting state
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
-    // Client selection modal state
     const [showClientModal, setShowClientModal] = useState(false);
     const [pendingDownload, setPendingDownload] = useState(null);
+    const [downloadPaths, setDownloadPaths] = useState([]);
+    const [selectedPath, setSelectedPath] = useState('');
+    const [isCustomPath, setIsCustomPath] = useState(false);
+    const [customPath, setCustomPath] = useState('');
 
     // Fetch clients on mount
     useEffect(() => {
@@ -35,6 +38,16 @@ const SearchPage = ({ searchState, setSearchState }) => {
             .then(res => res.json())
             .then(data => setSites(data))
             .catch(err => console.error('Failed to fetch sites:', err));
+
+        authenticatedFetch('/api/download-paths')
+            .then(res => res.json())
+            .then(data => {
+                setDownloadPaths(data || []);
+                if (data && data.length > 0) {
+                    setSelectedPath(data[0].path);
+                }
+            })
+            .catch(err => console.error('Failed to fetch download paths:', err));
     }, []);
 
     // Save state to parent when it changes
@@ -81,27 +94,31 @@ const SearchPage = ({ searchState, setSearchState }) => {
             return;
         }
 
-        // If only one client, confirm and download directly
-        if (clients.length === 1) {
+        // If paths exist or multiple clients exist, show the selection modal
+        if (downloadPaths.length > 0 || clients.length > 1) {
+            setPendingDownload(item);
+            setShowClientModal(true);
+        } else {
+            // Only one client and no predefined paths
             const clientName = clients[0].name || clients[0].type;
             if (window.confirm(`确认下载 "${item.name}" 到 [${clientName}] 吗？`)) {
                 executeDownload(item, clients[0].id);
             }
-        } else {
-            setPendingDownload(item);
-            setShowClientModal(true);
         }
     };
 
-    const handleClientSelect = (clientId) => {
+    const handleConfirmDownload = (clientId) => {
         if (pendingDownload) {
-            executeDownload(pendingDownload, clientId);
+            const finalPath = isCustomPath ? customPath : selectedPath;
+            executeDownload(pendingDownload, clientId, finalPath);
         }
         setShowClientModal(false);
         setPendingDownload(null);
+        setIsCustomPath(false);
+        setCustomPath('');
     };
 
-    const executeDownload = async (item, clientId) => {
+    const executeDownload = async (item, clientId, savePath = null) => {
         setDownloading(item.link);
         try {
             const res = await authenticatedFetch('/api/download', {
@@ -111,7 +128,8 @@ const SearchPage = ({ searchState, setSearchState }) => {
                     torrentUrl: item.torrentUrl,
                     clientId: clientId,
                     title: item.name,
-                    size: item.size
+                    size: item.size,
+                    savePath: savePath
                 })
             });
             const data = await res.json();
@@ -360,31 +378,113 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 )}
             </div>
 
-            {/* Client Modal */}
             {showClientModal && (
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
                     <div className={`${bgMain} rounded-2xl w-full max-w-md border ${borderColor} shadow-2xl overflow-hidden`}>
                         <div className={`p-6 border-b ${borderColor}`}>
-                            <h2 className={`text-xl font-bold ${textPrimary}`}>选择下载客户端</h2>
+                            <h2 className={`text-xl font-bold ${textPrimary}`}>下载确认</h2>
+                            <p className={`${textSecondary} text-xs mt-1 truncate`}>{pendingDownload?.name}</p>
                         </div>
-                        <div className="p-4 space-y-2 max-h-80 overflow-y-auto">
-                            {clients.map((client) => (
-                                <button
-                                    key={client.id}
-                                    onClick={() => handleClientSelect(client.id)}
-                                    className={`w-full flex items-center p-4 ${darkMode ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} rounded-xl transition-all text-left`}
-                                >
-                                    <div className="text-2xl mr-4">💾</div>
-                                    <div className="flex-1">
-                                        <div className={`${textPrimary} font-medium`}>{client.type}</div>
-                                        <div className={`${textSecondary} text-sm`}>{client.host}:{client.port}</div>
+
+                        <div className="p-6 space-y-6">
+                            {/* Path Selection - Only show if paths exist */}
+                            {downloadPaths.length > 0 && (
+                                <div>
+                                    <label className={`block text-[10px] font-bold uppercase ${textSecondary} mb-2 tracking-wider`}>保存位置</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {downloadPaths.map((p) => (
+                                            <button
+                                                key={p.id}
+                                                onClick={() => {
+                                                    setSelectedPath(p.path);
+                                                    setIsCustomPath(false);
+                                                }}
+                                                className={`p-3 rounded-xl border text-xs font-medium transition-all text-left ${!isCustomPath && selectedPath === p.path
+                                                    ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20'
+                                                    : `${bgSecondary} ${borderColor} ${textPrimary} hover:border-blue-500/50`
+                                                    }`}
+                                            >
+                                                <div className="font-bold mb-0.5">{p.name}</div>
+                                                <div className={`text-[10px] opacity-70 truncate`}>{p.path}</div>
+                                            </button>
+                                        ))}
+                                        {/* Default and Custom Options */}
+                                        <button
+                                            onClick={() => {
+                                                setSelectedPath('');
+                                                setIsCustomPath(false);
+                                            }}
+                                            className={`p-3 rounded-xl border text-xs font-medium transition-all text-left ${!isCustomPath && selectedPath === ''
+                                                ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20'
+                                                : `${bgSecondary} ${borderColor} ${textPrimary} hover:border-blue-500/50`
+                                                }`}
+                                        >
+                                            <div className="font-bold mb-0.5">默认路径</div>
+                                            <div className={`text-[10px] opacity-70 truncate`}>使用下载器默认设置</div>
+                                        </button>
+
+                                        <button
+                                            onClick={() => setIsCustomPath(true)}
+                                            className={`p-3 rounded-xl border text-xs font-medium transition-all text-left ${isCustomPath
+                                                ? 'bg-purple-600 border-purple-600 text-white shadow-md shadow-purple-500/20'
+                                                : `${bgSecondary} ${borderColor} ${textPrimary} hover:border-purple-500/50`
+                                                }`}
+                                        >
+                                            <div className="font-bold mb-0.5">手动输入</div>
+                                            <div className={`text-[10px] opacity-70 truncate`}>自定义保存路径</div>
+                                        </button>
                                     </div>
-                                    <div className="text-blue-500">→</div>
-                                </button>
-                            ))}
+
+                                    {isCustomPath && (
+                                        <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <input
+                                                type="text"
+                                                value={customPath}
+                                                onChange={(e) => setCustomPath(e.target.value)}
+                                                placeholder="请输入完整的物理路径..."
+                                                className={`w-full p-3 rounded-xl border text-sm focus:ring-2 focus:ring-purple-500 outline-none transition-all ${inputBg}`}
+                                                autoFocus
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            <div>
+                                <label className={`block text-[10px] font-bold uppercase ${textSecondary} mb-2 tracking-wider`}>选择下载器</label>
+                                <div className="space-y-2">
+                                    {clients.map((client) => (
+                                        <button
+                                            key={client.id}
+                                            onClick={() => handleConfirmDownload(client.id)}
+                                            className={`w-full flex items-center p-4 ${darkMode ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} rounded-xl transition-all text-left border border-transparent hover:border-blue-500/30 group`}
+                                        >
+                                            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-xl mr-4 group-hover:scale-110 transition-transform">
+                                                💾
+                                            </div>
+                                            <div className="flex-1">
+                                                <div className={`${textPrimary} font-bold text-sm`}>{client.name || client.type}</div>
+                                                <div className={`${textSecondary} text-[10px] font-mono`}>{client.host}:{client.port}</div>
+                                            </div>
+                                            <div className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">确认下载 →</div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                         </div>
-                        <div className="p-4 flex justify-end">
-                            <button onClick={() => setShowClientModal(false)} className={`px-4 py-2 ${textSecondary} hover:${textPrimary} font-medium`}>取消</button>
+
+                        <div className={`p-4 ${bgSecondary} border-t ${borderColor} flex justify-end`}>
+                            <button
+                                onClick={() => {
+                                    setShowClientModal(false);
+                                    setPendingDownload(null);
+                                    setIsCustomPath(false);
+                                    setCustomPath('');
+                                }}
+                                className={`px-6 py-2 rounded-xl text-sm font-bold ${textSecondary} hover:${textPrimary} transition-colors`}
+                            >
+                                取消
+                            </button>
                         </div>
                     </div>
                 </div>
