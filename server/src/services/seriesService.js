@@ -1,6 +1,7 @@
 const { getDB } = require('../db');
 const taskService = require('./taskService');
 const pathUtils = require('../utils/pathUtils');
+const episodeParser = require('../utils/episodeParser');
 
 class SeriesService {
     constructor() {
@@ -225,6 +226,42 @@ class SeriesService {
         }
 
         return regex;
+    }
+
+    /**
+     * Get downloaded episodes for a subscription
+     * Returns: { "1": [1, 2, 3], "2": [1, 2] }
+     */
+    getEpisodes(id) {
+        const sub = this._getDB().prepare('SELECT task_id FROM series_subscriptions WHERE id = ?').get(id);
+        if (!sub || !sub.task_id) return {};
+
+        const history = this._getDB().prepare('SELECT item_title, created_at FROM task_history WHERE task_id = ? ORDER BY created_at DESC').all(sub.task_id);
+
+        const resultMap = {};
+
+        history.forEach(row => {
+            const parsed = episodeParser.parse(row.item_title);
+            if (parsed && parsed.episodes && parsed.episodes.length > 0) {
+                // Default to Season 1 if not detected, or use subs.season? 
+                // Better to use parsed season. If null, maybe fallback to 'Unknown' or 1.
+                // Let's use parsed.season or '0' (Specials) or '1' as fallback if title has no season but has episodes.
+                const season = parsed.season !== null ? parsed.season : 1;
+
+                if (!resultMap[season]) {
+                    resultMap[season] = new Set();
+                }
+                parsed.episodes.forEach(ep => resultMap[season].add(ep));
+            }
+        });
+
+        // Convert Sets to sorted Arrays
+        const sortedResult = {};
+        Object.keys(resultMap).forEach(s => {
+            sortedResult[s] = Array.from(resultMap[s]).sort((a, b) => a - b);
+        });
+
+        return sortedResult;
     }
 }
 

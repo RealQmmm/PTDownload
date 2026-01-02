@@ -46,4 +46,14 @@ router.delete('/:id', (req, res) => {
     }
 });
 
+router.get('/:id/episodes', (req, res) => {
+    try {
+        const episodes = seriesService.getEpisodes(req.params.id);
+        res.json(episodes);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 module.exports = router;
