@@ -65,7 +65,22 @@ router.post('/', (req, res) => {
 router.get('/export', (req, res) => {
     try {
         const db = getDB();
-        const tables = ['sites', 'clients', 'tasks', 'rss_sources', 'settings', 'daily_stats', 'task_history', 'stats_checkpoint', 'site_daily_stats', 'users', 'series_subscriptions', 'series_episodes', 'download_paths'];
+        // Tables to export (task_logs excluded as it's regenerated and can be large)
+        const tables = [
+            'sites',
+            'clients',
+            'tasks',
+            'rss_sources',
+            'settings',
+            'daily_stats',
+            'task_history',
+            'stats_checkpoint',
+            'site_daily_stats',
+            'users',
+            'series_subscriptions',
+            'series_episodes',
+            'download_paths'
+        ];
         const data = {};
 
         tables.forEach(table => {
@@ -109,7 +124,23 @@ router.post('/import', async (req, res) => {
 
     try {
         const db = getDB();
-        const tables = ['sites', 'clients', 'tasks', 'rss_sources', 'settings', 'daily_stats', 'task_history', 'stats_checkpoint', 'site_daily_stats', 'users', 'series_subscriptions', 'series_episodes', 'download_paths'];
+        // Tables to import (includes task_logs for backward compatibility with old backups)
+        const tables = [
+            'sites',
+            'clients',
+            'tasks',
+            'rss_sources',
+            'settings',
+            'daily_stats',
+            'task_history',
+            'stats_checkpoint',
+            'site_daily_stats',
+            'users',
+            'series_subscriptions',
+            'series_episodes',
+            'download_paths',
+            'task_logs'  // Kept for backward compatibility, though not exported
+        ];
 
         const importTransaction = db.transaction((backupContent) => {
             // Disable foreign keys temporarily to avoid issues during deletion/insertion

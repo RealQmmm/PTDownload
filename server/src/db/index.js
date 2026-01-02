@@ -236,12 +236,12 @@ function createTables() {
     { key: 'cleanup_enabled', value: 'false' },
     { key: 'cleanup_min_ratio', value: '2.0' },
     { key: 'cleanup_max_seeding_time', value: '336' }, // 14 days in hours
-    { key: 'cleanup_max_seeding_time', value: '336' }, // 14 days in hours
     { key: 'cleanup_delete_files', value: 'true' },
     { key: 'search_mode', value: 'browse' }, // 'browse' or 'rss'
     { key: 'tmdb_api_key', value: '107492d807d58b01d0e5104d49af4081' },
     { key: 'tmdb_base_url', value: 'https://api.themoviedb.org/3' },
-    { key: 'tmdb_image_base_url', value: 'https://image.tmdb.org/t/p/w300' }
+    { key: 'tmdb_image_base_url', value: 'https://image.tmdb.org/t/p/w300' },
+    { key: 'rss_cache_ttl', value: '300' } // RSS cache TTL in seconds (default: 5 minutes)
   ];
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

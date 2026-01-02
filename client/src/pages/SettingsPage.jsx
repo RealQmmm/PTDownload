@@ -81,6 +81,7 @@ const SettingsPage = () => {
     const [message, setMessage] = useState(null);
     const [cookieCheckInterval, setCookieCheckInterval] = useState('60');
     const [checkinTime, setCheckinTime] = useState('09:00');
+    const [rssCacheTTL, setRssCacheTTL] = useState('300');
 
     useEffect(() => {
         setTempSiteName(siteName);
@@ -138,6 +139,7 @@ const SettingsPage = () => {
             });
             setCookieCheckInterval(data.cookie_check_interval || '60');
             setCheckinTime(data.checkin_time || '09:00');
+            setRssCacheTTL(data.rss_cache_ttl || '300');
         } catch (err) {
             console.error('Fetch settings failed:', err);
         }
@@ -166,8 +168,7 @@ const SettingsPage = () => {
                     search_mode: searchMode,
                     cookie_check_interval: cookieCheckInterval,
                     checkin_time: checkinTime,
-                    cookie_check_interval: cookieCheckInterval,
-                    checkin_time: checkinTime,
+                    rss_cache_ttl: rssCacheTTL,
                     ...logSettings,
                     ...securitySettings,
                     ...tmdbSettings
@@ -501,6 +502,20 @@ const SettingsPage = () => {
                                             value={checkinTime}
                                             onChange={(e) => setCheckinTime(e.target.value)}
                                             className={`w-32 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center outline-none focus:border-blue-500`}
+                                        />
+                                    </div>
+                                    <div className="flex items-center space-x-3">
+                                        <div className="flex-1">
+                                            <p className={`text-sm ${textPrimary} font-medium`}>RSS 缓存时间 (秒)</p>
+                                            <p className={`text-[10px] ${textSecondary}`}>同一 RSS 源的缓存有效期，减少重复请求 (推荐: 300)</p>
+                                        </div>
+                                        <input
+                                            type="number"
+                                            min="60"
+                                            max="3600"
+                                            value={rssCacheTTL}
+                                            onChange={(e) => setRssCacheTTL(e.target.value)}
+                                            className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
                                         />
                                     </div>
                                 </div>

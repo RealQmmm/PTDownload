@@ -9,6 +9,91 @@ const notificationService = require('./notificationService');
 const loggerService = require('./loggerService');
 
 class RSSService {
+    constructor() {
+        // RSS feed cache: { url: { data: responseData, timestamp: Date.now() } }
+        this.rssCache = new Map();
+
+        // Load cache TTL from settings (default: 5 minutes)
+        this.loadCacheTTL();
+    }
+
+    /**
+     * Load cache TTL from database settings
+     */
+    loadCacheTTL() {
+        try {
+            const { getDB } = require('../db');
+            const db = getDB();
+            const setting = db.prepare("SELECT value FROM settings WHERE key = 'rss_cache_ttl'").get();
+            const ttlSeconds = parseInt(setting?.value || '300'); // Default: 300 seconds (5 minutes)
+            this.cacheTTL = ttlSeconds * 1000; // Convert to milliseconds
+            console.log(`[RSS Cache] TTL set to ${ttlSeconds} seconds (${ttlSeconds / 60} minutes)`);
+        } catch (err) {
+            console.error('[RSS Cache] Failed to load TTL from settings, using default 5 minutes:', err.message);
+            this.cacheTTL = 5 * 60 * 1000; // Fallback: 5 minutes
+        }
+    }
+
+    /**
+     * Get RSS feed data with caching
+     * @param {string} rssUrl - The RSS feed URL
+     * @param {object} headers - Request headers (including cookies)
+     * @returns {Promise<string>} - RSS XML data
+     */
+    async getRSSFeed(rssUrl, headers) {
+        const now = Date.now();
+        const cached = this.rssCache.get(rssUrl);
+
+        // Check if cache is valid
+        if (cached && (now - cached.timestamp) < this.cacheTTL) {
+            const age = Math.round((now - cached.timestamp) / 1000);
+            console.log(`[RSS Cache] Using cached data for ${rssUrl} (age: ${age}s)`);
+            return cached.data;
+        }
+
+        // Fetch fresh data
+        console.log(`[RSS Cache] Fetching fresh data for ${rssUrl}`);
+        const response = await axios.get(rssUrl, {
+            headers: {
+                ...headers,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            timeout: 30000
+        });
+
+        // Update cache
+        this.rssCache.set(rssUrl, {
+            data: response.data,
+            timestamp: now
+        });
+
+        // Clean old cache entries (optional, prevents memory leak)
+        this.cleanCache();
+
+        return response.data;
+    }
+
+    /**
+     * Clean expired cache entries
+     */
+    cleanCache() {
+        const now = Date.now();
+        for (const [url, entry] of this.rssCache.entries()) {
+            if ((now - entry.timestamp) > this.cacheTTL) {
+                this.rssCache.delete(url);
+                console.log(`[RSS Cache] Cleaned expired cache for ${url}`);
+            }
+        }
+    }
+
+    /**
+     * Clear all cache (useful for manual refresh)
+     */
+    clearCache() {
+        const size = this.rssCache.size;
+        this.rssCache.clear();
+        console.log(`[RSS Cache] Cleared ${size} cache entries`);
+    }
     async executeTask(task) {
         const db = getDB();
         const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
@@ -21,17 +106,13 @@ class RSSService {
             const site = siteService.getSiteById(task.site_id);
             if (!site) throw new Error('Associated site not found');
 
-            // 2. Fetch RSS feed with site cookies
-            const response = await axios.get(task.rss_url, {
-                headers: {
-                    'Cookie': site.cookies || '',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                },
-                timeout: 30000
+            // 2. Fetch RSS feed with caching
+            const rssData = await this.getRSSFeed(task.rss_url, {
+                'Cookie': site.cookies || ''
             });
 
             // 3. Parse XML
-            const $ = cheerio.load(response.data, { xmlMode: true });
+            const $ = cheerio.load(rssData, { xmlMode: true });
             const items = [];
 
             $('item').each((i, el) => {
