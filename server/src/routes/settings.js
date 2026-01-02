@@ -69,7 +69,26 @@ router.get('/export', (req, res) => {
         const data = {};
 
         tables.forEach(table => {
-            data[table] = db.prepare(`SELECT * FROM ${table}`).all();
+            let rows = db.prepare(`SELECT * FROM ${table}`).all();
+
+            // Decrypt cookies locally for export so backup is portable
+            if (table === 'sites') {
+                const cryptoUtils = require('../utils/cryptoUtils');
+                rows = rows.map(site => {
+                    if (site.cookies && cryptoUtils.isEncrypted(site.cookies)) {
+                        try {
+                            // Decrypt so the exported JSON has plaintext cookies
+                            // When importing, the system will re-encrypt them with its own key
+                            site.cookies = cryptoUtils.decrypt(site.cookies);
+                        } catch (e) {
+                            // Keep as is if decryption fails
+                        }
+                    }
+                    return site;
+                });
+            }
+
+            data[table] = rows;
         });
 
         res.setHeader('Content-disposition', 'attachment; filename=pt_download_backup.json');
@@ -114,6 +133,14 @@ router.post('/import', async (req, res) => {
                             const insertStmt = db.prepare(`INSERT INTO ${table} (${validColumns.join(',')}) VALUES (${placeholders})`);
 
                             backupContent[table].forEach(row => {
+                                // Special handling for sites.cookies: Auto-encrypt if plaintext
+                                if (table === 'sites' && row.cookies) {
+                                    const cryptoUtils = require('../utils/cryptoUtils');
+                                    if (!cryptoUtils.isEncrypted(row.cookies)) {
+                                        row.cookies = cryptoUtils.encrypt(row.cookies);
+                                    }
+                                }
+
                                 const values = validColumns.map(col => row[col]);
                                 insertStmt.run(...values);
                             });
