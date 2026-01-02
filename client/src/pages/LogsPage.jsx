@@ -69,6 +69,7 @@ const LogsPage = () => {
 
     const filteredLogs = logs.filter(log => {
         if (filter === 'all') return true;
+        if (filter === 'success') return log.status === 'success' || log.status === 'info';
         return log.status === filter;
     });
 
@@ -156,13 +157,13 @@ const LogsPage = () => {
                                     <span className="text-gray-500 shrink-0 select-none mr-3 opacity-50">
                                         [{new Date(log.run_time).toLocaleString('sv-SE').replace('T', ' ')}]
                                     </span>
-                                    <span className={`shrink-0 mr-3 font-bold ${log.status === 'success' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                        {log.status === 'success' ? '[INFO] ' : '[ERR]  '}
+                                    <span className={`shrink-0 mr-3 font-bold ${(log.status === 'success' || log.status === 'info') ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                        {(log.status === 'success' || log.status === 'info') ? '[INFO] ' : '[ERR]  '}
                                     </span>
                                     <span className="shrink-0 mr-3 text-blue-400 font-bold opacity-80">
                                         {log.task_name ? `[${log.task_name}]` : '[SYSTEM]'}
                                     </span>
-                                    <span className={`${log.status === 'error' ? 'text-rose-400' : textSecondary} break-all`}>
+                                    <span className={`${(log.status === 'error' || log.status === 'warning') ? 'text-rose-400' : textSecondary} break-all`}>
                                         {log.message}
                                         {(log.items_found > 0 || log.items_matched > 0) && (
                                             <span className="ml-2 py-0.5 px-1.5 rounded bg-gray-500/10 text-[11px] text-gray-500">

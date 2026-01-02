@@ -918,11 +918,11 @@ const TasksPage = () => {
                                                         {new Date(log.run_time).toLocaleString()}
                                                     </td>
                                                     <td className="py-3 px-4">
-                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${log.status === 'success'
+                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${(log.status === 'success' || log.status === 'info')
                                                             ? 'bg-green-500/10 text-green-500'
                                                             : 'bg-red-500/10 text-red-500'
                                                             }`}>
-                                                            {log.status === 'success' ? '成功' : '失败'}
+                                                            {(log.status === 'success' || log.status === 'info') ? '成功' : '失败'}
                                                         </span>
                                                     </td>
                                                     <td className="py-3 px-4 text-center font-mono text-xs text-gray-500">
