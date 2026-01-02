@@ -160,12 +160,11 @@ class RSSService {
 
                             let result;
                             if (torrentData && !item.link.startsWith('magnet:')) {
-                                // If we have the file data, verify cookies/auth might be tricky for the client to re-download, 
-                                // so better to pass the data if the client service supports it.
-                                // Our downloaderService.addTorrent usually takes a URL. 
-                                // But download.js handles base64. Let's reuse that or use addTorrentFromData if available.
-                                // Actually, downloaderService has addTorrentFromData.
-                                result = await downloaderService.addTorrentFromData(targetClient, torrentData);
+                                // If we have the file data, pass it along with save path and category
+                                result = await downloaderService.addTorrentFromData(targetClient, torrentData, {
+                                    savePath: task.save_path,
+                                    category: task.category
+                                });
                             } else {
                                 // Magnet or fallback
                                 result = await downloaderService.addTorrent(targetClient, item.link, {

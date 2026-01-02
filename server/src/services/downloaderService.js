@@ -336,8 +336,9 @@ class DownloaderService {
     }
 
     // Add torrent from base64 encoded torrent file data
-    async addTorrentFromData(client, torrentBase64) {
+    async addTorrentFromData(client, torrentBase64, options = {}) {
         const { type, host, port, username, password } = client;
+        const { savePath, category } = options;
         const baseUrl = `http://${host}:${port}`;
 
         try {
@@ -362,6 +363,10 @@ class DownloaderService {
                     filename: 'torrent.torrent',
                     contentType: 'application/x-bittorrent'
                 });
+
+                // Add save path and category if provided
+                if (savePath) form.append('savepath', savePath);
+                if (category) form.append('category', category);
 
                 // 3. Upload torrent
                 await axios.post(
@@ -395,12 +400,15 @@ class DownloaderService {
                     }
                 }
 
-                // 2. Add Torrent with metainfo (base64)
+                // 2. Add Torrent with metainfo (base64) and download-dir
+                const args = { metainfo: torrentBase64 };
+                if (savePath) args['download-dir'] = savePath;
+
                 await axios.post(
                     rpcUrl,
                     {
                         method: 'torrent-add',
-                        arguments: { metainfo: torrentBase64 }
+                        arguments: args
                     },
                     {
                         headers: {
@@ -413,7 +421,7 @@ class DownloaderService {
             }
 
             if (type === 'Mock') {
-                console.log(`[Mock] Adding torrent data to ${host}:${port}`);
+                console.log(`[Mock] Adding torrent data to ${host}:${port} with savePath: ${savePath}, category: ${category}`);
                 return { success: true, message: '已添加至 Mock 客户端' };
             }
 

@@ -112,6 +112,14 @@ function createTables() {
       FOREIGN KEY(task_id) REFERENCES tasks(id)
     );
 
+    CREATE TABLE IF NOT EXISTS download_paths (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      path TEXT NOT NULL,
+      description TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT
@@ -197,6 +205,20 @@ function createTables() {
 
   // Ensure checkpoint exists
   db.prepare('INSERT OR IGNORE INTO stats_checkpoint (id, last_total_downloaded, last_total_uploaded, historical_total_downloaded, historical_total_uploaded) VALUES (1, 0, 0, 0, 0)').run();
+
+  // Insert default download paths
+  const defaultPaths = [
+    { name: '电影', path: '/downloads/movies', description: '电影下载目录' },
+    { name: '剧集', path: '/downloads/series', description: '电视剧下载目录' },
+    { name: '动画', path: '/downloads/anime', description: '动画下载目录' },
+    { name: '音乐', path: '/downloads/music', description: '音乐下载目录' },
+    { name: '纪录片', path: '/downloads/documentary', description: '纪录片下载目录' },
+    { name: '综艺', path: '/downloads/variety', description: '综艺节目下载目录' }
+  ];
+
+  const insertPath = db.prepare('INSERT OR IGNORE INTO download_paths (id, name, path, description) VALUES (?, ?, ?, ?)');
+  defaultPaths.forEach((p, index) => insertPath.run(index + 1, p.name, p.path, p.description));
+
 
   // Migrations
   const migrations = [

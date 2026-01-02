@@ -161,12 +161,16 @@ class SeriesService {
     deleteSubscription(id) {
         const sub = this._getDB().prepare('SELECT * FROM series_subscriptions WHERE id = ?').get(id);
         if (sub) {
-            // Delete the linked task first
+            // Delete subscription first (child table)
+            this._getDB().prepare('DELETE FROM series_subscriptions WHERE id = ?').run(id);
+
+            // Then delete the linked task (parent table)
             if (sub.task_id) {
                 taskService.deleteTask(sub.task_id);
+                // Also cancel the scheduled task
+                const schedulerService = require('./schedulerService');
+                schedulerService.cancelTask(sub.task_id);
             }
-            // Delete subscription
-            this._getDB().prepare('DELETE FROM series_subscriptions WHERE id = ?').run(id);
         }
     }
 
