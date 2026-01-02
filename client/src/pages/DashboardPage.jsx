@@ -32,42 +32,65 @@ const formatETA = (seconds) => {
 };
 
 // Sub-component for flow chart
-const HistoryChart = ({ data, textSecondary }) => {
+const HistoryChart = ({ data, textSecondary, darkMode }) => {
     if (!data || !Array.isArray(data) || data.length === 0) return null;
 
-    const maxVal = Math.max(...data.map(d => Math.max(d.downloaded_bytes || 0, d.uploaded_bytes || 0, 1024 * 1024)));
-    const chartHeight = 120;
+    // Fixed max value to be 1.1x of actual max to avoid touching the top
+    const rawMax = Math.max(...data.map(d => Math.max(d.downloaded_bytes || 0, d.uploaded_bytes || 0, 1024 * 1024 * 1024)));
+    const maxVal = rawMax * 1.1;
+    const chartHeight = 100;
+
+    // Y-axis ticks
+    const ticks = [rawMax, rawMax * 0.5, 0];
 
     return (
-        <div className="w-full">
-            <div className="flex justify-between items-end h-[120px] px-2">
-                {data.map((item, idx) => {
-                    const dlHeight = ((item.downloaded_bytes || 0) / maxVal) * chartHeight;
-                    const upHeight = ((item.uploaded_bytes || 0) / maxVal) * chartHeight;
-                    const dateStr = item.date ? new Date(item.date) : new Date();
-                    const label = `${dateStr.getMonth() + 1}/${dateStr.getDate()}`;
+        <div className="w-full h-full flex items-start">
+            {/* Y-Axis labels */}
+            <div className="flex flex-col justify-between h-[100px] pr-2 text-[9px] font-mono opacity-40 text-right min-w-[50px] pointer-events-none">
+                {ticks.map((tick, i) => (
+                    <span key={i} className={textSecondary}>{formatBytes(tick)}</span>
+                ))}
+            </div>
 
-                    return (
-                        <div key={idx} className="flex flex-col items-center flex-1 group relative">
-                            <div className="flex space-x-1 items-end h-[120px]">
-                                <div
-                                    className="w-2 md:w-3 bg-green-500 rounded-t-sm transition-all duration-500 ease-out"
-                                    style={{ height: `${Math.max(dlHeight, 2)}px` }}
-                                >
-                                    <div className="opacity-0 group-hover:opacity-100 absolute -top-12 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] p-2 rounded pointer-events-none z-10 whitespace-nowrap shadow-xl">
-                                        下载: {formatBytes(item.downloaded_bytes)}<br />
-                                        上传: {formatBytes(item.uploaded_bytes)}
+            {/* Main Chart Area */}
+            <div className="relative flex-1 h-[120px]"> {/* Extra space for labels at bottom */}
+                {/* Horizontal Grid Lines */}
+                <div className="absolute top-0 left-0 right-0 h-[100px] flex flex-col justify-between pointer-events-none">
+                    <div className={`border-t ${darkMode ? 'border-gray-700/30' : 'border-gray-200/50'} w-full h-0`}></div>
+                    <div className={`border-t ${darkMode ? 'border-gray-700/30' : 'border-gray-200/50'} w-full h-0`}></div>
+                    <div className={`border-b ${darkMode ? 'border-gray-700/30' : 'border-gray-200/50'} w-full h-0 opacity-50`}></div>
+                </div>
+
+                {/* Bars */}
+                <div className="flex justify-between items-end h-[100px] px-2 relative z-0">
+                    {data.map((item, idx) => {
+                        const dlHeight = ((item.downloaded_bytes || 0) / maxVal) * chartHeight;
+                        const upHeight = ((item.uploaded_bytes || 0) / maxVal) * chartHeight;
+                        const dateStr = item.date ? new Date(item.date) : new Date();
+                        const label = `${dateStr.getMonth() + 1}/${dateStr.getDate()}`;
+
+                        return (
+                            <div key={idx} className="flex flex-col items-center flex-1 group">
+                                <div className="flex space-x-1 items-end h-[100px] relative">
+                                    <div
+                                        className="w-1.5 md:w-2 bg-green-500 rounded-t-sm transition-all duration-500 ease-out z-10"
+                                        style={{ height: `${Math.max(dlHeight, 1.5)}px` }}
+                                    >
+                                        <div className="opacity-0 group-hover:opacity-100 absolute -top-12 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] p-2 rounded pointer-events-none z-20 whitespace-nowrap shadow-xl border border-gray-700">
+                                            下载: {formatBytes(item.downloaded_bytes)}<br />
+                                            上传: {formatBytes(item.uploaded_bytes)}
+                                        </div>
                                     </div>
+                                    <div
+                                        className="w-1.5 md:w-2 bg-blue-500 rounded-t-sm transition-all duration-500 ease-out z-10"
+                                        style={{ height: `${Math.max(upHeight, 1.5)}px` }}
+                                    ></div>
                                 </div>
-                                <div
-                                    className="w-2 md:w-3 bg-blue-500 rounded-t-sm transition-all duration-500 ease-out"
-                                    style={{ height: `${Math.max(upHeight, 2)}px` }}
-                                ></div>
+                                <span className={`${textSecondary} text-[10px] mt-2 opacity-80 whitespace-nowrap`}>{label}</span>
                             </div>
-                            <span className={`${textSecondary} text-[10px] mt-2`}>{label}</span>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
+                </div>
             </div>
         </div>
     );
@@ -306,8 +329,8 @@ const DashboardPage = ({ setActiveTab }) => {
                             <span className="flex items-center text-blue-500"><i className="w-2 h-2 bg-blue-500 rounded-full mr-1.5 inline-block"></i>上传</span>
                         </div>
                     </div>
-                    <div className="h-[100px]">
-                        <HistoryChart data={historyData} textSecondary={textSecondary} />
+                    <div className="h-[120px]">
+                        <HistoryChart data={historyData} textSecondary={textSecondary} darkMode={darkMode} />
                     </div>
                 </div>
             </div>

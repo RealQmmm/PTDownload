@@ -6,13 +6,13 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
 
     const menus = [
         { id: 'dashboard', name: '仪表盘', icon: '📊' },
-        { id: 'search', name: '资源搜索', icon: '🔍' },
-        { id: 'series', name: '我的追剧', icon: '📺' },
+        { id: 'search', name: '资源搜索', icon: '🔍', badge: expiredCookiesCount > 0 ? expiredCookiesCount : null },
+        { id: 'series', name: '我的追剧', icon: '📺', badge: expiredCookiesCount > 0 ? expiredCookiesCount : null },
+        { id: 'tasks', name: '自动任务', icon: '⏰', badge: expiredCookiesCount > 0 ? expiredCookiesCount : null },
         { id: 'sites', name: '站点管理', icon: '🌐', badge: expiredCookiesCount > 0 ? expiredCookiesCount : null },
-        { id: 'clients', name: '下载客户端', icon: '📥' },
-        { id: 'tasks', name: '自动任务', icon: '⏰' },
-        { id: 'settings', name: '系统设置', icon: '⚙️' },
-        { id: 'help', name: '使用帮助', icon: '❓' },
+        { id: 'clients', name: '下载客户端', icon: '📥', badge: expiredCookiesCount > 0 ? expiredCookiesCount : null },
+        { id: 'settings', name: '系统设置', icon: '⚙️', badge: expiredCookiesCount > 0 ? expiredCookiesCount : null },
+        { id: 'help', name: '使用帮助', icon: '❓', badge: expiredCookiesCount > 0 ? expiredCookiesCount : null },
     ];
 
     const bgColor = darkMode ? 'bg-gray-800' : 'bg-white';
