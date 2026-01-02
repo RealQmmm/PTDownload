@@ -131,8 +131,16 @@ const TasksPage = () => {
 
     const handleEdit = (task) => {
         setEditingTask(task);
+
+        // Determine if path is one of the presets
+        const isPresetPath = downloadPaths.some(p => p.path === task.save_path);
+        const savePathValue = isPresetPath ? task.save_path : 'custom';
+        const customPathValue = isPresetPath ? '' : task.save_path;
+
         setFormData({
             ...task,
+            save_path: savePathValue,
+            custom_path: customPathValue,
             filter_config: typeof task.filter_config === 'string'
                 ? JSON.parse(task.filter_config)
                 : (task.filter_config || { keywords: '', exclude: '', size_min: '', size_max: '' })

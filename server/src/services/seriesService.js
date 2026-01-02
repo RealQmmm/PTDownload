@@ -1,5 +1,6 @@
 const { getDB } = require('../db');
 const taskService = require('./taskService');
+const pathUtils = require('../utils/pathUtils');
 
 class SeriesService {
     constructor() {
@@ -142,6 +143,17 @@ class SeriesService {
             if (defaultPath) {
                 finalSavePath = defaultPath.path;
             }
+        }
+
+        // Auto-append Series Name to path for unified directory structure
+        if (finalSavePath) {
+            const safeName = pathUtils.sanitizeFilename(name);
+            // Use path.join but ensure we use forward slashes for compatibility if running on Windows but docker is linux, etc.
+            // Actually, node path.join uses OS separator. 
+            // Docker container is Linux, so it uses /.
+            // If user input path uses \, we might normalize it?
+            // Let's rely on pathUtils.join which uses path module.
+            finalSavePath = pathUtils.join(finalSavePath, safeName);
         }
 
         const taskId = taskService.createTask({
