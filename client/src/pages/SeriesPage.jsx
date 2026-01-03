@@ -1,6 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
 
+
+const SeriesOverview = ({ overview }) => {
+    const [expanded, setExpanded] = useState(false);
+
+    // Ensure overview is treated safely (force rebuild)
+    const hasOverview = overview && typeof overview === 'string' && overview.trim().length > 0;
+    const text = hasOverview ? overview : '暂无简介，点击刷新尝试从 TMDB 获取';
+    const showButton = hasOverview && overview.length > 60;
+
+    return (
+        <div
+            className="cursor-pointer group"
+            onClick={(e) => {
+                e.stopPropagation();
+                setExpanded(!expanded);
+            }}
+        >
+            <div
+                className={`${expanded ? '' : 'line-clamp-4'} mb-2 min-h-[4.5rem] italic leading-relaxed transition-all duration-300`}
+                title={expanded ? "点击收起" : "点击展开查看全部"}
+            >
+                {text}
+            </div>
+            {showButton && (
+                <div className="flex justify-center sm:justify-end mt-1">
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-bold opacity-70 group-hover:opacity-100 transition-opacity`}>
+                        {expanded ? '▲ 收起' : '▼ 展开更多'}
+                    </span>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const SeriesPage = () => {
     const { darkMode, authenticatedFetch } = useTheme();
     const [subscriptions, setSubscriptions] = useState([]);
@@ -197,7 +231,7 @@ const SeriesPage = () => {
                     onClick={openCreateModal}
                     className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 flex items-center"
                 >
-                    <span className="mr-1 text-xl">+</span> 新增订阅
+                    <span className="mr-1 text-xl">+</span> 新增追剧
                 </button>
             </div>
 
@@ -242,9 +276,7 @@ const SeriesPage = () => {
                                 </div>
 
                                 <div className={`text-xs ${textSecondary} ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'} p-3 rounded-lg mb-4`}>
-                                    <div className="line-clamp-4 mb-2 min-h-[4.5rem] italic leading-relaxed" title={sub.overview}>
-                                        {sub.overview || '暂无简介，点击刷新尝试从 TMDB 获取'}
-                                    </div>
+                                    <SeriesOverview overview={sub.overview} />
                                     <div className={`mt-2 pt-2 border-t ${borderColor} flex justify-between items-center`}>
                                         <span className="text-blue-500 font-bold">已下载: {sub.episode_count || 0} 集</span>
                                         <button
@@ -257,7 +289,7 @@ const SeriesPage = () => {
                                 </div>
 
                                 <div className="flex justify-between items-center text-xs">
-                                    <span className={textSecondary}>源: {sub.rss_source_name || 'Unknown'}</span>
+                                    <span className={textSecondary}>追剧来源: {sub.site_name || '未知'}</span>
                                     <div className="space-x-3 whitespace-nowrap">
                                         <button
                                             onClick={async () => {

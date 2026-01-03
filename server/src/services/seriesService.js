@@ -20,10 +20,12 @@ class SeriesService {
         const subs = this._getDB().prepare(`
             SELECT s.*, 
                    t.enabled as task_enabled, 
-                   r.name as rss_source_name
+                   r.name as rss_source_name,
+                   site.name as site_name
             FROM series_subscriptions s
             LEFT JOIN tasks t ON s.task_id = t.id
             LEFT JOIN rss_sources r ON s.rss_source_id = r.id
+            LEFT JOIN sites site ON r.site_id = site.id
             ORDER BY s.created_at DESC
         `).all();
 

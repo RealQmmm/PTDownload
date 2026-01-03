@@ -295,7 +295,7 @@ const TasksPage = () => {
     const handleSelectSource = (source) => {
         setFormData({
             ...formData,
-            name: source.name,
+            name: editingTask ? formData.name : source.name,
             site_id: source.site_id,
             rss_url: source.url
         });
@@ -376,22 +376,22 @@ const TasksPage = () => {
             {loading ? (
                 <div className={`flex justify-center items-center h-64 ${textSecondary}`}>加载任务中...</div>
             ) : (
-                <div className="grid grid-cols-1 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {tasks.map((task) => {
                         const site = sites.find(s => s.id === task.site_id);
                         const client = clients.find(c => c.id === task.client_id);
                         const matchingSource = rssSources.find(s => s.url === task.rss_url);
 
                         return (
-                            <div key={task.id} className={`${bgMain} border ${borderColor} rounded-xl p-4 md:p-6 transition-all hover:shadow-md group shadow-sm`}>
+                            <div key={task.id} className={`${bgMain} border ${borderColor} rounded-xl p-3 md:p-4 transition-all hover:shadow-md group shadow-sm`}>
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-                                    <div className="flex-1 space-y-2">
-                                        <div className="flex items-center space-x-3">
+                                    <div className="flex-1 space-y-1">
+                                        <div className="flex items-center space-x-2">
                                             <span className={`w-2 h-2 rounded-full ${task.enabled ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`}></span>
-                                            <h3 className={`text-xl font-bold ${textPrimary}`}>{task.name}</h3>
+                                            <h3 className={`text-lg font-bold ${textPrimary}`}>{task.name}</h3>
                                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${darkMode ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-blue-50 text-blue-600 border-blue-200'} border`}>RSS 订阅</span>
                                         </div>
-                                        <div className="flex flex-wrap items-center gap-y-2 text-sm text-gray-500 space-x-4">
+                                        <div className="flex flex-wrap items-center gap-y-1 text-xs text-gray-500 space-x-3">
                                             <div className="flex items-center">
                                                 <span className="mr-1">🌐</span> {site?.name || '未知站点'}
                                             </div>
@@ -403,22 +403,22 @@ const TasksPage = () => {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="flex items-center mt-4 md:mt-0 space-x-3 w-full md:w-auto justify-end">
+                                    <div className="flex items-center mt-2 md:mt-0 space-x-2 w-full md:w-auto justify-end">
                                         <button
                                             onClick={() => viewLogs(task)}
-                                            className={`px-4 py-2 rounded-lg text-sm font-medium border ${borderColor} text-blue-500 ${darkMode ? 'hover:bg-blue-900/20' : 'hover:bg-blue-50'} transition-colors`}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${borderColor} text-blue-500 ${darkMode ? 'hover:bg-blue-900/20' : 'hover:bg-blue-50'} transition-colors`}
                                         >
-                                            任务日志
+                                            日志
                                         </button>
                                         <button
                                             onClick={() => executeTask(task)}
-                                            className={`px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-colors`}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 transition-colors`}
                                         >
-                                            立即执行
+                                            运行
                                         </button>
                                         <button
                                             onClick={() => toggleTask(task)}
-                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${task.enabled
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${task.enabled
                                                 ? 'bg-amber-500/10 text-amber-500 hover:bg-amber-500/20'
                                                 : 'bg-green-500/10 text-green-500 hover:bg-green-500/20'
                                                 }`}
@@ -427,13 +427,13 @@ const TasksPage = () => {
                                         </button>
                                         <button
                                             onClick={() => handleEdit(task)}
-                                            className={`px-4 py-2 rounded-lg text-sm font-medium border ${borderColor} ${textSecondary} ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition-colors`}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${borderColor} ${textSecondary} ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition-colors`}
                                         >
                                             编辑
                                         </button>
                                         <button
                                             onClick={() => deleteTask(task.id)}
-                                            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
                                         >
                                             🗑️
                                         </button>
@@ -441,7 +441,7 @@ const TasksPage = () => {
                                 </div>
 
                                 {task.last_run && (
-                                    <div className={`mt-4 pt-4 border-t ${borderColor} text-[10px] ${textSecondary} flex justify-between items-center`}>
+                                    <div className={`mt-2 pt-2 border-t ${borderColor} text-[10px] ${textSecondary} flex justify-between items-center`}>
                                         <span>上次运行: {new Date(task.last_run).toLocaleString()}</span>
                                         <div className="flex items-center max-w-[50%]">
                                             {matchingSource ? (

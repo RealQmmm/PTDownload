@@ -345,7 +345,15 @@ const SitesPage = () => {
                             </div>
 
                             <div className="flex items-center justify-between mb-4 min-w-0">
-                                <p className={`${textSecondary} text-xs truncate flex-1`}>{site.url}</p>
+                                <a
+                                    href={site.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`${textSecondary} text-xs truncate flex-1 hover:text-blue-500 transition-colors cursor-pointer`}
+                                    title={`访问 ${site.name}`}
+                                >
+                                    {site.url}
+                                </a>
                                 {isToday(site.last_checkin_at) && (
                                     <span className="text-[10px] text-green-500 font-bold flex items-center ml-2 shrink-0">
                                         <span className="mr-1">✅</span> 今日已签到
