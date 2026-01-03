@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
-
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
+import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
 
 const SeriesOverview = ({ overview }) => {
     const [expanded, setExpanded] = useState(false);
@@ -62,13 +66,9 @@ const SeriesPage = () => {
     const [editId, setEditId] = useState(null);
     const [submitting, setSubmitting] = useState(false);
 
-    // Theme Classes
-    const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
-    const bgSecondary = darkMode ? 'bg-gray-900' : 'bg-gray-50';
-    const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
+    // Theme basic colors (redundant if components used fully, but useful for custom parts)
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
     const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
-    const inputBg = darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-white border-gray-300 text-gray-900';
 
     const handleShowDetails = async (sub) => {
         setCurrentSubscription(sub);
@@ -126,8 +126,6 @@ const SeriesPage = () => {
             setLoadingEpisodes(false);
         }
     };
-
-
 
     const fetchSubscriptions = async () => {
         try {
@@ -195,7 +193,7 @@ const SeriesPage = () => {
                 alert(data.error || '操作失败');
             }
         } catch (err) {
-            alert('提交错: ' + err.message);
+            alert('提交出错: ' + err.message);
         } finally {
             setSubmitting(false);
         }
@@ -221,45 +219,46 @@ const SeriesPage = () => {
     };
 
     return (
-        <div className="p-4 md:p-8">
+        <div className="p-4 md:p-8 space-y-6">
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className={`text-2xl md:text-3xl font-bold ${textPrimary}`}>我的追剧</h1>
                     <p className={`${textSecondary} mt-1 text-sm`}>智能管理您的电视剧订阅</p>
                 </div>
-                <button
+                <Button
                     onClick={openCreateModal}
-                    className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-bold transition-all shadow-lg shadow-blue-900/20 flex items-center"
+                    className="flex items-center"
                 >
-                    <span className="mr-1 text-xl">+</span> 新增追剧
-                </button>
+                    <span className="mr-1 text-xl leading-none">+</span> 新增追剧
+                </Button>
             </div>
 
             {loading ? (
                 <div className={`p-8 text-center ${textSecondary}`}>加载中...</div>
             ) : subscriptions.length === 0 ? (
-                <div className={`flex flex-col items-center justify-center p-12 ${bgMain} rounded-2xl border ${borderColor} text-center`}>
+                <Card className="flex flex-col items-center justify-center p-12 text-center">
                     <span className="text-4xl mb-4">📺</span>
                     <h3 className={`text-lg font-bold ${textPrimary} mb-2`}>还没有订阅任何剧集</h3>
                     <p className={`${textSecondary} mb-6`}>点击右上角按钮开始您的智能追剧之旅</p>
-                </div>
+                </Card>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6">
                     {subscriptions.map(sub => (
-                        <div key={sub.id} className={`${bgMain} rounded-2xl border ${borderColor} shadow-sm hover:shadow-md transition-all overflow-hidden flex`}>
+                        <Card key={sub.id} noPadding className="flex overflow-hidden h-full group">
                             {/* Optional Poster Section */}
                             {sub.poster_path && (
-                                <div className="w-24 sm:w-28 flex-shrink-0 bg-gray-200 dark:bg-gray-800">
+                                <div className="w-24 sm:w-32 flex-shrink-0 bg-gray-200 dark:bg-gray-800 relative overflow-hidden rounded-l-2xl">
                                     <img
                                         src={sub.poster_path}
                                         alt={sub.name}
-                                        className="w-full h-full object-cover"
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                         onError={(e) => { e.target.style.display = 'none' }}
                                     />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none"></div>
                                 </div>
                             )}
 
-                            <div className="flex-1 p-5 min-w-0">
+                            <div className="flex-1 p-5 min-w-0 flex flex-col">
                                 <div className="flex justify-between items-start mb-3">
                                     <div className="min-w-0 flex-1 mr-2">
                                         <div className="flex items-center gap-2 overflow-hidden">
@@ -275,22 +274,22 @@ const SeriesPage = () => {
                                     </div>
                                 </div>
 
-                                <div className={`text-xs ${textSecondary} ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'} p-3 rounded-lg mb-4`}>
+                                <div className={`text-xs ${textSecondary} bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg mb-4`}>
                                     <SeriesOverview overview={sub.overview} />
-                                    <div className={`mt-2 pt-2 border-t ${borderColor} flex justify-between items-center`}>
+                                    <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700/50 flex justify-between items-center">
                                         <span className="text-blue-500 font-bold">已下载: {sub.episode_count || 0} 集</span>
                                         <button
                                             onClick={() => handleShowDetails(sub)}
-                                            className={`text-xs px-2 py-1 rounded border ${borderColor} hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors whitespace-nowrap`}
+                                            className="text-xs px-2 py-1 rounded border border-gray-200 dark:border-gray-600 hover:bg-white dark:hover:bg-gray-700 transition-colors whitespace-nowrap text-gray-500 dark:text-gray-400"
                                         >
                                             详情
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="flex justify-between items-center text-xs">
-                                    <span className={textSecondary}>追剧来源: {sub.site_name || '未知'}</span>
-                                    <div className="space-x-3 whitespace-nowrap">
+                                <div className="mt-auto flex justify-between items-center text-xs">
+                                    <span className={textSecondary}>来源: {sub.site_name || '未知'}</span>
+                                    <div className="space-x-2 whitespace-nowrap">
                                         <button
                                             onClick={async () => {
                                                 if (confirm(`确定要更新 "${sub.name}" 的图片和简介吗？`)) {
@@ -310,7 +309,7 @@ const SeriesPage = () => {
                                             className="text-purple-400 hover:text-purple-500 font-medium"
                                             title="重新刮削图片和简介"
                                         >
-                                            ↻ 刷新
+                                            刷新
                                         </button>
                                         <button
                                             onClick={() => handleEdit(sub)}
@@ -327,195 +326,167 @@ const SeriesPage = () => {
                                     </div>
                                 </div>
                             </div>
-                        </div>
+                        </Card>
                     ))}
                 </div>
             )}
 
-            {/* Add Modal */}
-            {showModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-                    <div className={`${bgMain} rounded-2xl w-full max-w-lg border ${borderColor} shadow-2xl`}>
-                        <div className={`p-6 border-b ${borderColor}`}>
-                            <h2 className={`text-xl font-bold ${textPrimary}`}>{editId ? '编辑订阅' : '新增追剧订阅'}</h2>
-                        </div>
-                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                            <div>
-                                <label className={`block text-xs font-bold uppercase ${textSecondary} mb-1`}>剧集名称 (支持中文)</label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.name}
-                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                    placeholder="例如: 西部世界"
-                                    className={`w-full p-3 rounded-xl border ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
-                                />
-                            </div>
-                            <div>
-                                <label className={`block text-xs font-bold uppercase ${textSecondary} mb-1`}>别名 / 英文名 (用于匹配种子)</label>
-                                <input
-                                    type="text"
-                                    value={formData.alias || ''}
-                                    onChange={e => setFormData({ ...formData, alias: e.target.value })}
-                                    placeholder="例如: Westworld"
-                                    className={`w-full p-3 rounded-xl border ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
-                                />
-                                <p className={`text-[10px] ${textSecondary} mt-1`}>如果种子名称是英文，请在此填写英文原名。刷新元数据时会自动尝试获取。</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className={`block text-xs font-bold uppercase ${textSecondary} mb-1`}>季数 (数字)</label>
-                                    <input
-                                        type="number"
-                                        value={formData.season}
-                                        onChange={e => setFormData({ ...formData, season: e.target.value })}
-                                        placeholder="例如: 1"
-                                        className={`w-full p-2 rounded-xl border ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
-                                    />
-                                </div>
-                                <div>
-                                    <label className={`block text-xs font-bold uppercase ${textSecondary} mb-1`}>画质偏好</label>
-                                    <select
-                                        value={formData.quality}
-                                        onChange={e => setFormData({ ...formData, quality: e.target.value })}
-                                        className={`w-full p-2.5 ounded-xl border ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
-                                    >
-                                        <option value="">不限 / Any</option>
-                                        <option value="4K">4K / 2160p</option>
-                                        <option value="1080p">1080p</option>
-                                        <option value="720p">720p</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div>
-                                <label className={`block text-xs font-bold uppercase ${textSecondary} mb-1`}>RSS 订阅源</label>
-                                <select
-                                    required
-                                    value={formData.rss_source_id}
-                                    onChange={e => setFormData({ ...formData, rss_source_id: e.target.value })}
-                                    className={`w-full p-3 rounded-xl border ${inputBg} focus:ring-2 focus:ring-blue-500 outline-none`}
-                                >
-                                    <option value="">请选择 RSS 源</option>
-                                    {rssSources.map(src => (
-                                        <option key={src.id} value={src.id}>
-                                            {src.site_name ? `${src.site_name} - ${src.name}` : src.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="pt-4 flex justify-end space-x-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className={`px-5 py-2.5 rounded-xl font-medium ${textSecondary} ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
-                                >
-                                    取消
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={submitting}
-                                    className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg shadow-blue-600/20 disabled:opacity-50"
-                                >
-                                    {submitting ? '提交中...' : (editId ? '保存修改' : '确认订阅')}
-                                </button>
-                            </div>
-                        </form>
+            {/* Add/Edit Modal */}
+            <Modal
+                isOpen={showModal}
+                onClose={() => setShowModal(false)}
+                title={editId ? '编辑订阅' : '新增追剧订阅'}
+                description={editId ? '修改追剧配置' : '配置您的自动追剧任务'}
+                size="md"
+                footer={
+                    <div className="flex justify-end space-x-3">
+                        <Button variant="ghost" onClick={() => setShowModal(false)}>取消</Button>
+                        <Button onClick={handleSubmit} disabled={submitting}>
+                            {submitting ? '提交中...' : (editId ? '保存修改' : '确认订阅')}
+                        </Button>
                     </div>
-                </div>
-            )}
+                }
+            >
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <Input
+                        label="剧集名称 (支持中文)"
+                        required
+                        value={formData.name}
+                        onChange={e => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="例如: 西部世界"
+                    />
+                    <div>
+                        <Input
+                            label="别名 / 英文名 (用于匹配种子)"
+                            value={formData.alias || ''}
+                            onChange={e => setFormData({ ...formData, alias: e.target.value })}
+                            placeholder="例如: Westworld"
+                        />
+                        <p className={`text-[10px] ${textSecondary} mt-1`}>如果种子名称是英文，请填写英文原名。</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <Input
+                            label="季数 (数字)"
+                            type="number"
+                            value={formData.season}
+                            onChange={e => setFormData({ ...formData, season: e.target.value })}
+                            placeholder="例如: 1"
+                        />
+                        <Select
+                            label="画质偏好"
+                            value={formData.quality}
+                            onChange={e => setFormData({ ...formData, quality: e.target.value })}
+                        >
+                            <option value="">不限 / Any</option>
+                            <option value="4K">4K / 2160p</option>
+                            <option value="1080p">1080p</option>
+                            <option value="720p">720p</option>
+                        </Select>
+                    </div>
+                    <Select
+                        label="RSS 订阅源"
+                        required
+                        value={formData.rss_source_id}
+                        onChange={e => setFormData({ ...formData, rss_source_id: e.target.value })}
+                    >
+                        <option value="">请选择 RSS 源</option>
+                        {rssSources.map(src => (
+                            <option key={src.id} value={src.id}>
+                                {src.site_name ? `${src.site_name} - ${src.name}` : src.name}
+                            </option>
+                        ))}
+                    </Select>
+                </form>
+            </Modal>
+
             {/* Episodes Detail Modal */}
-            {showEpisodesModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-                    <div className={`${bgMain} rounded-2xl w-full max-w-2xl border ${borderColor} shadow-2xl max-h-[80vh] flex flex-col`}>
-                        <div className={`p-6 border-b ${borderColor} flex justify-between items-center`}>
-                            <div>
-                                <h2 className={`text-xl font-bold ${textPrimary}`}>剧集详情</h2>
-                                <p className={`text-sm ${textSecondary} mt-1`}>已下载的集数概览</p>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <button
-                                    onClick={handleRefreshEpisodes}
-                                    disabled={loadingEpisodes}
-                                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${loadingEpisodes
-                                        ? 'bg-gray-500/20 text-gray-500 cursor-not-allowed'
-                                        : 'bg-blue-500/20 text-blue-500 hover:bg-blue-500/30'
-                                        }`}
-                                    title="重新扫描集数信息"
-                                >
-                                    {loadingEpisodes ? '刷新中...' : '↻ 刷新'}
-                                </button>
-                                <button onClick={() => setShowEpisodesModal(false)} className={`p-2 rounded-full hover:bg-gray-700/50 ${textSecondary}`}>✕</button>
-                            </div>
-                        </div>
-                        <div className="p-6 overflow-y-auto flex-1">
-                            {loadingEpisodes ? (
-                                <div className={`text-center py-10 ${textSecondary}`}>加载数据中...</div>
-                            ) : (
-                                (() => {
-                                    // Ensure the subscribed season is always shown even if no episodes are downloaded
-                                    const displayData = { ...episodesData };
-                                    if (currentSubscription?.season && !displayData[currentSubscription.season]) {
-                                        displayData[currentSubscription.season] = { episodes: [], isSeasonPack: false };
-                                    }
+            <Modal
+                isOpen={showEpisodesModal}
+                onClose={() => setShowEpisodesModal(false)}
+                title="剧集详情"
+                description="已下载的集数概览"
+                size="lg"
+                footer={<Button variant="ghost" onClick={() => setShowEpisodesModal(false)}>关闭</Button>}
+            >
+                <div>
+                    <div className="flex justify-end mb-4">
+                        <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={handleRefreshEpisodes}
+                            disabled={loadingEpisodes}
+                        >
+                            {loadingEpisodes ? '刷新中...' : '↻ 刷新扫描'}
+                        </Button>
+                    </div>
 
-                                    const seasons = Object.keys(displayData).sort((a, b) => parseInt(a) - parseInt(b));
+                    <div className="overflow-y-auto max-h-[60vh]">
+                        {loadingEpisodes ? (
+                            <div className={`text-center py-10 ${textSecondary}`}>加载数据中...</div>
+                        ) : (
+                            (() => {
+                                // Ensure the subscribed season is always shown even if no episodes are downloaded
+                                const displayData = { ...episodesData };
+                                if (currentSubscription?.season && !displayData[currentSubscription.season]) {
+                                    displayData[currentSubscription.season] = { episodes: [], isSeasonPack: false };
+                                }
 
-                                    if (seasons.length === 0) {
-                                        return (
-                                            <div className={`text-center py-10 ${textSecondary}`}>
-                                                暂无已下载的剧集记录
+                                const seasons = Object.keys(displayData).sort((a, b) => parseInt(a) - parseInt(b));
+
+                                if (seasons.length === 0) {
+                                    return (
+                                        <div className={`text-center py-10 ${textSecondary}`}>
+                                            暂无已下载的剧集记录
+                                        </div>
+                                    );
+                                }
+
+                                return seasons.map(season => {
+                                    const seasonData = displayData[season];
+                                    const episodes = seasonData.episodes || [];
+
+                                    return (
+                                        <div key={season} className="mb-6 last:mb-0">
+                                            <h3 className={`text-sm font-bold ${textPrimary} mb-3 flex items-center flex-wrap`}>
+                                                <span className="w-1 h-4 bg-blue-500 rounded-full mr-2"></span>
+                                                第 {season} 季
+                                                <span className="ml-2 text-xs font-normal text-gray-500 bg-gray-500/10 px-2 py-0.5 rounded-full">
+                                                    已下 {episodes.length} 集 {(currentSubscription?.total_episodes && parseInt(season) === parseInt(currentSubscription.season)) ? ` / 共 ${currentSubscription.total_episodes} 集` : ''}
+                                                </span>
+                                            </h3>
+                                            <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
+                                                {(() => {
+                                                    // Generate full grid from 1 to max episode or TMDB count
+                                                    const isCurrentSeason = parseInt(season) === parseInt(currentSubscription?.season);
+                                                    const totalFromTMDB = isCurrentSeason ? (currentSubscription?.total_episodes || 0) : 0;
+                                                    const maxEp = Math.max(...episodes, totalFromTMDB, 0);
+                                                    const allEpisodes = Array.from({ length: maxEp }, (_, i) => i + 1);
+
+                                                    return allEpisodes.map(ep => {
+                                                        const isDownloaded = episodes.includes(ep);
+                                                        return (
+                                                            <div
+                                                                key={ep}
+                                                                className={`aspect-square flex items-center justify-center rounded-lg font-mono text-sm font-bold ${isDownloaded
+                                                                    ? 'bg-green-500/10 text-green-500 border border-green-500/20'
+                                                                    : 'bg-gray-500/5 text-gray-500/40 border border-gray-500/10'
+                                                                    }`}
+                                                                title={isDownloaded ? `已下载` : `未下载`}
+                                                            >
+                                                                {ep < 10 ? `0${ep}` : ep}
+                                                            </div>
+                                                        );
+                                                    });
+                                                })()}
                                             </div>
-                                        );
-                                    }
-
-                                    return seasons.map(season => {
-                                        const seasonData = displayData[season];
-                                        const episodes = seasonData.episodes || [];
-
-                                        return (
-                                            <div key={season} className="mb-6 last:mb-0">
-                                                <h3 className={`text-sm font-bold ${textPrimary} mb-3 flex items-center flex-wrap`}>
-                                                    <span className="w-1 h-4 bg-blue-500 rounded-full mr-2"></span>
-                                                    第 {season} 季
-                                                    <span className={`ml-2 text-xs font-normal ${textSecondary} bg-gray-500/10 px-2 py-0.5 rounded-full`}>
-                                                        已下 {episodes.length} 集 {(currentSubscription?.total_episodes && parseInt(season) === parseInt(currentSubscription.season)) ? ` / 共 ${currentSubscription.total_episodes} 集` : ''}
-                                                    </span>
-                                                </h3>
-                                                <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2">
-                                                    {(() => {
-                                                        // Generate full grid from 1 to max episode
-                                                        const isCurrentSeason = parseInt(season) === parseInt(currentSubscription?.season);
-                                                        const totalFromTMDB = isCurrentSeason ? (currentSubscription?.total_episodes || 0) : 0;
-                                                        const maxEp = Math.max(...episodes, totalFromTMDB, 0);
-                                                        const allEpisodes = Array.from({ length: maxEp }, (_, i) => i + 1);
-
-                                                        return allEpisodes.map(ep => {
-                                                            const isDownloaded = episodes.includes(ep);
-                                                            return (
-                                                                <div
-                                                                    key={ep}
-                                                                    className={`aspect-square flex items-center justify-center rounded-lg font-mono text-sm font-bold ${isDownloaded
-                                                                        ? 'bg-green-500/10 text-green-500 border border-green-500/20'
-                                                                        : 'bg-gray-500/5 text-gray-500/40 border border-gray-500/10'
-                                                                        }`}
-                                                                    title={isDownloaded ? `已下载` : `未下载`}
-                                                                >
-                                                                    {ep < 10 ? `0${ep}` : ep}
-                                                                </div>
-                                                            );
-                                                        });
-                                                    })()}
-                                                </div>
-                                            </div>
-                                        );
-                                    });
-                                })()
-                            )}
-                        </div>
+                                        </div>
+                                    );
+                                });
+                            })()
+                        )}
                     </div>
                 </div>
-            )}
+            </Modal>
         </div>
     );
 };

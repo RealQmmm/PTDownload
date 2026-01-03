@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
+import Card from '../components/ui/Card';
 
 // Format bytes to human readable format
 const formatBytes = (bytes) => {
@@ -177,7 +178,6 @@ const DashboardPage = ({ setActiveTab }) => {
     const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
 
     // Theme-aware classes
-    const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
     const borderColor = darkMode ? 'border-gray-700' : 'border-gray-100';
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
     const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-500';
@@ -258,17 +258,18 @@ const DashboardPage = ({ setActiveTab }) => {
 
     return (
         <div className="p-4 md:p-8 space-y-6">
-            <div className="mb-6">
+            <div className="mb-2">
                 <h1 className={`text-2xl md:text-3xl font-bold ${textPrimary}`}>仪表盘</h1>
+                <p className={`text-sm ${textSecondary} mt-1`}>各项数据实时监控与总览</p>
             </div>
 
             {/* Stats Overview */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 {/* Traffic Stats Card */}
-                <div className={`${bgMain} border ${borderColor} rounded-2xl p-5 shadow-sm flex flex-col justify-between`}>
+                <Card className="flex flex-col justify-between">
                     <div>
-                        <p className={`${textSecondary} text-sm font-bold uppercase mb-3`}>流量统计 (今日)</p>
-                        <div className="space-y-3">
+                        <p className={`${textSecondary} text-sm font-bold uppercase mb-4`}>流量统计 (今日)</p>
+                        <div className="space-y-4">
                             <div className="flex justify-between items-center">
                                 <span className={`${textSecondary} text-sm`}>下载</span>
                                 <span className={`text-lg font-bold ${textPrimary}`}>{formatBytes(downloadStats.totalDownloaded || 0)}</span>
@@ -279,24 +280,24 @@ const DashboardPage = ({ setActiveTab }) => {
                             </div>
                         </div>
                     </div>
-                    <div className={`mt-4 pt-4 border-t ${borderColor} flex justify-between items-center`}>
+                    <div className={`mt-6 pt-4 border-t ${borderColor} flex justify-between items-center`}>
                         <div className="flex flex-col">
                             <span className={`${textSecondary} text-xs opacity-70`}>累计下载</span>
                             <span className={`text-base font-bold ${textPrimary}`}>{formatBytes(downloadStats.histDownloaded || 0)}</span>
                         </div>
-                        <div className="h-6 w-px bg-gray-500/20"></div>
+                        <div className="h-8 w-px bg-gray-500/10 dark:bg-gray-500/20"></div>
                         <div className="flex flex-col items-end">
                             <span className={`${textSecondary} text-xs opacity-70`}>累计上传</span>
                             <span className={`text-base font-bold text-blue-500`}>{formatBytes(downloadStats.histUploaded || 0)}</span>
                         </div>
                     </div>
-                </div>
+                </Card>
 
                 {/* Speed Card */}
-                <div className={`${bgMain} border ${borderColor} rounded-2xl p-5 shadow-sm flex flex-col justify-between`}>
+                <Card className="flex flex-col justify-between">
                     <div>
-                        <p className={`${textSecondary} text-sm font-bold uppercase mb-3`}>即时速率</p>
-                        <div className="space-y-3">
+                        <p className={`${textSecondary} text-sm font-bold uppercase mb-4`}>即时速率</p>
+                        <div className="space-y-4">
                             <div className="flex justify-between items-center">
                                 <span className={`${textSecondary} text-sm`}>下载速度</span>
                                 <span className={`text-lg font-bold text-green-500`}>{formatSpeed(downloadStats.totalDownloadSpeed || 0)}</span>
@@ -308,7 +309,7 @@ const DashboardPage = ({ setActiveTab }) => {
                         </div>
                     </div>
 
-                    <div className={`mt-4 pt-4 border-t ${borderColor} h-16 relative`}>
+                    <div className={`mt-6 pt-4 border-t ${borderColor} h-16 relative`}>
                         <div className="absolute inset-x-0 bottom-0 h-14 flex items-end space-x-2">
                             <div className="flex-1 h-full relative">
                                 <SpeedSparkline data={speedHistory.downloads} color="#22C55E" height={50} />
@@ -318,27 +319,27 @@ const DashboardPage = ({ setActiveTab }) => {
                             </div>
                         </div>
                     </div>
-                </div>
+                </Card>
 
                 {/* Chart Card */}
-                <div className={`lg:col-span-2 ${bgMain} border ${borderColor} rounded-2xl p-5 shadow-sm`}>
-                    <div className="flex justify-between items-center mb-4">
+                <Card className="lg:col-span-2">
+                    <div className="flex justify-between items-center mb-6">
                         <p className={`${textSecondary} text-sm font-bold uppercase`}>最近7天流量</p>
                         <div className="flex space-x-3 text-[10px]">
                             <span className="flex items-center text-green-500"><i className="w-2 h-2 bg-green-500 rounded-full mr-1.5 inline-block"></i>下载</span>
                             <span className="flex items-center text-blue-500"><i className="w-2 h-2 bg-blue-500 rounded-full mr-1.5 inline-block"></i>上传</span>
                         </div>
                     </div>
-                    <div className="h-[120px]">
+                    <div className="h-[140px]">
                         <HistoryChart data={historyData} textSecondary={textSecondary} darkMode={darkMode} />
                     </div>
-                </div>
+                </Card>
             </div>
 
             {/* Bottom Section: Active Tasks & Today's History */}
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
                 {/* Active Tasks list (Left 75%) */}
-                <div className={`xl:col-span-3 ${bgMain} border ${borderColor} rounded-2xl p-4 md:p-6 shadow-sm overflow-hidden flex flex-col`}>
+                <Card className="xl:col-span-3 flex flex-col h-full min-h-[500px]">
                     <div className="flex justify-between items-center mb-6">
                         <div className="flex items-center">
                             <h2 className={`text-xl font-bold ${textPrimary} flex items-center`}>
@@ -507,10 +508,10 @@ const DashboardPage = ({ setActiveTab }) => {
                             </div>
                         );
                     })()}
-                </div>
+                </Card>
 
                 {/* Today's History (Right 25%) */}
-                <div className={`xl:col-span-1 ${bgMain} border ${borderColor} rounded-2xl p-6 shadow-sm flex flex-col`}>
+                <Card className="xl:col-span-1 flex flex-col h-full min-h-[500px]">
                     <h2 className={`text-lg font-bold ${textPrimary} mb-4 flex items-center`}>
                         <span className="mr-2">📁</span> 今日已下载
                         {todayDownloads.length > 0 && (
@@ -546,7 +547,7 @@ const DashboardPage = ({ setActiveTab }) => {
                             </div>
                         )}
                     </div>
-                </div>
+                </Card>
             </div>
         </div>
     );

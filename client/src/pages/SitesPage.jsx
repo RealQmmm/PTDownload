@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useMemo, memo } from 'react';
 import { useTheme } from '../App';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
+import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
 
 const SiteHeatmap = memo(({ siteId, darkMode, borderColor, textSecondary, authenticatedFetch }) => {
     const [data, setData] = useState([]);
@@ -51,7 +56,7 @@ const SiteHeatmap = memo(({ siteId, darkMode, borderColor, textSecondary, authen
     };
 
     return (
-        <div className="mt-4 pt-4 border-t border-dashed border-gray-700/50">
+        <div className="mt-4 pt-4 border-t border-dashed border-gray-500/20">
             <div className="flex items-center justify-between mb-2">
                 <span className={`text-[10px] ${textSecondary} font-bold uppercase tracking-wider`}>上传贡献图 (最近90天)</span>
             </div>
@@ -78,18 +83,13 @@ const SitesPage = () => {
     const [checkingId, setCheckingId] = useState(null);
 
     // Theme-aware classes
-    const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
-    const bgSecondary = darkMode ? 'bg-gray-900' : 'bg-gray-50';
-    const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
     const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
-    const inputBg = darkMode ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900';
-    const hoverBg = darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100';
+    const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
 
     // Form state
     const [formData, setFormData] = useState({
         name: '',
-        url: '',
         url: '',
         cookies: '',
         default_rss_url: '',
@@ -117,7 +117,7 @@ const SitesPage = () => {
     }, []);
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
+        if (e) e.preventDefault();
         const method = editingSite ? 'PUT' : 'POST';
         const url = editingSite ? `/api/sites/${editingSite.id}` : '/api/sites';
 
@@ -165,10 +165,6 @@ const SitesPage = () => {
                 enabled: site.enabled,
                 auto_checkin: site.auto_checkin || 0
             });
-            setShowModal(true);
-        } else {
-            setEditingSite(null);
-            setFormData({ name: '', url: '', cookies: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0 });
             setShowModal(true);
         }
     };
@@ -260,51 +256,57 @@ const SitesPage = () => {
     };
 
     return (
-        <div className="p-4 md:p-8">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 space-y-4 sm:space-y-0">
+        <div className="p-4 md:p-8 space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0">
                 <div>
                     <h1 className={`text-2xl md:text-3xl font-bold ${textPrimary}`}>站点管理</h1>
                     <p className={`${textSecondary} mt-1 text-sm`}>配置您已加入的 PT 站点</p>
                 </div>
                 <div className="flex space-x-2 w-full sm:w-auto">
-                    <button
-                        onClick={handleAdd}
-                        className="flex-1 sm:flex-none px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all shadow-lg shadow-blue-600/20"
-                    >
+                    <Button onClick={syncAllSiteData} variant="ghost" disabled={loading} size="sm">
+                        🔄 一键同步
+                    </Button>
+                    <Button onClick={checkinAll} variant="secondary" disabled={loading} size="sm">
+                        ✅ 一键签到
+                    </Button>
+                    <Button onClick={handleAdd} variant="primary" className="flex-1 sm:flex-none">
                         + 添加新站点
-                    </button>
+                    </Button>
                 </div>
             </div>
 
             {loading ? (
-                <div className={`flex justify-center items-center h-64 ${textSecondary}`}>加载中...</div>
+                <div className={`flex justify-center items-center h-64 ${textSecondary}`}>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-2"></div>
+                    加载中...
+                </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {sites.map((site) => (
-                        <div key={site.id} className={`${bgMain} rounded-xl p-6 border ${borderColor} hover:border-blue-500/50 transition-all group shadow-sm relative overflow-hidden`}>
+                        <Card key={site.id} className="relative group overflow-hidden flex flex-col h-full">
                             {/* Cookie Status Indicator */}
                             {site.enabled && site.type !== 'Mock' && (
                                 <div className="absolute top-0 right-0 flex">
-                                    <div className={`px-2 py-0.5 text-[8px] font-bold uppercase border-l border-b ${borderColor} ${site.cookie_status === 1 ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+                                    <div className={`px-2 py-0.5 text-[8px] font-bold uppercase rounded-bl-lg ${site.cookie_status === 1 ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
                                         }`}>
-                                        {site.cookie_status === 1 ? 'Cookie 已失效' : 'Cookie 正常'}
+                                        {site.cookie_status === 1 ? 'Cookie 失效' : '正常'}
                                     </div>
                                 </div>
                             )}
 
                             <div className="flex justify-between items-start mb-4">
-                                <div className="flex items-center">
-                                    <div className={`w-12 h-12 ${darkMode ? 'bg-blue-900/30' : 'bg-blue-100'} rounded-lg flex items-center justify-center text-2xl mr-4 group-hover:scale-110 transition-transform`}>
+                                <div className="flex items-center min-w-0">
+                                    <div className={`w-12 h-12 flex-shrink-0 ${darkMode ? 'bg-blue-900/20' : 'bg-blue-50'} rounded-lg flex items-center justify-center text-2xl mr-3 group-hover:scale-110 transition-transform`}>
                                         🌐
                                     </div>
-                                    <div className="min-w-0 flex-1">
+                                    <div className="min-w-0">
                                         <div className="flex items-center space-x-2">
-                                            <h3 className={`font-bold text-lg ${textPrimary} truncate`} title={site.name}>{site.name}</h3>
+                                            <h3 className={`font-bold text-lg ${textPrimary} truncate max-w-[120px]`} title={site.name}>{site.name}</h3>
                                             {site.enabled && (
                                                 <button
                                                     onClick={() => !checkingId && manualCheckin(site.id, true)}
                                                     disabled={checkingId === site.id}
-                                                    className={`text-sm transition-all ${checkingId === site.id ? 'animate-bounce' : 'hover:scale-125'} ${site.auto_checkin === 1 ? 'grayscale-0' : 'grayscale opacity-40 hover:opacity-100'} ${checkingId === site.id ? 'opacity-100 cursor-not-allowed' : ''}`}
+                                                    className={`text-sm transition-all ${checkingId === site.id ? 'animate-bounce' : 'hover:scale-125'} ${site.auto_checkin === 1 ? 'text-green-500' : 'text-gray-400 hover:text-green-500'} ${checkingId === site.id ? 'opacity-100 cursor-not-allowed' : ''}`}
                                                     title={site.auto_checkin === 1 ? "已开启每日自动签到 - 点击手动签到" : "自动签到已关闭 - 点击手动签到"}
                                                 >
                                                     ⏰
@@ -324,21 +326,19 @@ const SitesPage = () => {
                                 </div>
                                 <div className="flex space-x-1 shrink-0">
                                     {site.enabled && (
-                                        <>
-                                            <button
-                                                onClick={() => !refreshingId && syncSingleSiteData(site.id)}
-                                                disabled={refreshingId === site.id}
-                                                className={`${textSecondary} hover:text-blue-400 transition-colors p-1.5 rounded-lg ${hoverBg} ${refreshingId === site.id ? 'cursor-not-allowed' : ''}`}
-                                                title="手动刷新站点数据与状态"
-                                            >
-                                                <span className={`text-sm inline-block ${refreshingId === site.id ? 'animate-spin' : ''}`}>🔄</span>
-                                            </button>
-                                        </>
+                                        <button
+                                            onClick={() => !refreshingId && syncSingleSiteData(site.id)}
+                                            disabled={refreshingId === site.id}
+                                            className={`${textSecondary} hover:text-blue-500 transition-colors p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 ${refreshingId === site.id ? 'cursor-not-allowed' : ''}`}
+                                            title="手动刷新站点数据与状态"
+                                        >
+                                            <span className={`text-sm inline-block ${refreshingId === site.id ? 'animate-spin' : ''}`}>🔄</span>
+                                        </button>
                                     )}
-                                    <button onClick={() => openEdit(site)} className={`${textSecondary} hover:${textPrimary} transition-colors p-1.5 rounded-lg ${hoverBg}`} title="编辑站点">
+                                    <button onClick={() => openEdit(site)} className={`${textSecondary} hover:text-blue-500 transition-colors p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700`} title="编辑站点">
                                         <span className="text-sm">✏️</span>
                                     </button>
-                                    <button onClick={() => handleDelete(site.id)} className={`${textSecondary} hover:text-red-400 transition-colors p-1.5 rounded-lg ${hoverBg}`} title="删除站点">
+                                    <button onClick={() => handleDelete(site.id)} className={`${textSecondary} hover:text-red-500 transition-colors p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700`} title="删除站点">
                                         <span className="text-sm">🗑️</span>
                                     </button>
                                 </div>
@@ -362,7 +362,7 @@ const SitesPage = () => {
                             </div>
 
                             {/* User Stats Overview */}
-                            {site.enabled && (
+                            {site.enabled ? (
                                 <div className={`grid grid-cols-3 gap-2 mb-4 p-3 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'} border ${borderColor}`}>
                                     <div className="space-y-0.5">
                                         <p className={`text-[10px] ${textSecondary} uppercase`}>上传量</p>
@@ -379,6 +379,10 @@ const SitesPage = () => {
                                         </p>
                                     </div>
                                 </div>
+                            ) : (
+                                <div className={`mb-4 p-3 rounded-lg ${darkMode ? 'bg-gray-900/30' : 'bg-gray-50'} border border-dashed ${borderColor} text-center`}>
+                                    <p className={`text-xs ${textSecondary}`}>站点已禁用，无法获取数据</p>
+                                </div>
                             )}
 
                             {site.enabled && (
@@ -391,125 +395,104 @@ const SitesPage = () => {
                                 />
                             )}
 
-                            <div className={`flex justify-between items-center pt-4 border-t ${borderColor}`}>
+                            <div className={`flex justify-between items-center pt-4 border-t ${borderColor} mt-auto`}>
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${site.enabled
                                     ? (darkMode ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-green-50 text-green-600 border-green-100')
                                     : (darkMode ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-red-50 text-red-600 border-red-100')
                                     }`}>
                                     {site.enabled ? '已启用' : '已禁用'}
                                 </span>
-                                <button
+                                <Button
+                                    size="xs"
+                                    variant={site.enabled ? 'ghost' : 'secondary'}
                                     onClick={() => toggleStatus(site)}
-                                    className={`text-xs font-medium ${site.enabled ? `${textSecondary} hover:${textPrimary}` : 'text-blue-400 hover:text-blue-300'}`}
                                 >
                                     {site.enabled ? '禁用' : '启用'}
-                                </button>
+                                </Button>
                             </div>
-                        </div>
+                        </Card>
                     ))}
                     {sites.length === 0 && (
-                        <div className={`col-span-full py-12 text-center ${textSecondary} ${bgMain} rounded-xl border border-dashed ${borderColor}`}>
-                            暂无站点，点击上方按钮添加。
-                        </div>
+                        <Card className="col-span-full py-12 text-center border-dashed">
+                            <p className={textSecondary}>暂无站点，点击上方按钮添加。</p>
+                        </Card>
                     )}
                 </div>
             )}
 
             {/* Modal */}
-            {showModal && (
-                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-                    <div className={`${bgMain} rounded-2xl w-full max-w-lg border ${borderColor} shadow-2xl`}>
-                        <div className={`p-6 border-b ${borderColor} flex justify-between items-center`}>
-                            <h2 className={`text-xl font-bold ${textPrimary}`}>{editingSite ? '编辑站点' : '添加站点'}</h2>
-                            <button onClick={() => setShowModal(false)} className={`${textSecondary} hover:${textPrimary}`}>✕</button>
-                        </div>
-                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                            <div>
-                                <label className={`block text-sm font-medium ${textSecondary} mb-1`}>站点名称</label>
-                                <input
-                                    required
-                                    type="text"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    placeholder="例如: M-Team"
-                                    className={`w-full ${inputBg} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
-                                />
-                            </div>
-                            <div>
-                                <label className={`block text-sm font-medium ${textSecondary} mb-1`}>站点地址 (URL)</label>
-                                <input
-                                    type="url"
-                                    required
-                                    value={formData.url}
-                                    onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                                    className={`w-full ${inputBg} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
-                                    placeholder="https://kp.m-team.cc"
-                                />
-                            </div>
-                            <div>
-                                <label className={`block text-sm font-medium ${textSecondary} mb-1`}>默认 RSS 地址 (用于 RSS 搜索)</label>
-                                <input
-                                    type="url"
-                                    value={formData.default_rss_url}
-                                    onChange={(e) => setFormData({ ...formData, default_rss_url: e.target.value })}
-                                    className={`w-full ${inputBg} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
-                                    placeholder="https://example.com/torrentrss.php?..."
-                                />
-                                <p className="text-xs text-gray-500 mt-1">留空则自动尝试构造 /torrentrss.php</p>
-                            </div>
-                            <div>
-                                <label className={`block text-sm font-medium ${textSecondary} mb-1`}>站点类型</label>
-                                <select
-                                    value={formData.type}
-                                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                                    className={`w-full ${inputBg} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
-                                >
-                                    <option value="NexusPHP">NexusPHP</option>
-                                    <option value="Gazelle">Gazelle</option>
-                                    <option value="Unit3D">Unit3D</option>
-                                    <option value="Mock">Mock (Testing)</option>
-                                    <option value="Other">Other</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className={`block text-sm font-medium ${textSecondary} mb-1`}>Cookies (可选)</label>
-                                <textarea
-                                    value={formData.cookies}
-                                    onChange={(e) => setFormData({ ...formData, cookies: e.target.value })}
-                                    placeholder="粘贴浏览器的 Cookie 以便进行自动任务"
-                                    rows="3"
-                                    className={`w-full ${inputBg} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
-                                ></textarea>
-                            </div>
-                            <div className="flex items-center space-x-2 py-2">
-                                <input
-                                    type="checkbox"
-                                    id="auto_checkin"
-                                    checked={formData.auto_checkin === 1}
-                                    onChange={(e) => setFormData({ ...formData, auto_checkin: e.target.checked ? 1 : 0 })}
-                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <label htmlFor="auto_checkin" className={`text-sm font-medium ${textPrimary}`}>启用每日自动签到</label>
-                            </div>
-                            <div className="flex justify-end space-x-3 mt-6">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowModal(false)}
-                                    className={`px-6 py-2 rounded-lg ${textSecondary} ${hoverBg} transition-colors`}
-                                >
-                                    取消
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-6 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors"
-                                >
-                                    保存
-                                </button>
-                            </div>
-                        </form>
+            <Modal
+                isOpen={showModal}
+                onClose={() => setShowModal(false)}
+                title={editingSite ? '编辑站点' : '添加站点'}
+                description={editingSite ? '修改站点配置信息' : '配置新的 PT 站点'}
+                size="lg"
+                footer={
+                    <div className="flex justify-end space-x-3">
+                        <Button variant="ghost" onClick={() => setShowModal(false)}>取消</Button>
+                        <Button onClick={handleSubmit}>保存</Button>
                     </div>
-                </div>
-            )}
+                }
+            >
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <Input
+                        label="站点名称"
+                        required
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="例如: M-Team"
+                    />
+                    <Input
+                        label="站点地址 (URL)"
+                        type="url"
+                        required
+                        value={formData.url}
+                        onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                        placeholder="https://kp.m-team.cc"
+                    />
+                    <div>
+                        <Input
+                            label="默认 RSS 地址 (用于 RSS 搜索)"
+                            type="url"
+                            value={formData.default_rss_url}
+                            onChange={(e) => setFormData({ ...formData, default_rss_url: e.target.value })}
+                            placeholder="https://example.com/torrentrss.php?..."
+                        />
+                        <p className="text-xs text-gray-500 mt-1">留空则自动尝试构造 /torrentrss.php</p>
+                    </div>
+                    <Select
+                        label="站点类型"
+                        value={formData.type}
+                        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    >
+                        <option value="NexusPHP">NexusPHP</option>
+                        <option value="Gazelle">Gazelle</option>
+                        <option value="Unit3D">Unit3D</option>
+                        <option value="Mock">Mock (Testing)</option>
+                        <option value="Other">Other</option>
+                    </Select>
+                    <div>
+                        <label className={`block text-xs font-bold uppercase ${textSecondary} mb-1`}>Cookies (可选)</label>
+                        <textarea
+                            value={formData.cookies}
+                            onChange={(e) => setFormData({ ...formData, cookies: e.target.value })}
+                            placeholder="粘贴浏览器的 Cookie 以便进行自动任务"
+                            rows="3"
+                            className={`w-full ${darkMode ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900'} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
+                        ></textarea>
+                    </div>
+                    <div className="flex items-center space-x-2 py-2">
+                        <input
+                            type="checkbox"
+                            id="auto_checkin"
+                            checked={formData.auto_checkin === 1}
+                            onChange={(e) => setFormData({ ...formData, auto_checkin: e.target.checked ? 1 : 0 })}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <label htmlFor="auto_checkin" className={`text-sm font-medium ${textPrimary}`}>启用每日自动签到</label>
+                    </div>
+                </form>
+            </Modal>
         </div>
     );
 };

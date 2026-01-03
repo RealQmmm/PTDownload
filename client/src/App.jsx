@@ -221,7 +221,7 @@ function App() {
                 {/* Mobile Backdrop */}
                 {sidebarOpen && (
                     <div
-                        className="fixed inset-0 z-20 bg-black/50 lg:hidden"
+                        className="fixed inset-0 z-20 bg-gray-900/50 backdrop-blur-sm lg:hidden transition-opacity"
                         onClick={() => setSidebarOpen(false)}
                     />
                 )}
@@ -241,21 +241,23 @@ function App() {
                 </div>
 
                 {/* Main Content */}
-                <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+                <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative bg-surface-50 dark:bg-surface-950 transition-colors duration-300">
                     {/* Mobile Header */}
-                    <header className={`lg:hidden flex items-center justify-between p-4 border-b shrink-0 ${computedDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                    <header className={`lg:hidden flex items-center justify-between p-4 border-b shrink-0 ${computedDarkMode ? 'bg-surface-900 border-gray-800' : 'bg-white border-gray-200'}`}>
                         <button
                             onClick={() => setSidebarOpen(true)}
-                            className={`p-2 rounded-lg ${computedDarkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'} transition-colors`}
+                            className={`p-2 rounded-lg ${computedDarkMode ? 'hover:bg-gray-800 text-gray-200' : 'hover:bg-gray-100 text-gray-700'} transition-colors`}
                         >
                             <span className="text-2xl">☰</span>
                         </button>
-                        <h1 className="text-xl font-bold text-blue-400 truncate px-4">{siteName}</h1>
+                        <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary-400 to-primary-600 truncate px-4">
+                            {siteName}
+                        </h1>
                         <div className="w-10"></div> {/* Spacer for symmetry */}
                     </header>
 
-                    <main className={`flex-1 overflow-y-auto overflow-x-hidden ${computedDarkMode ? 'bg-gray-900' : 'bg-gray-100'}`}>
-                        <div className="max-w-full">
+                    <main className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+                        <div className="max-w-full h-full">
                             {renderContent()}
                         </div>
                     </main>

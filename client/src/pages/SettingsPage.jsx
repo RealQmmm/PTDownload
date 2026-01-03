@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../App';
 import LogsPage from './LogsPage';
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
 
 const SettingsPage = () => {
     const { darkMode, themeMode, setThemeMode, siteName, setSiteName, authenticatedFetch } = useTheme();
@@ -23,50 +27,10 @@ const SettingsPage = () => {
         tmdb_base_url: '',
         tmdb_image_base_url: ''
     });
-
-    const handleSavePassword = async () => {
-        if (!passwordData.oldPassword || !passwordData.newPassword) {
-            setMessage({ type: 'error', text: '请填写完整信息' });
-            setTimeout(() => setMessage(null), 3000);
-            return;
-        }
-        if (passwordData.newPassword !== passwordData.confirmPassword) {
-            setMessage({ type: 'error', text: '两次输入的新密码不一致' });
-            setTimeout(() => setMessage(null), 3000);
-            return;
-        }
-
-        setSaving(true);
-        setMessage(null);
-        try {
-            const res = await authenticatedFetch('/api/auth/change-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    oldPassword: passwordData.oldPassword,
-                    newPassword: passwordData.newPassword
-                })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setMessage({ type: 'success', text: '密码修改成功' });
-                setPasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
-            } else {
-                setMessage({ type: 'error', text: data.error || '修改失败' });
-            }
-        } catch (err) {
-            setMessage({ type: 'error', text: '请求出错' });
-        } finally {
-            setSaving(false);
-            setTimeout(() => setMessage(null), 3000);
-        }
-    };
-
-
     const [notifySettings, setNotifySettings] = useState({
         notify_enabled: false,
         notify_on_download_start: false,
-        notification_receivers: [] // JSONArray of {id, type, name, url, method, enabled}
+        notification_receivers: []
     });
     const [securitySettings, setSecuritySettings] = useState({
         security_login_limit: '5'
@@ -82,6 +46,13 @@ const SettingsPage = () => {
     const [cookieCheckInterval, setCookieCheckInterval] = useState('60');
     const [checkinTime, setCheckinTime] = useState('09:00');
     const [rssCacheTTL, setRssCacheTTL] = useState('300');
+
+    // Theme helpers
+    const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
+    const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
+    const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
+    const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
+    const activeSelectionClass = darkMode ? 'border-blue-500 bg-blue-900/20' : 'border-blue-500 bg-blue-50';
 
     useEffect(() => {
         setTempSiteName(siteName);
@@ -120,7 +91,6 @@ const SettingsPage = () => {
                     newNotifySettings.notification_receivers = receivers;
                 } catch (e) { console.error('Parse error', e); }
             } else if (data.notify_bark_url || data.notify_webhook_url) {
-                // Migration from old fields if new field is empty
                 const migrated = [];
                 if (data.notify_bark_url) {
                     migrated.push({ id: crypto.randomUUID(), type: 'bark', name: '默认 Bark', url: data.notify_bark_url, enabled: true });
@@ -144,16 +114,6 @@ const SettingsPage = () => {
             console.error('Fetch settings failed:', err);
         }
     };
-
-    // Theme-aware classes
-    const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
-    const bgSecondary = darkMode ? 'bg-gray-900' : 'bg-gray-50';
-    const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-    const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
-    const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
-    const hoverBg = darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100';
-    const inputBg = darkMode ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900';
-    const activeSelectionClass = darkMode ? 'border-blue-500 bg-blue-900/20' : 'border-blue-500 bg-blue-50';
 
     const handleSaveGeneral = async () => {
         setSaving(true);
@@ -197,7 +157,7 @@ const SettingsPage = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     ...notifySettings,
-                    notification_receivers: JSON.stringify(notifySettings.notification_receivers) // Send as JSON string for storage
+                    notification_receivers: JSON.stringify(notifySettings.notification_receivers)
                 })
             });
             if (res.ok) {
@@ -237,6 +197,44 @@ const SettingsPage = () => {
             }
         } catch (err) {
             setMessage({ type: 'error', text: '请求失败' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const handleSavePassword = async () => {
+        if (!passwordData.oldPassword || !passwordData.newPassword) {
+            setMessage({ type: 'error', text: '请填写完整信息' });
+            setTimeout(() => setMessage(null), 3000);
+            return;
+        }
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            setMessage({ type: 'error', text: '两次输入的新密码不一致' });
+            setTimeout(() => setMessage(null), 3000);
+            return;
+        }
+
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await authenticatedFetch('/api/auth/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    oldPassword: passwordData.oldPassword,
+                    newPassword: passwordData.newPassword
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: '密码修改成功' });
+                setPasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
+            } else {
+                setMessage({ type: 'error', text: data.error || '修改失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求出错' });
         } finally {
             setSaving(false);
             setTimeout(() => setMessage(null), 3000);
@@ -356,8 +354,7 @@ const SettingsPage = () => {
     };
 
     const handleSaveCleanup = async (newValue) => {
-        // If enabling, show warning
-        if (newValue && !confirm('⚠️ 严重警告 ⚠️\n\n开启此功能后，系统将自动删除满足条件的种子和已下载的资源(根据设置的选项)！\n\n请务必确认：\n1. 您已设置了合理的“最小分享率”和“最长做种时间”。\n2. 您了解此操作是不可逆的。\n\n是否确认开启？')) {
+        if (newValue && !confirm('⚠️ 严重警告 ⚠️\n\n开启此功能后，系统将自动删除满足条件的种子和已下载的资源！\n\n请务必确认：\n1. 您已设置了合理的“最小分享率”和“最长做种时间”。\n2. 您了解此操作是不可逆的。\n\n是否确认开启？')) {
             return;
         }
 
@@ -416,180 +413,134 @@ const SettingsPage = () => {
         switch (subTab) {
             case 'general':
                 return (
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         {message && (
                             <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                                 {message.text}
                             </div>
                         )}
 
-                        <div className={`${bgSecondary} p-4 rounded-xl border ${borderColor} space-y-6`}>
-                            {/* Section 1: Site Info */}
+                        <Card className="space-y-6">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div>
-                                    <label className={`block text-xs font-bold ${textSecondary} mb-2 uppercase tracking-wider`}>站点名称</label>
-                                    <div className="flex space-x-2">
-                                        <input
-                                            type="text"
-                                            value={tempSiteName}
-                                            onChange={(e) => setTempSiteName(e.target.value)}
-                                            className={`flex-1 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1.5 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
-                                            placeholder="PT Manager"
-                                        />
-                                    </div>
+                                    <Input
+                                        label="站点名称"
+                                        value={tempSiteName}
+                                        onChange={(e) => setTempSiteName(e.target.value)}
+                                        placeholder="PT Manager"
+                                    />
                                     <p className={`text-[10px] ${textSecondary} mt-1`}>侧边栏顶部显示的名称</p>
                                 </div>
-                                <div>
-                                    <label className={`block text-xs font-bold ${textSecondary} mb-2 uppercase tracking-wider`}>界面语言</label>
-                                    <select className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1.5 text-sm ${textPrimary} outline-none focus:border-blue-500`}>
-                                        <option>简体中文</option>
-                                        <option>English</option>
-                                    </select>
-                                </div>
+                                <Select label="界面语言">
+                                    <option>简体中文</option>
+                                    <option>English</option>
+                                </Select>
                             </div>
-
 
                             <hr className={borderColor} />
 
-                            {/* Section 2: Log & Sync Management */}
                             <div>
-                                <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>日志与同步设置</label>
+                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>日志与同步设置</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="flex-1">
-                                            <p className={`text-sm ${textPrimary} font-medium`}>日志保留天数</p>
-                                            <p className={`text-[10px] ${textSecondary}`}>自动清理超过此天数的日志</p>
-                                        </div>
-                                        <input
-                                            type="number"
-                                            value={logSettings.log_retention_days}
-                                            onChange={(e) => setLogSettings({ ...logSettings, log_retention_days: e.target.value })}
-                                            className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
-                                        />
-                                    </div>
-                                    <div className="flex items-center space-x-3">
-                                        <div className="flex-1">
-                                            <p className={`text-sm ${textPrimary} font-medium`}>最大日志条数/任务</p>
-                                            <p className={`text-[10px] ${textSecondary}`}>每个任务最大保留条目数</p>
-                                        </div>
-                                        <input
-                                            type="number"
-                                            value={logSettings.log_max_count}
-                                            onChange={(e) => setLogSettings({ ...logSettings, log_max_count: e.target.value })}
-                                            className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
-                                        />
-                                    </div>
-                                    <div className="flex items-center space-x-3">
-                                        <div className="flex-1">
-                                            <p className={`text-sm ${textPrimary} font-medium`}>站点数据检查间隔 (分钟)</p>
-                                            <p className={`text-[10px] ${textSecondary}`}>后台自动检查站点数据的频率(包含Cookie检查)</p>
-                                        </div>
-                                        <input
-                                            type="number"
-                                            min="5"
-                                            value={cookieCheckInterval}
-                                            onChange={(e) => setCookieCheckInterval(e.target.value)}
-                                            className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
-                                        />
-                                    </div>
-                                    <div className="flex items-center space-x-3">
-                                        <div className="flex-1">
-                                            <p className={`text-sm ${textPrimary} font-medium`}>每日自动签到时间</p>
-                                            <p className={`text-[10px] ${textSecondary}`}>PT 站点每日自动打卡时间</p>
-                                        </div>
-                                        <input
-                                            type="time"
-                                            value={checkinTime}
-                                            onChange={(e) => setCheckinTime(e.target.value)}
-                                            className={`w-32 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center outline-none focus:border-blue-500`}
-                                        />
-                                    </div>
-                                    <div className="flex items-center space-x-3">
-                                        <div className="flex-1">
-                                            <p className={`text-sm ${textPrimary} font-medium`}>RSS 缓存时间 (秒)</p>
-                                            <p className={`text-[10px] ${textSecondary}`}>同一 RSS 源的缓存有效期，减少重复请求 (推荐: 300)</p>
-                                        </div>
-                                        <input
-                                            type="number"
-                                            min="60"
-                                            max="3600"
-                                            value={rssCacheTTL}
-                                            onChange={(e) => setRssCacheTTL(e.target.value)}
-                                            className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-
-                            <hr className={borderColor} />
-
-                            {/* Section: Security Settings */}
-                            <div>
-                                <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>安全设置</label>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="flex items-center space-x-3">
-                                        <div className="flex-1">
-                                            <p className={`text-sm ${textPrimary} font-medium`}>登录限流 (次/分钟)</p>
-                                            <p className={`text-[10px] ${textSecondary}`}>同一 IP 每分钟允许的最大失败尝试次数(推荐: 3-5)</p>
-                                        </div>
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            max="100"
-                                            value={securitySettings?.security_login_limit || '5'}
-                                            onChange={(e) => setSecuritySettings({ ...securitySettings, security_login_limit: e.target.value })}
-                                            className={`w-20 ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-1 text-sm ${textPrimary} text-center`}
-                                        />
-                                    </div>
+                                    <Input
+                                        label="日志保留天数"
+                                        type="number"
+                                        value={logSettings.log_retention_days}
+                                        onChange={(e) => setLogSettings({ ...logSettings, log_retention_days: e.target.value })}
+                                        placeholder="7"
+                                    />
+                                    <Input
+                                        label="最大日志条数/任务"
+                                        type="number"
+                                        value={logSettings.log_max_count}
+                                        onChange={(e) => setLogSettings({ ...logSettings, log_max_count: e.target.value })}
+                                        placeholder="100"
+                                    />
+                                    <Input
+                                        label="站点数据检查间隔 (分钟)"
+                                        type="number"
+                                        min="5"
+                                        value={cookieCheckInterval}
+                                        onChange={(e) => setCookieCheckInterval(e.target.value)}
+                                        placeholder="60"
+                                    />
+                                    <Input
+                                        label="每日自动签到时间"
+                                        type="time"
+                                        value={checkinTime}
+                                        onChange={(e) => setCheckinTime(e.target.value)}
+                                    />
+                                    <Input
+                                        label="RSS 缓存时间 (秒)"
+                                        type="number"
+                                        min="60"
+                                        max="3600"
+                                        value={rssCacheTTL}
+                                        onChange={(e) => setRssCacheTTL(e.target.value)}
+                                    />
                                 </div>
                             </div>
 
                             <hr className={borderColor} />
 
-                            {/* Section: Search Mode */}
                             <div>
-                                <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>搜索模式</label>
+                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>安全设置</h3>
+                                <div className="max-w-xs">
+                                    <Input
+                                        label="登录限流 (次/分钟)"
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        value={securitySettings?.security_login_limit || '5'}
+                                        onChange={(e) => setSecuritySettings({ ...securitySettings, security_login_limit: e.target.value })}
+                                    />
+                                </div>
+                            </div>
+
+                            <hr className={borderColor} />
+
+                            <div>
+                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>搜索模式</h3>
                                 <div className="space-y-4">
                                     <div>
-                                        <label className={`block text-sm font-medium ${textSecondary} mb-2`}>搜索结果最大页数 (1-10)</label>
-                                        <input
+                                        <Input
+                                            label="搜索结果最大页数 (1-10)"
                                             type="number"
                                             min="1"
                                             max="10"
                                             value={searchLimit}
                                             onChange={(e) => setSearchLimit(e.target.value)}
                                             disabled={searchMode === 'rss'}
-                                            className={`w-full ${inputBg} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none ${searchMode === 'rss' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            className={searchMode === 'rss' ? 'opacity-50 cursor-not-allowed' : ''}
                                         />
-                                        {searchMode === 'rss' && <p className="text-xs text-yellow-500 mt-1">RSS 模式下不支持分页限制，默认返回前 50 条</p>}
+                                        {searchMode === 'rss' && <p className="text-xs text-yellow-500 mt-1">RSS 模式下不支持分页限制</p>}
                                     </div>
 
                                     <div>
-                                        <label className={`block text-sm font-medium ${textSecondary} mb-2`}>搜索模式</label>
+                                        <label className={`block text-xs font-bold ${textSecondary} mb-2`}>搜索模式</label>
                                         <div className="flex space-x-4">
-                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'browse' ? activeSelectionClass : borderColor}`}>
+                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'browse' ? activeSelectionClass : borderColor} transition-colors flex-1`}>
                                                 <input
                                                     type="radio"
                                                     name="search_mode"
                                                     value="browse"
                                                     checked={searchMode === 'browse'}
                                                     onChange={(e) => setSearchMode(e.target.value)}
-                                                    className="text-blue-600 focus:ring-blue-500"
+                                                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                                                 />
                                                 <div>
                                                     <div className={`font-medium ${textPrimary}`}>网页解析 (默认)</div>
                                                     <div className="text-xs text-gray-500">模拟浏览器访问搜索页面解析结果</div>
                                                 </div>
                                             </label>
-                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'rss' ? activeSelectionClass : borderColor}`}>
+                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'rss' ? activeSelectionClass : borderColor} transition-colors flex-1`}>
                                                 <input
                                                     type="radio"
                                                     name="search_mode"
                                                     value="rss"
                                                     checked={searchMode === 'rss'}
                                                     onChange={(e) => setSearchMode(e.target.value)}
-                                                    className="text-blue-600 focus:ring-blue-500"
+                                                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                                                 />
                                                 <div>
                                                     <div className={`font-medium ${textPrimary}`}>RSS 订阅源</div>
@@ -603,56 +554,40 @@ const SettingsPage = () => {
 
                             <hr className={borderColor} />
 
-                            {/* Section: TMDB Settings */}
                             <div>
-                                <label className={`block text-xs font-bold ${textSecondary} mb-3 uppercase tracking-wider`}>TMDB 刮削设置 (图片/元数据)</label>
-                                <div className="grid grid-cols-1 gap-4">
-                                    <div>
-                                        <label className={`block text-xs ${textSecondary} mb-1`}>API Key</label>
-                                        <input
-                                            type="text"
-                                            value={tmdbSettings.tmdb_api_key}
-                                            onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_api_key: e.target.value })}
-                                            className={`w-full ${inputBg} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
-                                            placeholder="例如: 107492d..."
+                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>TMDB 刮削设置</h3>
+                                <div className="space-y-4">
+                                    <Input
+                                        label="API Key"
+                                        value={tmdbSettings.tmdb_api_key}
+                                        onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_api_key: e.target.value })}
+                                        placeholder="例如: 107492d..."
+                                    />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <Input
+                                            label="API Base URL"
+                                            value={tmdbSettings.tmdb_base_url}
+                                            onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_base_url: e.target.value })}
+                                            placeholder="默认: https://api.themoviedb.org/3"
+                                        />
+                                        <Input
+                                            label="Image Base URL"
+                                            value={tmdbSettings.tmdb_image_base_url}
+                                            onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_image_base_url: e.target.value })}
+                                            placeholder="默认: https://image.tmdb.org/t/p/w300"
                                         />
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className={`block text-xs ${textSecondary} mb-1`}>API Base URL (可用于代理)</label>
-                                            <input
-                                                type="text"
-                                                value={tmdbSettings.tmdb_base_url}
-                                                onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_base_url: e.target.value })}
-                                                className={`w-full ${inputBg} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
-                                                placeholder="默认: https://api.themoviedb.org/3"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className={`block text-xs ${textSecondary} mb-1`}>Image Base URL</label>
-                                            <input
-                                                type="text"
-                                                value={tmdbSettings.tmdb_image_base_url}
-                                                onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_image_base_url: e.target.value })}
-                                                className={`w-full ${inputBg} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
-                                                placeholder="默认: https://image.tmdb.org/t/p/w300"
-                                            />
-                                        </div>
-                                    </div>
-                                    <p className={`text-[10px] ${textSecondary}`}>注意: 如果您在国内无法访问 TMDB，请修改 Base URL 为可用的镜像或反代地址。</p>
                                 </div>
                             </div>
-                        </div>
+                        </Card>
 
-                        <hr className={borderColor} />
-
-                        {/* Section 3: Interface */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between space-y-3 sm:space-y-0">
+                        {/* Theme Section */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700">
                             <div>
                                 <p className={`text-sm font-medium ${textPrimary}`}>视觉主题</p>
                                 <p className={`text-[10px] ${textSecondary}`}>选择您偏好的界面显示模式</p>
                             </div>
-                            <div className={`flex items-center ${darkMode ? 'bg-gray-700/50' : 'bg-gray-100'} p-1 rounded-lg border ${borderColor}`}>
+                            <div className={`flex items-center ${darkMode ? 'bg-gray-700/50' : 'bg-gray-100'} p-1 rounded-lg mt-2 sm:mt-0`}>
                                 {[
                                     { id: 'light', name: '浅色', icon: '☀️' },
                                     { id: 'dark', name: '深色', icon: '🌙' },
@@ -663,7 +598,7 @@ const SettingsPage = () => {
                                         onClick={() => setThemeMode(mode.id)}
                                         className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center space-x-1.5 ${themeMode === mode.id
                                             ? 'bg-blue-600 text-white shadow-sm font-bold'
-                                            : `${textSecondary} hover:${textPrimary} hover:bg-gray-200/50 dark:hover:bg-gray-600/30`}`}
+                                            : `${textSecondary} hover:${textPrimary}`}`}
                                     >
                                         <span>{mode.icon}</span>
                                         <span>{mode.name}</span>
@@ -672,18 +607,14 @@ const SettingsPage = () => {
                             </div>
                         </div>
 
-                        {/* Save Button Row */}
-                        <div className="pt-2 flex justify-end">
-                            <button
-                                onClick={handleSaveGeneral}
-                                disabled={saving}
-                                className="px-8 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-bold text-sm disabled:opacity-50 shadow-lg shadow-blue-600/20"
-                            >
+                        <div className="flex justify-end">
+                            <Button onClick={handleSaveGeneral} disabled={saving}>
                                 {saving ? '保存中...' : '提交所有设置'}
-                            </button>
+                            </Button>
                         </div>
-                    </div >
+                    </div>
                 );
+
             case 'notifications':
                 return (
                     <div className="space-y-4">
@@ -693,7 +624,7 @@ const SettingsPage = () => {
                             </div>
                         )}
 
-                        <div className={`${bgSecondary} p-6 rounded-xl border ${borderColor} space-y-8`}>
+                        <Card className="space-y-6">
                             <div className="flex items-center justify-between">
                                 <div>
                                     <h3 className={`text-sm font-bold ${textPrimary}`}>资源下载通知</h3>
@@ -709,134 +640,129 @@ const SettingsPage = () => {
 
                             <hr className={borderColor} />
 
-                            <div className="space-y-6">
-                                <div>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <label className={`block text-xs font-bold ${textSecondary} uppercase tracking-wider`}>通知接收端 ({notifySettings.notification_receivers.length})</label>
-                                        <button
-                                            onClick={() => {
-                                                const newReceiver = {
-                                                    id: crypto.randomUUID(),
-                                                    type: 'bark',
-                                                    name: '新接收端',
-                                                    url: '',
-                                                    enabled: true,
-                                                    method: 'GET'
-                                                };
-                                                setNotifySettings({
-                                                    ...notifySettings,
-                                                    notification_receivers: [...notifySettings.notification_receivers, newReceiver]
-                                                });
-                                            }}
-                                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded transition-colors"
-                                        >
-                                            + 添加接收端
-                                        </button>
-                                    </div>
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center mb-2">
+                                    <label className={`block text-xs font-bold ${textSecondary} uppercase tracking-wider`}>通知接收端 ({notifySettings.notification_receivers.length})</label>
+                                    <Button
+                                        size="xs"
+                                        onClick={() => {
+                                            const newReceiver = {
+                                                id: crypto.randomUUID(),
+                                                type: 'bark',
+                                                name: '新接收端',
+                                                url: '',
+                                                enabled: true,
+                                                method: 'GET'
+                                            };
+                                            setNotifySettings({
+                                                ...notifySettings,
+                                                notification_receivers: [...notifySettings.notification_receivers, newReceiver]
+                                            });
+                                        }}
+                                    >
+                                        + 添加接收端
+                                    </Button>
+                                </div>
 
-                                    <div className="space-y-4">
-                                        {notifySettings.notification_receivers.map((receiver, index) => (
-                                            <div key={receiver.id} className={`p-4 rounded-lg border ${borderColor} ${darkMode ? 'bg-gray-800/50' : 'bg-gray-50'}`}>
-                                                <div className="flex items-center space-x-2 mb-2">
-                                                    <select
-                                                        value={receiver.type}
-                                                        onChange={(e) => {
-                                                            const updated = [...notifySettings.notification_receivers];
-                                                            updated[index].type = e.target.value;
-                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                        }}
-                                                        className={`w-28 ${inputBg} border rounded px-2 py-1 text-xs`}
-                                                    >
-                                                        <option value="bark">Bark</option>
-                                                        <option value="webhook">Webhook</option>
-                                                    </select>
-                                                    <input
-                                                        type="text"
+                                <div className="space-y-4">
+                                    {notifySettings.notification_receivers.map((receiver, index) => (
+                                        <div key={receiver.id} className={`p-4 rounded-lg border ${borderColor} ${darkMode ? 'bg-gray-800/30' : 'bg-gray-50'}`}>
+                                            <div className="flex items-center space-x-2 mb-3">
+                                                <Select
+                                                    value={receiver.type}
+                                                    onChange={(e) => {
+                                                        const updated = [...notifySettings.notification_receivers];
+                                                        updated[index].type = e.target.value;
+                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                    }}
+                                                    className="w-32"
+                                                >
+                                                    <option value="bark">Bark</option>
+                                                    <option value="webhook">Webhook</option>
+                                                </Select>
+                                                <div className="flex-1">
+                                                    <Input
                                                         value={receiver.name}
                                                         onChange={(e) => {
                                                             const updated = [...notifySettings.notification_receivers];
                                                             updated[index].name = e.target.value;
                                                             setNotifySettings({ ...notifySettings, notification_receivers: updated });
                                                         }}
-                                                        className={`flex-1 ${inputBg} border rounded px-2 py-1 text-xs`}
                                                         placeholder="备注名称"
                                                     />
-                                                    <button
-                                                        onClick={() => {
-                                                            const updated = notifySettings.notification_receivers.filter((_, i) => i !== index);
-                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                        }}
-                                                        className="text-red-400 hover:text-red-500 p-1"
-                                                        title="删除"
-                                                    >
-                                                        🗑️
-                                                    </button>
                                                 </div>
+                                                <Button
+                                                    variant="danger"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        const updated = notifySettings.notification_receivers.filter((_, i) => i !== index);
+                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                    }}
+                                                >
+                                                    🗑️
+                                                </Button>
+                                            </div>
 
-                                                <div className="space-y-2">
-                                                    {receiver.type === 'webhook' && (
-                                                        <div className="flex items-center space-x-2">
-                                                            <span className={`text-xs ${textSecondary} w-10`}>Method:</span>
-                                                            <select
-                                                                value={receiver.method || 'GET'}
-                                                                onChange={(e) => {
-                                                                    const updated = [...notifySettings.notification_receivers];
-                                                                    updated[index].method = e.target.value;
-                                                                    setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                                }}
-                                                                className={`w-20 ${inputBg} border rounded px-2 py-1 text-xs`}
-                                                            >
-                                                                <option value="GET">GET</option>
-                                                                <option value="POST">POST</option>
-                                                            </select>
-                                                        </div>
-                                                    )}
-
+                                            <div className="space-y-3">
+                                                {receiver.type === 'webhook' && (
                                                     <div className="flex items-center space-x-2">
-                                                        <span className={`text-xs ${textSecondary} w-10`}>URL:</span>
-                                                        <input
-                                                            type="text"
+                                                        <span className={`text-xs ${textSecondary} w-16`}>Method:</span>
+                                                        <Select
+                                                            value={receiver.method || 'GET'}
+                                                            onChange={(e) => {
+                                                                const updated = [...notifySettings.notification_receivers];
+                                                                updated[index].method = e.target.value;
+                                                                setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                            }}
+                                                            className="w-24"
+                                                        >
+                                                            <option value="GET">GET</option>
+                                                            <option value="POST">POST</option>
+                                                        </Select>
+                                                    </div>
+                                                )}
+
+                                                <div className="flex items-center space-x-2">
+                                                    <span className={`text-xs ${textSecondary} w-16`}>URL:</span>
+                                                    <div className="flex-1">
+                                                        <Input
                                                             value={receiver.url}
                                                             onChange={(e) => {
                                                                 const updated = [...notifySettings.notification_receivers];
                                                                 updated[index].url = e.target.value;
                                                                 setNotifySettings({ ...notifySettings, notification_receivers: updated });
                                                             }}
-                                                            className={`flex-1 ${inputBg} border rounded px-2 py-1 text-xs`}
                                                             placeholder={receiver.type === 'bark' ? "https://api.day.app/Key" : "https://example.com/api"}
                                                         />
                                                     </div>
                                                 </div>
                                             </div>
-                                        ))}
-                                        {notifySettings.notification_receivers.length === 0 && (
-                                            <div className={`text-center py-4 text-xs ${textSecondary} border border-dashed ${borderColor} rounded-lg`}>
-                                                暂无通知接收端，请点击上方“添加”按钮。
-                                            </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    ))}
+                                    {notifySettings.notification_receivers.length === 0 && (
+                                        <div className={`text-center py-8 text-xs ${textSecondary} border border-dashed ${borderColor} rounded-lg`}>
+                                            暂无通知接收端，请点击上方“添加”按钮。
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
                             <div className="pt-4 flex justify-end space-x-3">
-                                <button
+                                <Button
+                                    variant="secondary"
                                     onClick={handleTestNotify}
                                     disabled={saving || !notifySettings.notify_on_download_start}
-                                    className={`px-6 py-2 border ${borderColor} ${textSecondary} hover:${textPrimary} rounded-lg transition-all font-bold text-sm disabled:opacity-30`}
                                 >
                                     发送测试通知
-                                </button>
-                                <button
-                                    onClick={handleSaveNotify}
-                                    disabled={saving}
-                                    className="px-10 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-bold text-sm disabled:opacity-50 shadow-lg shadow-blue-600/20"
-                                >
+                                </Button>
+                                <Button onClick={handleSaveNotify} disabled={saving}>
                                     {saving ? '保存中...' : '保存通知设置'}
-                                </button>
+                                </Button>
                             </div>
-                        </div>
+                        </Card>
                     </div>
                 );
+
             case 'backup':
                 return (
                     <div className="space-y-4">
@@ -846,19 +772,16 @@ const SettingsPage = () => {
                             </div>
                         )}
 
-                        <div className={`${bgSecondary} p-6 rounded-xl border ${borderColor} space-y-8`}>
+                        <Card className="space-y-8">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="space-y-4">
                                     <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider`}>导出数据</h3>
                                     <p className={`text-xs ${textSecondary}`}>
                                         点击下方按钮将下载一个包含所有配置、站点、任务、客户端及历史统计数据的 JSON 文件。
                                     </p>
-                                    <button
-                                        onClick={handleExport}
-                                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-all shadow-lg shadow-blue-600/20"
-                                    >
+                                    <Button onClick={handleExport} className="w-full">
                                         立即导出备份
-                                    </button>
+                                    </Button>
                                 </div>
 
                                 <div className="space-y-4">
@@ -877,7 +800,7 @@ const SettingsPage = () => {
                                         />
                                         <label
                                             htmlFor="import-backup"
-                                            className={`flex items-center justify-center w-full py-3 border-2 border-dashed ${borderColor} rounded-lg cursor-pointer ${hoverBg} transition-all font-bold text-sm ${textPrimary}`}
+                                            className={`flex items-center justify-center w-full py-2.5 border-2 border-dashed ${borderColor} rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-all font-bold text-sm ${textPrimary}`}
                                         >
                                             {saving ? '正在导入...' : '选择备份文件并导入'}
                                         </label>
@@ -892,33 +815,13 @@ const SettingsPage = () => {
                                     <ul className="list-disc list-inside space-y-1">
                                         <li>导入成功后应用会自动刷新页面。</li>
                                         <li>如果导入的是在不同环境下生成的备份，请确保站点 Cookies 与客户端地址仍然有效。</li>
-                                        <li>建议在执行重大更新或迁移服务器前先手动导出一份备份。</li>
                                     </ul>
                                 </div>
                             </div>
-                        </div>
+                        </Card>
                     </div>
                 );
-            case 'network':
-                return (
-                    <div className="space-y-6">
-                        <div>
-                            <h3 className={`text-lg font-medium ${textPrimary} mb-4`}>代理设置</h3>
-                            <div className={`${bgSecondary} rounded-lg p-4 border ${borderColor} space-y-4`}>
-                                <div>
-                                    <label className={`block text-sm ${textSecondary} mb-1`}>HTTP 代理</label>
-                                    <input
-                                        type="text"
-                                        placeholder="http://127.0.0.1:7890"
-                                        className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded px-3 py-2 ${textPrimary}`}
-                                        disabled
-                                    />
-                                </div>
-                                <p className="text-xs text-yellow-500">代理功能开发中...</p>
-                            </div>
-                        </div>
-                    </div>
-                );
+
             case 'maintenance':
                 return (
                     <div className="space-y-4">
@@ -928,7 +831,7 @@ const SettingsPage = () => {
                             </div>
                         )}
 
-                        <div className={`${bgSecondary} p-6 rounded-xl border ${borderColor} space-y-6`}>
+                        <Card className="space-y-6">
                             <div className="space-y-4">
                                 <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
                                     <span className="mr-2">🧩</span> 历史数据校正
@@ -938,24 +841,18 @@ const SettingsPage = () => {
                                         如果您之前通过其他方式添加了种子，或者系统的完成时间记录不准，可以使用此功能。
                                     </p>
                                     <ul className={`mt-2 space-y-1 text-[11px] ${textSecondary}`}>
-                                        <li>• 自动 matching 下载器中的种子与本地历史记录。</li>
+                                        <li>• 自动校验下载器中的种子与本地历史记录。</li>
                                         <li>• 优先从下载器获取精确的 <b>完成时间</b> 和 <b>创建时间</b>。</li>
                                         <li>• 自动校验并更新 <b>Hash 唯一标识</b>。</li>
-                                        <li>• 同步 <b>完成状态</b>，修复卡在“下载中”的历史条目。</li>
                                     </ul>
                                 </div>
-                                <button
-                                    onClick={handleSyncHistory}
-                                    disabled={saving}
-                                    className="w-full sm:w-auto px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold transition-all shadow-lg shadow-blue-600/20 flex items-center justify-center space-x-2"
-                                >
-                                    <span>{saving ? '同步中...' : '立即开始全局数据同步'}</span>
-                                </button>
+                                <Button onClick={handleSyncHistory} disabled={saving} className="w-full sm:w-auto">
+                                    {saving ? '同步中...' : '立即开始全局数据同步'}
+                                </Button>
                             </div>
 
                             <hr className={borderColor} />
 
-                            {/* Section: Auto Cleanup */}
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between">
                                     <div>
@@ -976,31 +873,23 @@ const SettingsPage = () => {
 
                                 <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-100/50'} border ${borderColor}`}>
                                     <div>
-                                        <label className={`block text-xs font-bold ${textSecondary} mb-2 uppercase`}>最小分享率</label>
-                                        <div className="flex items-center space-x-2">
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                value={cleanupSettings.cleanup_min_ratio}
-                                                onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_min_ratio: e.target.value })}
-                                                className={`w-full ${inputBg} border rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500`}
-                                            />
-                                            <span className={`text-xs ${textSecondary}`}>Ratio</span>
-                                        </div>
+                                        <Input
+                                            label="最小分享率"
+                                            type="number"
+                                            step="0.1"
+                                            value={cleanupSettings.cleanup_min_ratio}
+                                            onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_min_ratio: e.target.value })}
+                                        />
                                         <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此分享率时删除</p>
                                     </div>
                                     <div>
-                                        <label className={`block text-xs font-bold ${textSecondary} mb-2 uppercase`}>最长做种时间 (小时)</label>
-                                        <div className="flex items-center space-x-2">
-                                            <input
-                                                type="number"
-                                                value={cleanupSettings.cleanup_max_seeding_time}
-                                                onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_max_seeding_time: e.target.value })}
-                                                className={`w-full ${inputBg} border rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500`}
-                                            />
-                                            <span className={`text-xs ${textSecondary}`}>Hours</span>
-                                        </div>
-                                        <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此做种时间时删除 ({(cleanupSettings.cleanup_max_seeding_time / 24).toFixed(1)} 天)</p>
+                                        <Input
+                                            label="最长做种时间 (小时)"
+                                            type="number"
+                                            value={cleanupSettings.cleanup_max_seeding_time}
+                                            onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_max_seeding_time: e.target.value })}
+                                        />
+                                        <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此时间时删除 ({(cleanupSettings.cleanup_max_seeding_time / 24).toFixed(1)} 天)</p>
                                     </div>
                                     <div className="md:col-span-2 space-y-2">
                                         <div className="flex items-center justify-between">
@@ -1017,13 +906,14 @@ const SettingsPage = () => {
                                         </div>
                                     </div>
                                     <div className="md:col-span-2 pt-2">
-                                        <button
+                                        <Button
+                                            variant="secondary"
                                             onClick={handleSaveCleanupConfig}
                                             disabled={saving}
-                                            className="w-full py-2 bg-blue-600/10 hover:bg-blue-600/20 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-bold transition-all border border-blue-600/20"
+                                            className="w-full text-blue-600 dark:text-blue-400"
                                         >
                                             保存清理策略
-                                        </button>
+                                        </Button>
                                     </div>
                                 </div>
                             </div>
@@ -1038,7 +928,7 @@ const SettingsPage = () => {
                                     <button
                                         onClick={handleClearHeatmap}
                                         disabled={saving}
-                                        className={`p-3 border ${borderColor} rounded-lg text-xs ${textSecondary} text-left ${hoverBg} transition-all`}
+                                        className={`p-3 border ${borderColor} rounded-lg text-xs ${textSecondary} text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-all`}
                                     >
                                         <p className="font-bold mb-1 text-red-400">清空全部热力数据</p>
                                         <p>删除所有站点的历史上传记录图表</p>
@@ -1046,16 +936,32 @@ const SettingsPage = () => {
                                     <button
                                         onClick={handleClearTasks}
                                         disabled={saving}
-                                        className={`p-3 border ${borderColor} rounded-lg text-xs ${textSecondary} text-left ${hoverBg} transition-all`}
+                                        className={`p-3 border ${borderColor} rounded-lg text-xs ${textSecondary} text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-all`}
                                     >
                                         <p className="font-bold mb-1 text-red-400">清理任务历史与日志</p>
                                         <p>删除所有下载记录及 RSS 运行日志</p>
                                     </button>
                                 </div>
                             </div>
-                        </div>
+                        </Card>
                     </div>
                 );
+
+            case 'network':
+                return (
+                    <Card>
+                        <h3 className={`text-lg font-medium ${textPrimary} mb-4`}>代理设置</h3>
+                        <div className="space-y-4">
+                            <Input
+                                label="HTTP 代理"
+                                placeholder="http://127.0.0.1:7890"
+                                disabled
+                            />
+                            <p className="text-xs text-yellow-500">代理功能开发中...</p>
+                        </div>
+                    </Card>
+                );
+
             case 'security':
                 return (
                     <div className="space-y-4">
@@ -1065,65 +971,53 @@ const SettingsPage = () => {
                             </div>
                         )}
 
-                        <div className={`${bgSecondary} p-6 rounded-xl border ${borderColor} space-y-6`}>
+                        <Card className="space-y-6">
                             <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider`}>修改密码</h3>
-
                             <div className="space-y-4 max-w-md">
-                                <div>
-                                    <label className={`block text-xs font-bold ${textSecondary} mb-2`}>当前密码</label>
-                                    <input
-                                        type="password"
-                                        value={passwordData.oldPassword}
-                                        onChange={(e) => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
-                                        className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
-                                    />
-                                </div>
-                                <div>
-                                    <label className={`block text-xs font-bold ${textSecondary} mb-2`}>新密码</label>
-                                    <input
-                                        type="password"
-                                        value={passwordData.newPassword}
-                                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                                        className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
-                                    />
-                                </div>
-                                <div>
-                                    <label className={`block text-xs font-bold ${textSecondary} mb-2`}>确认新密码</label>
-                                    <input
-                                        type="password"
-                                        value={passwordData.confirmPassword}
-                                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                                        className={`w-full ${darkMode ? 'bg-gray-800 border-gray-600' : 'bg-white border-gray-300'} border rounded-lg px-3 py-2 text-sm ${textPrimary} focus:border-blue-500 outline-none`}
-                                    />
-                                </div>
+                                <Input
+                                    label="当前密码"
+                                    type="password"
+                                    value={passwordData.oldPassword}
+                                    onChange={(e) => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
+                                />
+                                <Input
+                                    label="新密码"
+                                    type="password"
+                                    value={passwordData.newPassword}
+                                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                />
+                                <Input
+                                    label="确认新密码"
+                                    type="password"
+                                    value={passwordData.confirmPassword}
+                                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                />
                             </div>
-
                             <div className="pt-2">
-                                <button
-                                    onClick={handleSavePassword}
-                                    disabled={saving}
-                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all font-bold text-sm disabled:opacity-50 shadow-lg shadow-blue-600/20"
-                                >
+                                <Button onClick={handleSavePassword} disabled={saving}>
                                     {saving ? '保存中...' : '修改密码'}
-                                </button>
+                                </Button>
                             </div>
-                        </div>
+                        </Card>
                     </div>
                 );
+
             case 'about':
                 return (
                     <div className="text-center py-10">
                         <div className="text-4xl mb-4">📦</div>
                         <h2 className={`text-2xl font-bold ${textPrimary} mb-2`}>{siteName}</h2>
                         <p className={textSecondary}>Version 0.1.0 (Alpha)</p>
-                        <div className={`mt-8 p-4 ${bgSecondary} rounded-lg border ${borderColor} text-left text-sm ${textSecondary}`}>
+                        <div className={`mt-8 p-4 ${bgMain} rounded-lg border ${borderColor} text-left text-sm ${textSecondary} inline-block max-w-sm`}>
                             <p>Powered by React, Express, and Docker.</p>
                             <p className="mt-2">Made with ❤️ for PT users.</p>
                         </div>
                     </div>
                 );
+
             case 'logs':
                 return <LogsPage />;
+
             default:
                 return null;
         }
@@ -1133,10 +1027,10 @@ const SettingsPage = () => {
         <div className="p-4 md:p-8 h-full flex flex-col">
             <h1 className={`text-2xl md:text-3xl font-bold ${textPrimary} mb-6 md:mb-8`}>系统设置</h1>
 
-            <div className={`flex-1 flex flex-col lg:flex-row ${bgMain} rounded-xl border ${borderColor} overflow-hidden`}>
+            <div className={`flex-1 flex flex-col lg:flex-row ${bgMain} rounded-xl border ${borderColor} overflow-hidden shadow-sm`}>
                 {/* Settings Navigation */}
-                <div className={`w-full lg:w-48 ${bgMain} border-b lg:border-b-0 lg:border-r ${borderColor} p-2 md:p-4`}>
-                    <nav className="flex lg:flex-col space-x-1 lg:space-x-0 lg:space-y-1 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0">
+                <div className={`w-full lg:w-48 ${darkMode ? 'bg-gray-800' : 'bg-gray-50'} border-b lg:border-b-0 lg:border-r ${borderColor} p-2 md:p-4`}>
+                    <nav className="flex lg:flex-col space-x-1 lg:space-x-0 lg:space-y-1 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0 scrollbar-hide">
                         {[
                             { id: 'general', name: '通用', icon: '⚙️' },
                             { id: 'notifications', name: '通知', icon: '🔔' },
@@ -1150,9 +1044,9 @@ const SettingsPage = () => {
                             <button
                                 key={item.id}
                                 onClick={() => setSubTab(item.id)}
-                                className={`flex-shrink-0 lg:flex-none flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors ${subTab === item.id
-                                    ? 'bg-blue-600 text-white lg:bg-blue-600/20 lg:text-blue-400'
-                                    : `${textSecondary} ${hoverBg} hover:${textPrimary}`
+                                className={`flex-shrink-0 lg:flex-none flex items-center px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${subTab === item.id
+                                    ? 'bg-blue-600 text-white lg:bg-blue-600/10 lg:text-blue-600 dark:lg:text-blue-400 shadow-sm lg:shadow-none'
+                                    : `${textSecondary} hover:bg-gray-200/50 dark:hover:bg-gray-700/50 hover:${textPrimary}`
                                     }`}
                             >
                                 <span className="mr-2 lg:mr-3">{item.icon}</span>

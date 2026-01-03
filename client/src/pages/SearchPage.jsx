@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../App';
 import { FormatUtils } from '../utils/formatUtils';
-
-
+import Card from '../components/ui/Card';
+import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
+import Input from '../components/ui/Input';
+import Select from '../components/ui/Select';
 
 const SearchPage = ({ searchState, setSearchState }) => {
     const { darkMode, authenticatedFetch } = useTheme();
@@ -27,27 +30,36 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const [isCustomPath, setIsCustomPath] = useState(false);
     const [customPath, setCustomPath] = useState('');
 
+    // Theme-aware classes
+    const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
+    const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
+    const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
+    const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
+    const bgSecondary = darkMode ? 'bg-gray-900' : 'bg-gray-50';
+
     // Fetch clients on mount
     useEffect(() => {
-        authenticatedFetch('/api/clients')
-            .then(res => res.json())
-            .then(data => setClients(data))
-            .catch(err => console.error('Failed to fetch clients:', err));
+        const fetchData = async () => {
+            try {
+                const clientsRes = await authenticatedFetch('/api/clients');
+                const clientsData = await clientsRes.json();
+                setClients(clientsData || []);
 
-        authenticatedFetch('/api/sites')
-            .then(res => res.json())
-            .then(data => setSites(data))
-            .catch(err => console.error('Failed to fetch sites:', err));
+                const sitesRes = await authenticatedFetch('/api/sites');
+                const sitesData = await sitesRes.json();
+                setSites(sitesData || []);
 
-        authenticatedFetch('/api/download-paths')
-            .then(res => res.json())
-            .then(data => {
-                setDownloadPaths(data || []);
-                if (data && data.length > 0) {
-                    setSelectedPath(data[0].path);
+                const pathsRes = await authenticatedFetch('/api/download-paths');
+                const pathsData = await pathsRes.json();
+                setDownloadPaths(pathsData || []);
+                if (pathsData && pathsData.length > 0) {
+                    setSelectedPath(pathsData[0].path);
                 }
-            })
-            .catch(err => console.error('Failed to fetch download paths:', err));
+            } catch (err) {
+                console.error('Failed to fetch initialization data:', err);
+            }
+        };
+        fetchData();
     }, []);
 
     // Save state to parent when it changes
@@ -146,16 +158,8 @@ const SearchPage = ({ searchState, setSearchState }) => {
         }
     };
 
-    // Theme-aware classes
-    const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
-    const bgSecondary = darkMode ? 'bg-gray-900' : 'bg-gray-50';
-    const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-    const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
-    const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
-    const inputBg = darkMode ? 'bg-gray-800 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900';
-
     // Sorting Logic
-    const sortedResults = React.useMemo(() => {
+    const sortedResults = useMemo(() => {
         if (!sortConfig.key) return results;
         return [...results].sort((a, b) => {
             let valA = a[sortConfig.key];
@@ -199,45 +203,33 @@ const SearchPage = ({ searchState, setSearchState }) => {
             <div className="mb-6 md:mb-8">
                 <h1 className={`text-2xl md:text-3xl font-bold mb-4 md:mb-6 ${textPrimary}`}>资源搜索</h1>
 
-                <div className="space-y-4">
-                    <form onSubmit={handleSearch} className="flex flex-row gap-2">
-                        <div className="relative flex-1">
-                            <span className={`absolute left-3 top-3 ${textSecondary}`}>🔍</span>
-                            <input
-                                type="text"
-                                value={query}
-                                onChange={(e) => setQuery(e.target.value)}
-                                placeholder="输入关键词..."
-                                className={`w-full border rounded-xl py-2.5 pl-10 pr-3 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-sm ${inputBg}`}
-                            />
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <select
+                <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4">
+                    <div className="flex-1">
+                        <Input
+                            placeholder="输入关键词..."
+                            value={query}
+                            onChange={(e) => setQuery(e.target.value)}
+                        // We use a custom icon here inside the Input if we could, but Input doesn't support leftIcon prop yet.
+                        // We'll stick to simple Input for now.
+                        />
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                        <div className="w-40">
+                            <Select
                                 value={selectedSite}
                                 onChange={(e) => setSelectedSite(e.target.value)}
-                                className={`border rounded-xl py-2.5 px-3 pr-8 focus:outline-none focus:border-blue-500 transition-all text-sm ${inputBg} appearance-none cursor-pointer`}
-                                style={{
-                                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
-                                    backgroundPosition: `right 0.5rem center`,
-                                    backgroundRepeat: `no-repeat`,
-                                    backgroundSize: `1.5em 1.5em`
-                                }}
                             >
                                 <option value="">全部站点</option>
                                 {sites.filter(s => s.enabled === 1 || s.enabled === true || s.enabled === '1').map(site => (
                                     <option key={site.id} value={site.name}>{site.name}</option>
                                 ))}
-                            </select>
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="bg-blue-600 hover:bg-blue-500 text-white px-4 md:px-8 py-2.5 rounded-xl font-bold transition-all disabled:opacity-50 shadow-lg shadow-blue-900/20 whitespace-nowrap h-full text-sm md:text-base"
-                            >
-                                搜索
-                            </button>
+                            </Select>
                         </div>
-                    </form>
-                </div>
+                        <Button type="submit" disabled={loading} className="w-24">
+                            搜索
+                        </Button>
+                    </div>
+                </form>
             </div>
 
             <div className="flex-1 overflow-hidden flex flex-col">
@@ -250,10 +242,9 @@ const SearchPage = ({ searchState, setSearchState }) => {
                     </div>
                 ) : results.length > 0 ? (
                     <div className="flex-1 overflow-hidden flex flex-col">
-
-                        <div className={`flex-1 overflow-hidden flex flex-col ${bgMain} rounded-xl border ${borderColor}`}>
+                        <Card className="flex-1 overflow-hidden flex flex-col p-0">
                             {/* Desktop Table View */}
-                            <div className="hidden lg:block overflow-x-auto overflow-y-auto flex-1">
+                            <div className="hidden lg:block overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
                                 <table className="w-full text-left border-collapse">
                                     <thead className={`${bgSecondary} ${textSecondary} sticky top-0 z-10`}>
                                         <tr>
@@ -278,12 +269,12 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                     <tbody className={`divide-y ${darkMode ? 'divide-gray-700/50' : 'divide-gray-100'}`}>
                                         {sortedResults.map((item, index) => (
                                             <tr key={index} className={`${darkMode ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50/50'} transition-colors group`}>
-                                                <td className="p-4">
+                                                <td className="p-4 align-middle">
                                                     <span className={`${darkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100'} border px-2 py-1 rounded text-xs font-bold uppercase tracking-tight`}>
                                                         {item.siteName}
                                                     </span>
                                                 </td>
-                                                <td className="p-4 py-5 max-w-xs md:max-w-sm lg:max-w-md">
+                                                <td className="p-4 py-5 max-w-xs md:max-w-sm lg:max-w-md align-middle">
                                                     <div className="flex flex-col space-y-1.5">
                                                         <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} group-hover:text-blue-500 font-bold text-xs leading-snug line-clamp-2 transition-colors`} title={item.name}>
                                                             {item.name}
@@ -311,13 +302,14 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                                     {item.date}
                                                 </td>
                                                 <td className="p-4 text-right pr-6 align-middle">
-                                                    <button
+                                                    <Button
+                                                        size="xs"
+                                                        variant="primary"
                                                         onClick={() => handleDownloadClick(item)}
                                                         disabled={downloading === item.link || !item.torrentUrl}
-                                                        className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${!item.torrentUrl ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : downloading === item.link ? 'bg-amber-600/50 text-amber-100 cursor-wait' : 'bg-blue-600/10 text-blue-500 hover:bg-blue-600 hover:text-white border border-blue-600/20'}`}
                                                     >
                                                         {downloading === item.link ? '添加中...' : '下载'}
-                                                    </button>
+                                                    </Button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -348,17 +340,17 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                             <div className="text-green-500 font-bold">↑ {item.seeders}</div>
                                             <div className="text-red-400">↓ {item.leechers}</div>
                                         </div>
-                                        <button
+                                        <Button
+                                            className="w-full"
                                             onClick={() => handleDownloadClick(item)}
                                             disabled={downloading === item.link || !item.torrentUrl}
-                                            className={`w-full py-2.5 rounded-lg text-sm font-bold transition-all ${!item.torrentUrl ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : downloading === item.link ? 'bg-yellow-600/50 text-yellow-200 cursor-wait' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                                         >
-                                            {downloading === item.link ? '⏳ 添加中...' : '📥 下 载'}
-                                        </button>
+                                            {downloading === item.link ? '⏳ 添加中...' : '📥 下载'}
+                                        </Button>
                                     </div>
                                 ))}
                             </div>
-                        </div>
+                        </Card>
 
                         <div className={`mt-4 p-3 ${bgSecondary} rounded-lg border ${borderColor} ${textSecondary} text-xs text-center lg:text-right`}>
                             共找到 {results.length} 个结果
@@ -378,117 +370,118 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 )}
             </div>
 
-            {showClientModal && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-                    <div className={`${bgMain} rounded-2xl w-full max-w-md border ${borderColor} shadow-2xl overflow-hidden`}>
-                        <div className={`p-6 border-b ${borderColor}`}>
-                            <h2 className={`text-xl font-bold ${textPrimary}`}>下载确认</h2>
-                            <p className={`${textSecondary} text-xs mt-1 truncate`}>{pendingDownload?.name}</p>
-                        </div>
+            {/* Download Modal - Using Reusable Modal */}
+            <Modal
+                isOpen={showClientModal}
+                onClose={() => {
+                    setShowClientModal(false);
+                    setPendingDownload(null);
+                    setIsCustomPath(false);
+                    setCustomPath('');
+                }}
+                title="下载确认"
+                description={pendingDownload?.name}
+                footer={null} // We'll implement custom body/footer content inside
+            >
+                <div className="space-y-6">
+                    {/* Path Selection - Only show if paths exist */}
+                    {downloadPaths.length > 0 && (
+                        <div>
+                            <label className={`block text-[10px] font-bold uppercase ${textSecondary} mb-2 tracking-wider`}>保存位置</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {downloadPaths.map((p) => (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => {
+                                            setSelectedPath(p.path);
+                                            setIsCustomPath(false);
+                                        }}
+                                        className={`p-3 rounded-xl border text-xs font-medium transition-all text-left ${!isCustomPath && selectedPath === p.path
+                                            ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20'
+                                            : `${bgSecondary} ${borderColor} ${textPrimary} hover:border-blue-500/50`
+                                            }`}
+                                    >
+                                        <div className="font-bold mb-0.5">{p.name}</div>
+                                        <div className={`text-[10px] opacity-70 truncate`}>{p.path}</div>
+                                    </button>
+                                ))}
+                                {/* Default and Custom Options */}
+                                <button
+                                    onClick={() => {
+                                        setSelectedPath('');
+                                        setIsCustomPath(false);
+                                    }}
+                                    className={`p-3 rounded-xl border text-xs font-medium transition-all text-left ${!isCustomPath && selectedPath === ''
+                                        ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20'
+                                        : `${bgSecondary} ${borderColor} ${textPrimary} hover:border-blue-500/50`
+                                        }`}
+                                >
+                                    <div className="font-bold mb-0.5">默认路径</div>
+                                    <div className={`text-[10px] opacity-70 truncate`}>使用下载器默认设置</div>
+                                </button>
 
-                        <div className="p-6 space-y-6">
-                            {/* Path Selection - Only show if paths exist */}
-                            {downloadPaths.length > 0 && (
-                                <div>
-                                    <label className={`block text-[10px] font-bold uppercase ${textSecondary} mb-2 tracking-wider`}>保存位置</label>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        {downloadPaths.map((p) => (
-                                            <button
-                                                key={p.id}
-                                                onClick={() => {
-                                                    setSelectedPath(p.path);
-                                                    setIsCustomPath(false);
-                                                }}
-                                                className={`p-3 rounded-xl border text-xs font-medium transition-all text-left ${!isCustomPath && selectedPath === p.path
-                                                    ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20'
-                                                    : `${bgSecondary} ${borderColor} ${textPrimary} hover:border-blue-500/50`
-                                                    }`}
-                                            >
-                                                <div className="font-bold mb-0.5">{p.name}</div>
-                                                <div className={`text-[10px] opacity-70 truncate`}>{p.path}</div>
-                                            </button>
-                                        ))}
-                                        {/* Default and Custom Options */}
-                                        <button
-                                            onClick={() => {
-                                                setSelectedPath('');
-                                                setIsCustomPath(false);
-                                            }}
-                                            className={`p-3 rounded-xl border text-xs font-medium transition-all text-left ${!isCustomPath && selectedPath === ''
-                                                ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20'
-                                                : `${bgSecondary} ${borderColor} ${textPrimary} hover:border-blue-500/50`
-                                                }`}
-                                        >
-                                            <div className="font-bold mb-0.5">默认路径</div>
-                                            <div className={`text-[10px] opacity-70 truncate`}>使用下载器默认设置</div>
-                                        </button>
+                                <button
+                                    onClick={() => setIsCustomPath(true)}
+                                    className={`p-3 rounded-xl border text-xs font-medium transition-all text-left ${isCustomPath
+                                        ? 'bg-purple-600 border-purple-600 text-white shadow-md shadow-purple-500/20'
+                                        : `${bgSecondary} ${borderColor} ${textPrimary} hover:border-purple-500/50`
+                                        }`}
+                                >
+                                    <div className="font-bold mb-0.5">手动输入</div>
+                                    <div className={`text-[10px] opacity-70 truncate`}>自定义保存路径</div>
+                                </button>
+                            </div>
 
-                                        <button
-                                            onClick={() => setIsCustomPath(true)}
-                                            className={`p-3 rounded-xl border text-xs font-medium transition-all text-left ${isCustomPath
-                                                ? 'bg-purple-600 border-purple-600 text-white shadow-md shadow-purple-500/20'
-                                                : `${bgSecondary} ${borderColor} ${textPrimary} hover:border-purple-500/50`
-                                                }`}
-                                        >
-                                            <div className="font-bold mb-0.5">手动输入</div>
-                                            <div className={`text-[10px] opacity-70 truncate`}>自定义保存路径</div>
-                                        </button>
-                                    </div>
-
-                                    {isCustomPath && (
-                                        <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
-                                            <input
-                                                type="text"
-                                                value={customPath}
-                                                onChange={(e) => setCustomPath(e.target.value)}
-                                                placeholder="请输入完整的物理路径..."
-                                                className={`w-full p-3 rounded-xl border text-sm focus:ring-2 focus:ring-purple-500 outline-none transition-all ${inputBg}`}
-                                                autoFocus
-                                            />
-                                        </div>
-                                    )}
+                            {isCustomPath && (
+                                <div className="mt-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <Input
+                                        value={customPath}
+                                        onChange={(e) => setCustomPath(e.target.value)}
+                                        placeholder="请输入完整的物理路径..."
+                                        autoFocus
+                                    />
                                 </div>
                             )}
-
-                            <div>
-                                <label className={`block text-[10px] font-bold uppercase ${textSecondary} mb-2 tracking-wider`}>选择下载器</label>
-                                <div className="space-y-2">
-                                    {clients.map((client) => (
-                                        <button
-                                            key={client.id}
-                                            onClick={() => handleConfirmDownload(client.id)}
-                                            className={`w-full flex items-center p-4 ${darkMode ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} rounded-xl transition-all text-left border border-transparent hover:border-blue-500/30 group`}
-                                        >
-                                            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-xl mr-4 group-hover:scale-110 transition-transform">
-                                                💾
-                                            </div>
-                                            <div className="flex-1">
-                                                <div className={`${textPrimary} font-bold text-sm`}>{client.name || client.type}</div>
-                                                <div className={`${textSecondary} text-[10px] font-mono`}>{client.host}:{client.port}</div>
-                                            </div>
-                                            <div className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">确认下载 →</div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
                         </div>
+                    )}
 
-                        <div className={`p-4 ${bgSecondary} border-t ${borderColor} flex justify-end`}>
-                            <button
-                                onClick={() => {
-                                    setShowClientModal(false);
-                                    setPendingDownload(null);
-                                    setIsCustomPath(false);
-                                    setCustomPath('');
-                                }}
-                                className={`px-6 py-2 rounded-xl text-sm font-bold ${textSecondary} hover:${textPrimary} transition-colors`}
-                            >
-                                取消
-                            </button>
+                    <div>
+                        <label className={`block text-[10px] font-bold uppercase ${textSecondary} mb-2 tracking-wider`}>选择下载器</label>
+                        <div className="space-y-2">
+                            {clients.map((client) => (
+                                <button
+                                    key={client.id}
+                                    onClick={() => handleConfirmDownload(client.id)}
+                                    className={`w-full flex items-center p-4 ${darkMode ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} rounded-xl transition-all text-left border border-transparent hover:border-blue-500/30 group`}
+                                >
+                                    <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-xl mr-4 group-hover:scale-110 transition-transform">
+                                        💾
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className={`${textPrimary} font-bold text-sm`}>{client.name || client.type}</div>
+                                        <div className={`${textSecondary} text-[10px] font-mono`}>{client.host}:{client.port}</div>
+                                    </div>
+                                    <div className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity font-bold text-xs">确认下载 →</div>
+                                </button>
+                            ))}
                         </div>
                     </div>
+
+                    <div className="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <Button
+                            variant="primary"
+                            onClick={() => {
+                                setShowClientModal(false);
+                                setPendingDownload(null);
+                                setIsCustomPath(false);
+                                setCustomPath('');
+                            }}
+                        >
+                            取消
+                        </Button>
+                    </div>
                 </div>
-            )}
+            </Modal>
         </div>
     );
 };

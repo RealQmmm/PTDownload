@@ -1,14 +1,12 @@
 import React from 'react';
 import { useTheme } from '../App';
+import Card from '../components/ui/Card';
 
 const HelpPage = () => {
     const { darkMode } = useTheme();
 
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
     const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
-    const bgCard = darkMode ? 'bg-gray-800' : 'bg-white';
-    const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-    const accentColor = 'blue';
 
     const sections = [
         {
@@ -74,19 +72,19 @@ const HelpPage = () => {
     ];
 
     return (
-        <div className="space-y-6">
-            <header>
+        <div className="p-4 md:p-8">
+            <header className="mb-6">
                 <h1 className={`text-2xl font-bold ${textPrimary}`}>使用帮助与规则说明</h1>
-                <p className={`mt-1 ${textSecondary}`}>了解 PTDownload 的自动化运行逻辑与数据同步规则</p>
+                <p className={`mt-1 ${textSecondary} text-sm`}>了解 PTDownload 的自动化运行逻辑与数据同步规则</p>
             </header>
 
-            <div className={`grid grid-cols-1 gap-6`}>
+            <div className={`grid grid-cols-1 md:grid-cols-2 gap-6`}>
                 {sections.map((section, idx) => (
-                    <div
+                    <Card
                         key={idx}
-                        className={`${bgCard} border ${borderColor} rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow`}
+                        className="p-0 overflow-hidden"
                     >
-                        <div className="px-6 py-4 border-b border-gray-700/30 bg-opacity-50 bg-gray-700/10 flex items-center space-x-3">
+                        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 flex items-center space-x-3">
                             <span className="text-xl">{section.icon}</span>
                             <h2 className={`text-lg font-bold ${textPrimary}`}>{section.title}</h2>
                         </div>
@@ -100,11 +98,11 @@ const HelpPage = () => {
                                 ))}
                             </ul>
                         </div>
-                    </div>
+                    </Card>
                 ))}
             </div>
 
-            <footer className={`text-center py-8 ${textSecondary} text-xs border-t ${borderColor} mt-8`}>
+            <footer className={`text-center py-8 ${textSecondary} text-xs border-t border-gray-200 dark:border-gray-700 mt-8`}>
                 <p>PTDownload v1.0.0 - 让 PT 管理更简单</p>
             </footer>
         </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../App';
+import Button from '../components/ui/Button';
 
 const LogsPage = () => {
     const { darkMode, authenticatedFetch } = useTheme();
@@ -87,11 +88,11 @@ const LogsPage = () => {
                     <h3 className={`text-lg font-bold ${textPrimary}`}>运行日志</h3>
                     <div className="flex items-center mt-1 space-x-4">
                         <p className={`${textSecondary} text-xs`}>所有后台任务的实时运行状态记录</p>
-                        <div className="flex items-center space-x-2 border-l border-gray-700/50 pl-4">
+                        <div className="flex items-center space-x-2 border-l border-gray-500/30 pl-4">
                             <span className={`text-[10px] font-bold ${textSecondary} uppercase tracking-tight`}>详细系统日志</span>
                             <button
                                 onClick={handleToggleSystemLogs}
-                                className={`relative inline-block w-8 h-4 transition duration-200 ease-in-out rounded-full cursor-pointer ${enableSystemLogs ? 'bg-blue-600' : 'bg-gray-600'}`}
+                                className={`relative inline-block w-8 h-4 transition duration-200 ease-in-out rounded-full cursor-pointer ${enableSystemLogs ? 'bg-blue-600' : 'bg-gray-400 dark:bg-gray-600'}`}
                             >
                                 <span className={`absolute top-0.5 inline-block w-3 h-3 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${enableSystemLogs ? 'left-4.5' : 'left-0.5'}`} />
                             </button>
@@ -99,19 +100,21 @@ const LogsPage = () => {
                     </div>
                 </div>
                 <div className="flex space-x-3 w-full sm:w-auto">
-                    <button
+                    <Button
+                        size="sm"
+                        variant="ghost"
                         onClick={fetchLogs}
                         disabled={loading}
-                        className={`px-3 py-1.5 bg-blue-600/10 text-blue-500 hover:bg-blue-600/20 rounded-lg text-xs font-medium transition-colors flex items-center`}
                     >
                         <span className={`mr-2 ${loading ? 'animate-spin' : ''}`}>🔄</span> 刷新
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        size="sm"
+                        variant="danger"
                         onClick={handleClearLogs}
-                        className={`px-3 py-1.5 bg-red-600/10 text-red-500 hover:bg-red-600/20 rounded-lg text-xs font-medium transition-colors flex items-center`}
                     >
                         <span className="mr-2">🗑️</span> 清空
-                    </button>
+                    </Button>
                 </div>
             </div>
 
@@ -127,9 +130,9 @@ const LogsPage = () => {
                             <button
                                 key={f.id}
                                 onClick={() => setFilter(f.id)}
-                                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all ${filter === f.id
-                                    ? `bg-blue-600 text-white shadow-lg shadow-blue-600/20`
-                                    : `${textSecondary} hover:bg-gray-500/10`
+                                className={`px-4 py-1.5 rounded-xl text-xs font-bold transition-all border ${filter === f.id
+                                    ? `bg-blue-600 text-white shadow-md border-blue-600`
+                                    : `${textSecondary} border-transparent hover:bg-gray-200 dark:hover:bg-gray-800`
                                     }`}
                             >
                                 {f.name}
@@ -163,7 +166,7 @@ const LogsPage = () => {
                                     <span className="shrink-0 mr-3 text-blue-400 font-bold opacity-80">
                                         {log.task_name ? `[${log.task_name}]` : '[SYSTEM]'}
                                     </span>
-                                    <span className={`${(log.status === 'error' || log.status === 'warning') ? 'text-rose-400' : textSecondary} break-all`}>
+                                    <span className={`${(log.status === 'error' || log.status === 'warning') ? 'text-rose-500' : textSecondary} break-all`}>
                                         {log.message}
                                         {(log.items_found > 0 || log.items_matched > 0) && (
                                             <span className="ml-2 py-0.5 px-1.5 rounded bg-gray-500/10 text-[11px] text-gray-500">
