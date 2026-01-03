@@ -182,18 +182,6 @@ const SitesPage = () => {
         }
     };
 
-    const syncAllSiteData = async () => {
-        setLoading(true);
-        try {
-            await authenticatedFetch('/api/sites/check-all', { method: 'POST' });
-            fetchSites();
-        } catch (err) {
-            console.error('Failed to sync site data:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const syncSingleSiteData = async (id) => {
         setRefreshingId(id);
         try {
@@ -241,19 +229,7 @@ const SitesPage = () => {
         }
     };
 
-    const checkinAll = async () => {
-        setLoading(true);
-        try {
-            const res = await authenticatedFetch('/api/sites/checkin-all', { method: 'POST' });
-            const data = await res.json();
-            alert(`已尝试为所有站点签到，成功: ${data.count}`);
-            fetchSites();
-        } catch (err) {
-            alert('一键签到失败');
-        } finally {
-            setLoading(false);
-        }
-    };
+
 
     return (
         <div className="p-4 md:p-8 space-y-6">
@@ -263,12 +239,7 @@ const SitesPage = () => {
                     <p className={`${textSecondary} mt-1 text-sm`}>配置您已加入的 PT 站点</p>
                 </div>
                 <div className="flex space-x-2 w-full sm:w-auto">
-                    <Button onClick={syncAllSiteData} variant="ghost" disabled={loading} size="sm">
-                        🔄 一键同步
-                    </Button>
-                    <Button onClick={checkinAll} variant="secondary" disabled={loading} size="sm">
-                        ✅ 一键签到
-                    </Button>
+
                     <Button onClick={handleAdd} variant="primary" className="flex-1 sm:flex-none">
                         + 添加新站点
                     </Button>

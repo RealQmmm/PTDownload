@@ -1,4 +1,40 @@
 const cheerio = require('cheerio');
+const { getDB } = require('../db');
+
+// Get category map from database
+const getCategoryMap = () => {
+    try {
+        const db = getDB();
+        const row = db.prepare("SELECT value FROM settings WHERE key = 'category_map'").get();
+        if (row && row.value) {
+            return JSON.parse(row.value);
+        }
+    } catch (e) {
+        console.error('[CategoryMap] Failed to load from database:', e.message);
+    }
+
+    // Return empty object if no config found
+    // This will cause unmatched categories to use default path fallback
+    return {};
+};
+
+// Normalize category names to standard format
+const normalizeCategory = (category) => {
+    if (!category) return '';
+
+    const cat = category.toLowerCase().trim();
+    const categoryMap = getCategoryMap();
+
+    // Find matching category
+    for (const [standardName, aliases] of Object.entries(categoryMap)) {
+        if (aliases.some(alias => cat.includes(alias) || alias.includes(cat))) {
+            return standardName;
+        }
+    }
+
+    // If no match, return original (capitalized)
+    return category.charAt(0).toUpperCase() + category.slice(1);
+};
 
 const parseDate = (dateStr) => {
     if (!dateStr || dateStr === 'Unknown') return new Date().toISOString();
@@ -20,7 +56,7 @@ const parseDate = (dateStr) => {
         date.setHours(date.getHours() - parseInt(hmsMatch[1]));
         date.setMinutes(date.getMinutes() - parseInt(hmsMatch[2]));
         if (hmsMatch[4]) {
-            date.setSeconds(date.getSeconds() - parseInt(hmsMatch[4]));
+            date.setSeconds(date.setSeconds() - parseInt(hmsMatch[4]));
         }
     } else {
         // Parse parts like "1年2月", "3月5天", "5天2小时", "5小时30分", "10分钟"
@@ -203,12 +239,66 @@ const parsers = {
                 if (titleCell.find('img.pro_hot').length) isHot = true;
                 if (titleCell.find('img.pro_new').length) isNew = true;
 
+                // Extract category/type information
+                let category = '';
+                let categoryId = null;
+
+                // Method 1: Check first cell for category icon/link
+                const firstCell = $(el).find('td').first();
+                const catLink = firstCell.find('a[href*="cat="], a[href*="?cat"]').first();
+                if (catLink.length) {
+                    const catHref = catLink.attr('href');
+                    const catMatch = catHref.match(/cat=(\d+)/);
+                    if (catMatch) {
+                        categoryId = parseInt(catMatch[1]);
+                    }
+
+                    // Try to get category name from title or alt
+                    category = catLink.attr('title') || catLink.find('img').attr('alt') || catLink.find('img').attr('title') || '';
+
+                    // If no text, try to infer from image src
+                    if (!category) {
+                        const imgSrc = catLink.find('img').attr('src') || '';
+                        // Common patterns: /pic/cat_movie.png, /images/categories/401.png, etc.
+                        const srcMatch = imgSrc.match(/cat[_-]?(\w+)|categories?[\/\\](\d+|[a-z]+)/i);
+                        if (srcMatch) {
+                            category = srcMatch[1] || srcMatch[2] || '';
+                        }
+                    }
+                }
+
+                // Method 2: Check for category in second cell (some sites)
+                if (!category) {
+                    const secondCell = $(el).find('td').eq(1);
+                    const catImg = secondCell.find('img[alt], img[title]').first();
+                    if (catImg.length) {
+                        category = catImg.attr('alt') || catImg.attr('title') || '';
+                    }
+                }
+
+                // Method 3: Look for category text in any cell
+                if (!category) {
+                    for (let j = 0; j < Math.min(3, cells.length); j++) {
+                        const cellText = $(cells[j]).text().trim();
+                        // Common category names
+                        if (/^(电影|剧集|动漫|音乐|综艺|纪录片|软件|游戏|体育|其他|Movie|TV|Anime|Music|Variety|Documentary|Software|Game|Sport|Other)$/i.test(cellText)) {
+                            category = cellText;
+                            break;
+                        }
+                    }
+                }
+
+                // Normalize category to standard names
+                category = normalizeCategory(category);
+
                 results.push({
                     id, name, subtitle, link, torrentUrl, size,
                     seeders: parseInt(seeders) || 0,
                     leechers: parseInt(leechers) || 0,
                     date,
-                    isFree, freeType, isHot, isNew
+                    isFree, freeType, isHot, isNew,
+                    category: category,
+                    categoryId: categoryId
                 });
             } catch (err) {
                 // Silently skip rows that fail
@@ -256,6 +346,10 @@ const parseUserStats = (html, type) => {
         if (levelMatch) stats.level = levelMatch[2];
 
         // Check-in status detection - Enhanced with more keywords and debug logging
+        // Check for disabled checkin button (more specific pattern to avoid false positives)
+        const disabledCheckinPattern = /<[^>]*disabled[^>]*(签到|checkin|attendance)[^>]*>|<[^>]*(签到|checkin|attendance)[^>]*disabled[^>]*>/i;
+        const hasDisabledCheckin = disabledCheckinPattern.test(html);
+
         const alreadyCheckedIn = text.includes('已经签到') ||
             text.includes('今日已签到') ||
             text.includes('签到成功') ||
@@ -277,10 +371,7 @@ const parseUserStats = (html, type) => {
             html.includes('signed_in') ||
             html.includes('checked_in') ||
             html.includes('attendance_yes') ||
-            // Check for disabled checkin button (more specific pattern to avoid false positives)
-            // The disabled attribute should be on or near the checkin element, not just anywhere on the page
-            const disabledCheckinPattern = /<[^>]*disabled[^>]*(签到|checkin|attendance)[^>]*>|<[^>]*(签到|checkin|attendance)[^>]*disabled[^>]*>/i;
-        const hasDisabledCheckin = disabledCheckinPattern.test(html);
+            hasDisabledCheckin;
 
         // Debug logging (only if system logs enabled)
         const { getDB } = require('../db');
@@ -292,9 +383,9 @@ const parseUserStats = (html, type) => {
             // Log relevant text snippets for debugging
             const checkinRelatedText = text.match(/.{0,50}(签到|checkin|attendance).{0,50}/gi);
             if (checkinRelatedText && checkinRelatedText.length > 0) {
-                console.log(`[Checkin Debug] Found checkin-related text:`, checkinRelatedText.slice(0, 3));
+                console.log(`[Checkin Debug] Found checkin - related text: `, checkinRelatedText.slice(0, 3));
             }
-            console.log(`[Checkin Debug] isCheckedIn: ${alreadyCheckedIn}`);
+            console.log(`[Checkin Debug]isCheckedIn: ${alreadyCheckedIn} `);
         }
 
         // Only mark as checked in if we have clear evidence

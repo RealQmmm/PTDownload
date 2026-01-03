@@ -251,7 +251,7 @@ const SeriesPage = () => {
                                     <img
                                         src={sub.poster_path}
                                         alt={sub.name}
-                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 rounded-l-2xl"
                                         onError={(e) => { e.target.style.display = 'none' }}
                                     />
                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none"></div>

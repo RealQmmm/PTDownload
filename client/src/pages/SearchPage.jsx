@@ -1,11 +1,48 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../App';
 import { FormatUtils } from '../utils/formatUtils';
+import { suggestPathByTorrentName } from '../utils/pathUtils';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
+
+// Helper function to get category color
+const getCategoryColor = (category, darkMode) => {
+    const colorMap = {
+        '电影': darkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700',
+        '剧集': darkMode ? 'bg-pink-500/20 text-pink-400' : 'bg-pink-100 text-pink-700',
+        '动画': darkMode ? 'bg-cyan-500/20 text-cyan-400' : 'bg-cyan-100 text-cyan-700',
+        '音乐': darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700',
+        '综艺': darkMode ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-700',
+        '纪录片': darkMode ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-700',
+        '软件': darkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-700',
+        '游戏': darkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700',
+        '体育': darkMode ? 'bg-teal-500/20 text-teal-400' : 'bg-teal-100 text-teal-700',
+        '学习': darkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700',
+        '其他': darkMode ? 'bg-gray-500/20 text-gray-400' : 'bg-gray-100 text-gray-700'
+    };
+    return colorMap[category] || (darkMode ? 'bg-gray-500/20 text-gray-400' : 'bg-gray-100 text-gray-700');
+};
+
+// Helper function to get category icon
+const getCategoryIcon = (category) => {
+    const iconMap = {
+        '电影': '🎬',
+        '剧集': '📺',
+        '动画': '🎨',
+        '音乐': '🎵',
+        '综艺': '🎭',
+        '纪录片': '📚',
+        '软件': '💻',
+        '游戏': '🎮',
+        '体育': '⚽',
+        '学习': '📖',
+        '其他': '📦'
+    };
+    return iconMap[category] || '📦';
+};
 
 const SearchPage = ({ searchState, setSearchState }) => {
     const { darkMode, authenticatedFetch } = useTheme();
@@ -19,6 +56,14 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const [clients, setClients] = useState([]);
     const [sites, setSites] = useState([]);
     const [selectedSite, setSelectedSite] = useState('');
+    const [autoDownloadEnabled, setAutoDownloadEnabled] = useState(false);
+    const [enableCategoryManagement, setEnableCategoryManagement] = useState(false);
+    // Auto download options
+    const [matchByCategory, setMatchByCategory] = useState(true);
+    const [matchByKeyword, setMatchByKeyword] = useState(true);
+    const [fallbackToDefaultPath, setFallbackToDefaultPath] = useState(true);
+    const [useDownloaderDefault, setUseDownloaderDefault] = useState(true);
+    const [categoryMap, setCategoryMap] = useState(null);
 
     // Sorting state
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
@@ -29,6 +74,8 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const [selectedPath, setSelectedPath] = useState('');
     const [isCustomPath, setIsCustomPath] = useState(false);
     const [customPath, setCustomPath] = useState('');
+    const [defaultDownloadPath, setDefaultDownloadPath] = useState('');
+    const [enableMultiPath, setEnableMultiPath] = useState(false);
 
     // Theme-aware classes
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
@@ -54,6 +101,31 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 setDownloadPaths(pathsData || []);
                 if (pathsData && pathsData.length > 0) {
                     setSelectedPath(pathsData[0].path);
+                }
+
+                // Load auto download setting
+                const settingsRes = await authenticatedFetch('/api/settings');
+                const settingsData = await settingsRes.json();
+
+                const categoryMgmt = settingsData.enable_category_management !== 'false';
+                const autoEnabled = settingsData.auto_download_enabled === 'true';
+                setEnableCategoryManagement(categoryMgmt);
+                setAutoDownloadEnabled(categoryMgmt && autoEnabled);
+                setMatchByCategory(settingsData.match_by_category !== 'false');
+                setMatchByKeyword(settingsData.match_by_keyword !== 'false');
+                setFallbackToDefaultPath(settingsData.fallback_to_default_path !== 'false');
+                setUseDownloaderDefault(settingsData.use_downloader_default !== 'false');
+
+                // Load default download path and multi-path switch
+                setDefaultDownloadPath(settingsData.default_download_path || '');
+                setEnableMultiPath(settingsData.enable_multi_path === 'true');
+
+                if (settingsData.category_map) {
+                    try {
+                        setCategoryMap(JSON.parse(settingsData.category_map));
+                    } catch (e) {
+                        console.error('Failed to parse category map:', e);
+                    }
                 }
             } catch (err) {
                 console.error('Failed to fetch initialization data:', err);
@@ -101,27 +173,110 @@ const SearchPage = ({ searchState, setSearchState }) => {
     };
 
     const handleDownloadClick = (item) => {
-        if (!clients || clients.length === 0) {
-            alert('请先在"下载器管理"中添加下载客户端');
-            return;
-        }
+        try {
+            if (!clients || clients.length === 0) {
+                alert('请先在"下载器管理"中添加下载客户端');
+                return;
+            }
 
-        // If paths exist or multiple clients exist, show the selection modal
-        if (downloadPaths.length > 0 || clients.length > 1) {
+            // ========== 多路径管理开启：智能下载或高级选择 ==========
+            if (enableMultiPath) {
+                // 准备智能推荐选项
+                const suggestOptions = {
+                    match_by_category: matchByCategory,
+                    match_by_keyword: matchByKeyword,
+                    fallback_to_default_path: fallbackToDefaultPath,
+                    use_downloader_default: useDownloaderDefault,
+                    category_map: categoryMap
+                };
+
+                // 使用智能路径推荐（分类管理开启时才匹配）
+                let suggestedPath = null;
+                if (enableCategoryManagement) {
+                    try {
+                        suggestedPath = suggestPathByTorrentName(item, downloadPaths, suggestOptions);
+                    } catch (e) {
+                        console.warn('Smart path suggestion failed:', e);
+                    }
+                }
+
+                if (suggestedPath) {
+                    setSelectedPath(suggestedPath.path);
+                    setIsCustomPath(false);
+                }
+
+                // 智能下载模式：自动匹配后弹出确认框
+                if (autoDownloadEnabled) {
+                    const defaultClient = clients.find(c => c.is_default) || clients[0];
+                    const clientName = defaultClient.name || defaultClient.type;
+
+                    if (!suggestedPath) {
+                        // 如果没有匹配到路径，询问是否手动选择
+                        if (confirm('智能下载路径匹配失败（所有策略均未命中）。是否手动选择路径？')) {
+                            setPendingDownload(item);
+                            setShowClientModal(true);
+                        }
+                        return;
+                    }
+
+                    // 弹出确认框显示匹配的路径
+                    const pathName = downloadPaths.find(p => p.path === suggestedPath.path)?.name || '自动匹配';
+                    const pathInfo = suggestedPath.path
+                        ? `\n保存路径: ${pathName} (${suggestedPath.path})`
+                        : '\n保存路径: 下载器默认路径';
+
+                    if (window.confirm(`智能下载确认\n\n下载器: [${clientName}]${pathInfo}\n\n资源: "${item.name}"\n大小: ${item.size}\n\n确认下载吗？`)) {
+                        executeDownload(item, defaultClient.id, suggestedPath.path);
+                    }
+                    return;
+                }
+
+                // 分类管理开启但智能下载关闭：显示模态框（已预选路径）
+                // 分类管理关闭：显示模态框（用户手动选择）
+                setPendingDownload(item);
+                setShowClientModal(true);
+                return;
+            }
+
+            // ========== 多路径管理关闭：简单模式 ==========
+            // 简单模式：只有一个下载器时，显示简化确认框
+            if (clients.length === 1) {
+                const client = clients[0];
+                const clientName = client.name || client.type;
+                const pathInfo = defaultDownloadPath
+                    ? `\n保存路径: ${defaultDownloadPath}`
+                    : '\n保存路径: 下载器默认路径';
+
+                if (window.confirm(`确认下载到 [${clientName}] 吗？${pathInfo}\n\n资源: "${item.name}"\n大小: ${item.size}`)) {
+                    executeDownload(item, client.id, defaultDownloadPath || null);
+                }
+                return;
+            }
+
+            // 多个下载器：显示选择下载器的模态框（但不显示路径选择）
             setPendingDownload(item);
             setShowClientModal(true);
-        } else {
-            // Only one client and no predefined paths
-            const clientName = clients[0].name || clients[0].type;
-            if (window.confirm(`确认下载 "${item.name}" 到 [${clientName}] 吗？`)) {
-                executeDownload(item, clients[0].id);
-            }
+
+        } catch (err) {
+            console.error('Download handling error:', err);
+            alert('准备下载时出错: ' + err.message);
         }
     };
 
+
+
     const handleConfirmDownload = (clientId) => {
         if (pendingDownload) {
-            const finalPath = isCustomPath ? customPath : selectedPath;
+            let finalPath;
+
+            if (enableMultiPath) {
+                // 多路径模式：使用用户选择的路径
+                finalPath = isCustomPath ? customPath : selectedPath;
+            } else {
+                // 简单模式：使用默认下载路径
+                finalPath = defaultDownloadPath || null;
+            }
+
             executeDownload(pendingDownload, clientId, finalPath);
         }
         setShowClientModal(false);
@@ -203,32 +358,30 @@ const SearchPage = ({ searchState, setSearchState }) => {
             <div className="mb-6 md:mb-8">
                 <h1 className={`text-2xl md:text-3xl font-bold mb-4 md:mb-6 ${textPrimary}`}>资源搜索</h1>
 
-                <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4">
-                    <div className="flex-1">
+                <form onSubmit={handleSearch} className="flex gap-2">
+                    <div className="flex-1 min-w-0">
                         <Input
                             placeholder="输入关键词..."
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                        // We use a custom icon here inside the Input if we could, but Input doesn't support leftIcon prop yet.
-                        // We'll stick to simple Input for now.
+                            className="text-sm"
                         />
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                        <div className="w-40">
-                            <Select
-                                value={selectedSite}
-                                onChange={(e) => setSelectedSite(e.target.value)}
-                            >
-                                <option value="">全部站点</option>
-                                {sites.filter(s => s.enabled === 1 || s.enabled === true || s.enabled === '1').map(site => (
-                                    <option key={site.id} value={site.name}>{site.name}</option>
-                                ))}
-                            </Select>
-                        </div>
-                        <Button type="submit" disabled={loading} className="w-24">
-                            搜索
-                        </Button>
+                    <div className="w-20 sm:w-32 shrink-0">
+                        <Select
+                            value={selectedSite}
+                            onChange={(e) => setSelectedSite(e.target.value)}
+                            className="text-sm"
+                        >
+                            <option value="">全部</option>
+                            {sites.filter(s => s.enabled === 1 || s.enabled === true || s.enabled === '1').map(site => (
+                                <option key={site.id} value={site.name}>{site.name}</option>
+                            ))}
+                        </Select>
                     </div>
+                    <Button type="submit" disabled={loading} className="w-16 sm:w-20 shrink-0 text-sm whitespace-nowrap">
+                        搜索
+                    </Button>
                 </form>
             </div>
 
@@ -270,9 +423,16 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                         {sortedResults.map((item, index) => (
                                             <tr key={index} className={`${darkMode ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50/50'} transition-colors group`}>
                                                 <td className="p-4 align-middle">
-                                                    <span className={`${darkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100'} border px-2 py-1 rounded text-xs font-bold uppercase tracking-tight`}>
-                                                        {item.siteName}
-                                                    </span>
+                                                    <div className="flex flex-col gap-1.5">
+                                                        <span className={`${darkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100'} border px-2 py-1 rounded text-xs font-bold uppercase tracking-tight w-fit`}>
+                                                            {item.siteName}
+                                                        </span>
+                                                        {item.category && (
+                                                            <span className={`${getCategoryColor(item.category, darkMode)} px-2 py-0.5 rounded text-[10px] font-bold w-fit`}>
+                                                                {getCategoryIcon(item.category)} {item.category}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="p-4 py-5 max-w-xs md:max-w-sm lg:max-w-md align-middle">
                                                     <div className="flex flex-col space-y-1.5">
@@ -318,30 +478,37 @@ const SearchPage = ({ searchState, setSearchState }) => {
                             </div>
 
                             {/* Mobile Card View */}
-                            <div className="lg:hidden p-4 overflow-y-auto space-y-4">
-                                {results.map((item, index) => (
-                                    <div key={index} className={`${bgSecondary} rounded-xl border ${borderColor} p-4 shadow-sm`}>
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-2 py-1 rounded text-xs font-bold`}>
-                                                {item.siteName}
-                                            </span>
-                                            <div className="flex gap-1">
-                                                {item.isHot && <span className="p-1 px-1.5 rounded bg-orange-500/20 text-orange-400 text-[10px] font-medium">🔥热门</span>}
-                                                {item.isFree && <span className="p-1 px-1.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-medium">🎁{item.freeType || '免费'}</span>}
+                            <div className="lg:hidden p-1 sm:p-3 overflow-y-auto space-y-2">
+                                {sortedResults.map((item, index) => (
+                                    <div key={index} className={`${bgSecondary} rounded-lg border ${borderColor} p-2 sm:p-3 shadow-sm`}>
+                                        <div className="flex justify-between items-start mb-1.5 gap-2">
+                                            <div className="flex gap-1 flex-wrap flex-1 min-w-0">
+                                                <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap`}>
+                                                    {item.siteName}
+                                                </span>
+                                                {item.category && (
+                                                    <span className={`${getCategoryColor(item.category, darkMode)} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap`}>
+                                                        {getCategoryIcon(item.category)} {item.category}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex gap-1 shrink-0">
+                                                {item.isHot && <span className="px-1 py-0.5 rounded bg-orange-500/20 text-orange-400 text-[9px] font-medium whitespace-nowrap">🔥</span>}
+                                                {item.isFree && <span className="px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[9px] font-medium whitespace-nowrap">🎁</span>}
                                             </div>
                                         </div>
-                                        <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} font-bold text-sm line-clamp-2 mb-2 leading-tight`}>
+                                        <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} font-bold text-xs sm:text-sm line-clamp-2 mb-1.5 leading-tight block`}>
                                             {item.name}
                                         </a>
-                                        {item.subtitle && <p className={`${textSecondary} text-xs line-clamp-1 mb-3`}>{item.subtitle}</p>}
-                                        <div className="grid grid-cols-2 gap-y-3 mb-4 text-xs font-mono">
-                                            <div className="text-gray-500">大小: <span className={textPrimary}>{item.size}</span></div>
-                                            <div className="text-gray-500">时间: <span className={textPrimary}>{item.date}</span></div>
-                                            <div className="text-green-500 font-bold">↑ {item.seeders}</div>
-                                            <div className="text-red-400">↓ {item.leechers}</div>
+                                        {item.subtitle && <p className={`${textSecondary} text-[10px] line-clamp-1 mb-2`}>{item.subtitle}</p>}
+                                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 mb-2 text-[10px] sm:text-xs">
+                                            <div className="text-gray-500 truncate">大小: <span className={`${textPrimary} font-mono`}>{item.size}</span></div>
+                                            <div className="text-gray-500 truncate">时间: <span className={`${textPrimary} font-mono text-[9px] sm:text-[10px]`}>{item.date}</span></div>
+                                            <div className="text-green-500 font-bold font-mono">↑ {item.seeders}</div>
+                                            <div className="text-red-400 font-mono">↓ {item.leechers}</div>
                                         </div>
                                         <Button
-                                            className="w-full"
+                                            className="w-full text-xs sm:text-sm py-1.5 sm:py-2"
                                             onClick={() => handleDownloadClick(item)}
                                             disabled={downloading === item.link || !item.torrentUrl}
                                         >
@@ -384,10 +551,21 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 footer={null} // We'll implement custom body/footer content inside
             >
                 <div className="space-y-6">
-                    {/* Path Selection - Only show if paths exist */}
-                    {downloadPaths.length > 0 && (
+                    {/* Path Selection - Only show if multi-path is enabled */}
+                    {enableMultiPath && downloadPaths.length > 0 && (
                         <div>
-                            <label className={`block text-[10px] font-bold uppercase ${textSecondary} mb-2 tracking-wider`}>保存位置</label>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className={`block text-[10px] font-bold uppercase ${textSecondary} tracking-wider`}>保存位置</label>
+                                {autoDownloadEnabled && pendingDownload && suggestPathByTorrentName(pendingDownload, downloadPaths) && (
+                                    <span className="text-[10px] text-blue-500 font-medium flex items-center">
+                                        <span className="mr-1">✨</span>
+                                        智能推荐
+                                        {pendingDownload.category && (
+                                            <span className="ml-1 text-[9px] opacity-70">({pendingDownload.category})</span>
+                                        )}
+                                    </span>
+                                )}
+                            </div>
                             <div className="grid grid-cols-2 gap-2">
                                 {downloadPaths.map((p) => (
                                     <button

@@ -21,9 +21,9 @@ const TasksPage = () => {
     const [selectedTaskLogs, setSelectedTaskLogs] = useState([]);
     const [logLoading, setLogLoading] = useState(false);
     const [downloadPaths, setDownloadPaths] = useState([]);
-    const [showPathsModal, setShowPathsModal] = useState(false);
-    const [editingPath, setEditingPath] = useState(null);
-    const [pathFormData, setPathFormData] = useState({ name: '', path: '', description: '' });
+    const [defaultDownloadPath, setDefaultDownloadPath] = useState('');
+    const [enableMultiPath, setEnableMultiPath] = useState(false);
+
 
     // Helpers for Human-readable CRON
     const cronToHuman = (cron) => {
@@ -112,9 +112,21 @@ const TasksPage = () => {
         }
     };
 
+    const fetchSettings = async () => {
+        try {
+            const res = await authenticatedFetch('/api/settings');
+            const data = await res.json();
+            setDefaultDownloadPath(data.default_download_path || '');
+            setEnableMultiPath(data.enable_multi_path === 'true');
+        } catch (err) {
+            console.error('Fetch settings failed:', err);
+        }
+    };
+
     useEffect(() => {
         fetchData();
         fetchDownloadPaths();
+        fetchSettings();
     }, []);
 
     const handleAdd = () => {
@@ -310,50 +322,7 @@ const TasksPage = () => {
         setShowModal(true);
     };
 
-    const handlePathSubmit = async (e) => {
-        e.preventDefault();
-        const method = editingPath ? 'PUT' : 'POST';
-        const url = editingPath ? `/api/download-paths/${editingPath.id}` : '/api/download-paths';
 
-        try {
-            const res = await authenticatedFetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(pathFormData)
-            });
-            if (res.ok) {
-                setPathFormData({ name: '', path: '', description: '' });
-                setEditingPath(null);
-                fetchDownloadPaths();
-            }
-        } catch (err) {
-            alert('保存失败');
-        }
-    };
-
-    const openPathEdit = (path) => {
-        setEditingPath(path);
-        setPathFormData({
-            name: path.name,
-            path: path.path,
-            description: path.description || ''
-        });
-    };
-
-    const cancelPathEdit = () => {
-        setEditingPath(null);
-        setPathFormData({ name: '', path: '', description: '' });
-    };
-
-    const deletePath = async (id) => {
-        if (!confirm('确定删除该路径吗？')) return;
-        try {
-            await authenticatedFetch(`/api/download-paths/${id}`, { method: 'DELETE' });
-            fetchDownloadPaths();
-        } catch (err) {
-            alert('删除失败');
-        }
-    };
 
     return (
         <div className="p-4 md:p-8">
@@ -404,7 +373,7 @@ const TasksPage = () => {
                                                 <span className="mr-1">🌐</span> {site?.name || '未知站点'}
                                             </div>
                                             <div className="flex items-center">
-                                                <span className="mr-1">📥</span> {client?.type || '默认客户端'}
+                                                <span className="mr-1">📥</span> {client?.name || client?.type || '默认客户端'}
                                             </div>
                                             <div className={`flex items-center font-mono text-[10px] ${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded`}>
                                                 <span className="mr-1">⏰</span> {cronToHuman(task.cron)}
@@ -716,7 +685,7 @@ const TasksPage = () => {
                                 onChange={(e) => setFormData({ ...formData, client_id: parseInt(e.target.value) })}
                             >
                                 <option value="">默认下载器</option>
-                                {clients.map(c => <option key={c.id} value={c.id}>{c.type} ({c.host})</option>)}
+                                {clients.map(c => <option key={c.id} value={c.id}>{c.name || c.type} ({c.host})</option>)}
                             </Select>
                         </div>
                         <div className="md:col-span-2">
@@ -727,20 +696,28 @@ const TasksPage = () => {
                                     onChange={(e) => setFormData({ ...formData, save_path: e.target.value })}
                                 >
                                     <option value="">请选择路径</option>
-                                    {downloadPaths.map(p => (
-                                        <option key={p.id} value={p.path}>
-                                            {p.name} ({p.path})
-                                        </option>
-                                    ))}
+                                    {enableMultiPath ? (
+                                        // 多路径管理模式：显示所有配置的路径
+                                        <>
+                                            {downloadPaths.map(p => (
+                                                <option key={p.id} value={p.path}>
+                                                    {p.is_default ? '⭐ ' : ''}{p.name} ({p.path})
+                                                </option>
+                                            ))}
+                                        </>
+                                    ) : (
+                                        // 简单模式：只显示默认路径
+                                        <>
+                                            {defaultDownloadPath && (
+                                                <option value={defaultDownloadPath}>
+                                                    📂 默认路径 ({defaultDownloadPath})
+                                                </option>
+                                            )}
+                                        </>
+                                    )}
                                     <option value="custom">✏️ 自定义路径...</option>
                                 </Select>
-                                <Button
-                                    variant="secondary"
-                                    onClick={() => setShowPathsModal(true)}
-                                    title="管理路径"
-                                >
-                                    ⚙️
-                                </Button>
+
                             </div>
                             {formData.save_path === 'custom' && (
                                 <Input
@@ -749,6 +726,11 @@ const TasksPage = () => {
                                     placeholder="/downloads/custom"
                                     className="mt-2"
                                 />
+                            )}
+                            {!enableMultiPath && !defaultDownloadPath && (
+                                <p className="text-xs text-amber-500 mt-1">
+                                    💡 提示：请先在「系统设置 - 下载」中配置默认下载路径
+                                </p>
                             )}
                         </div>
                     </div>
@@ -934,111 +916,7 @@ const TasksPage = () => {
                 </div>
             </Modal>
 
-            {/* Download Paths Management Modal */}
-            <Modal
-                isOpen={showPathsModal}
-                onClose={() => setShowPathsModal(false)}
-                title="下载路径管理"
-                size="lg"
-                footer={
-                    <Button variant="ghost" onClick={() => setShowPathsModal(false)}>
-                        关闭
-                    </Button>
-                }
-            >
-                <div className="space-y-6">
-                    <form onSubmit={handlePathSubmit} className={`p-4 rounded-xl border-2 ${editingPath ? 'border-blue-500/50 bg-blue-500/5' : 'border-dashed border-gray-200 dark:border-gray-700'}`}>
-                        <div className="flex justify-between items-center mb-4">
-                            <h4 className={`text-xs font-bold ${editingPath ? 'text-blue-500' : 'text-gray-500'} uppercase`}>
-                                {editingPath ? '编辑路径' : '添加新路径'}
-                            </h4>
-                            {editingPath && (
-                                <button
-                                    type="button"
-                                    onClick={cancelPathEdit}
-                                    className="text-[10px] text-blue-500 hover:underline font-bold"
-                                >
-                                    取消编辑
-                                </button>
-                            )}
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <Input
-                                    label="名称"
-                                    required
-                                    value={pathFormData.name}
-                                    onChange={(e) => setPathFormData({ ...pathFormData, name: e.target.value })}
-                                    placeholder="电影"
-                                />
-                            </div>
-                            <div>
-                                <Input
-                                    label="路径"
-                                    required
-                                    value={pathFormData.path}
-                                    onChange={(e) => setPathFormData({ ...pathFormData, path: e.target.value })}
-                                    placeholder="/downloads/movies"
-                                />
-                            </div>
-                            <div>
-                                <Input
-                                    label="描述"
-                                    value={pathFormData.description}
-                                    onChange={(e) => setPathFormData({ ...pathFormData, description: e.target.value })}
-                                    placeholder="电影下载目录"
-                                />
-                            </div>
-                        </div>
-                        <div className="mt-4 flex justify-end">
-                            <Button
-                                type="submit"
-                                variant={editingPath ? 'secondary' : 'primary'}
-                                className={editingPath ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
-                            >
-                                {editingPath ? '更新' : '添加'}
-                            </Button>
-                        </div>
-                    </form>
 
-                    <div className="space-y-3">
-                        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">已配置的路径 ({downloadPaths.length})</h3>
-                        {downloadPaths.length === 0 ? (
-                            <p className="text-center py-8 text-sm text-gray-500">暂无路径，请先添加</p>
-                        ) : (
-                            downloadPaths.map(path => (
-                                <div key={path.id} className="flex items-center justify-between p-3 border border-gray-100 dark:border-gray-800 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                    <div className="flex-1 min-w-0 mr-4">
-                                        <div className="flex items-center space-x-2">
-                                            <span className="font-bold text-sm text-gray-900 dark:text-white">{path.name}</span>
-                                            <span className="text-xs text-gray-400 font-mono">{path.path}</span>
-                                        </div>
-                                        {path.description && (
-                                            <p className="text-[10px] text-gray-400 mt-1">{path.description}</p>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <button
-                                            onClick={() => openPathEdit(path)}
-                                            className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors"
-                                            title="编辑"
-                                        >
-                                            ✏️
-                                        </button>
-                                        <button
-                                            onClick={() => deletePath(path.id)}
-                                            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
-                                            title="删除"
-                                        >
-                                            🗑️
-                                        </button>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            </Modal>
         </div >
     );
 };

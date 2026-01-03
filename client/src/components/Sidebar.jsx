@@ -11,6 +11,7 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
         { id: 'tasks', name: '自动任务', icon: '⏰' },
         { id: 'sites', name: '站点管理', icon: '🌐', badge: expiredCookiesCount > 0 ? expiredCookiesCount : null },
         { id: 'clients', name: '下载客户端', icon: '📥' },
+
         { id: 'settings', name: '系统设置', icon: '⚙️' },
         { id: 'help', name: '使用帮助', icon: '❓' },
     ];
@@ -30,8 +31,8 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
                             key={menu.id}
                             onClick={() => setActiveTab(menu.id)}
                             className={`w-full flex items-center px-4 py-3 rounded-xl transition-all duration-200 group relative overflow-hidden ${isActive
-                                    ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
-                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-surface-800 hover:text-primary-600 dark:hover:text-primary-400'
+                                ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
+                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-surface-800 hover:text-primary-600 dark:hover:text-primary-400'
                                 }`}
                         >
                             <span className={`mr-3 text-xl transition-transform duration-200 ${isActive ? 'scale-110' : 'group-hover:scale-110'}`}>
@@ -46,8 +47,8 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
 
                             {menu.badge && (
                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center shadow-sm ${isActive
-                                        ? 'bg-white text-primary-600'
-                                        : 'bg-red-500 text-white'
+                                    ? 'bg-white text-primary-600'
+                                    : 'bg-red-500 text-white'
                                     }`}>
                                     {menu.badge}
                                 </span>

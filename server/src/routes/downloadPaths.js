@@ -16,10 +16,18 @@ router.get('/', (req, res) => {
 // Create download path
 router.post('/', (req, res) => {
     try {
-        const { name, path, description } = req.body;
+        const { name, path, description, is_default } = req.body;
         const db = getDB();
-        const info = db.prepare('INSERT INTO download_paths (name, path, description) VALUES (?, ?, ?)').run(name, path, description);
-        res.status(201).json({ id: info.lastInsertRowid, name, path, description });
+
+        const insert = db.transaction(() => {
+            if (is_default) {
+                db.prepare('UPDATE download_paths SET is_default = 0').run();
+            }
+            return db.prepare('INSERT INTO download_paths (name, path, description, is_default) VALUES (?, ?, ?, ?)').run(name, path, description, is_default ? 1 : 0);
+        });
+
+        const info = insert();
+        res.status(201).json({ id: info.lastInsertRowid, name, path, description, is_default: is_default ? 1 : 0 });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -28,9 +36,17 @@ router.post('/', (req, res) => {
 // Update download path
 router.put('/:id', (req, res) => {
     try {
-        const { name, path, description } = req.body;
+        const { name, path, description, is_default } = req.body;
         const db = getDB();
-        db.prepare('UPDATE download_paths SET name = ?, path = ?, description = ? WHERE id = ?').run(name, path, description, req.params.id);
+
+        const update = db.transaction(() => {
+            if (is_default) {
+                db.prepare('UPDATE download_paths SET is_default = 0 WHERE id != ?').run(req.params.id);
+            }
+            db.prepare('UPDATE download_paths SET name = ?, path = ?, description = ?, is_default = ? WHERE id = ?').run(name, path, description, is_default ? 1 : 0, req.params.id);
+        });
+
+        update();
         res.json({ message: 'Download path updated successfully' });
     } catch (err) {
         res.status(500).json({ error: err.message });

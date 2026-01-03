@@ -5,6 +5,8 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
+import PathManager from '../components/PathManager';
+import CategoryMapEditor from '../components/CategoryMapEditor';
 
 const SettingsPage = () => {
     const { darkMode, themeMode, setThemeMode, siteName, setSiteName, authenticatedFetch } = useTheme();
@@ -46,6 +48,19 @@ const SettingsPage = () => {
     const [cookieCheckInterval, setCookieCheckInterval] = useState('60');
     const [checkinTime, setCheckinTime] = useState('09:00');
     const [rssCacheTTL, setRssCacheTTL] = useState('300');
+
+    const [autoDownloadEnabled, setAutoDownloadEnabled] = useState(false);
+    // Auto download sub-options
+    const [matchByCategory, setMatchByCategory] = useState(true);
+    const [matchByKeyword, setMatchByKeyword] = useState(true);
+    const [fallbackToDefaultPath, setFallbackToDefaultPath] = useState(true);
+    const [useDownloaderDefault, setUseDownloaderDefault] = useState(true);
+    const [enableCategoryManagement, setEnableCategoryManagement] = useState(true);
+
+    // Default download path (simple mode)
+    const [defaultDownloadPath, setDefaultDownloadPath] = useState('');
+    // Multi-path management switch
+    const [enableMultiPath, setEnableMultiPath] = useState(false);
 
     // Theme helpers
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
@@ -110,6 +125,20 @@ const SettingsPage = () => {
             setCookieCheckInterval(data.cookie_check_interval || '60');
             setCheckinTime(data.checkin_time || '09:00');
             setRssCacheTTL(data.rss_cache_ttl || '300');
+
+
+
+            // Load auto download setting
+            setAutoDownloadEnabled(data.auto_download_enabled === 'true');
+            setMatchByCategory(data.match_by_category !== 'false');
+            setMatchByKeyword(data.match_by_keyword !== 'false');
+            setFallbackToDefaultPath(data.fallback_to_default_path !== 'false');
+            setUseDownloaderDefault(data.use_downloader_default !== 'false');
+            setEnableCategoryManagement(data.enable_category_management !== 'false');
+
+            // Load default download path and multi-path switch
+            setDefaultDownloadPath(data.default_download_path || '');
+            setEnableMultiPath(data.enable_multi_path === 'true');
         } catch (err) {
             console.error('Fetch settings failed:', err);
         }
@@ -398,6 +427,114 @@ const SettingsPage = () => {
 
             if (res.ok) {
                 setMessage({ type: 'success', text: '清理策略已保存' });
+            } else {
+                setMessage({ type: 'error', text: '保存失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+
+
+    const handleToggleAutoDownload = async (newValue) => {
+        setSaving(true);
+        setMessage(null);
+
+        try {
+            const res = await authenticatedFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    auto_download_enabled: newValue
+                })
+            });
+
+            if (res.ok) {
+                setAutoDownloadEnabled(newValue);
+                setMessage({
+                    type: 'success',
+                    text: newValue ? '智能下载已开启，点击下载将自动添加' : '智能下载已关闭，下载前将显示确认对话框'
+                });
+            } else {
+                setMessage({ type: 'error', text: '保存失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+
+    const handleToggleAutoDownloadOption = async (key, value) => {
+        setSaving(true);
+        setMessage(null);
+
+        try {
+            const res = await authenticatedFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [key]: value })
+            });
+
+            if (res.ok) {
+                if (key === 'match_by_category') setMatchByCategory(value);
+                if (key === 'match_by_keyword') setMatchByKeyword(value);
+                if (key === 'fallback_to_default_path') setFallbackToDefaultPath(value);
+                if (key === 'use_downloader_default') setUseDownloaderDefault(value);
+                if (key === 'enable_category_management') setEnableCategoryManagement(value);
+            } else {
+                setMessage({ type: 'error', text: '保存失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleSaveDefaultPath = async () => {
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await authenticatedFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ default_download_path: defaultDownloadPath })
+            });
+            if (res.ok) {
+                setMessage({ type: 'success', text: '默认下载路径已保存' });
+            } else {
+                setMessage({ type: 'error', text: '保存失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const handleToggleMultiPath = async (newValue) => {
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await authenticatedFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enable_multi_path: newValue })
+            });
+            if (res.ok) {
+                setEnableMultiPath(newValue);
+                setMessage({
+                    type: 'success',
+                    text: newValue ? '多路径管理已开启' : '多路径管理已关闭'
+                });
             } else {
                 setMessage({ type: 'error', text: '保存失败' });
             }
@@ -1013,6 +1150,203 @@ const SettingsPage = () => {
                             <p className="mt-2">Made with ❤️ for PT users.</p>
                         </div>
                     </div>
+                )
+
+                    ;
+
+            case 'category':
+                return (
+                    <div className="space-y-6">
+                        {message && (
+                            <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {message.text}
+                            </div>
+                        )}
+
+                        {/* 0. 默认下载路径 (始终显示) */}
+                        <Card className="p-4 border-l-4 border-l-green-500">
+                            <div className="space-y-3">
+                                <div>
+                                    <h3 className={`text-base font-bold ${textPrimary} mb-1 flex items-center`}>
+                                        <span className="mr-2">📂</span> 默认下载路径
+                                    </h3>
+                                    <p className={`text-xs ${textSecondary}`}>
+                                        所有下载任务默认使用的存储路径，如果未启用多路径管理则使用此路径
+                                    </p>
+                                </div>
+                                <div className="flex items-center space-x-3">
+                                    <Input
+                                        value={defaultDownloadPath}
+                                        onChange={(e) => setDefaultDownloadPath(e.target.value)}
+                                        placeholder="例如: /downloads 或留空使用下载器默认"
+                                        className="flex-1"
+                                    />
+                                    <Button
+                                        onClick={handleSaveDefaultPath}
+                                        disabled={saving}
+                                        size="sm"
+                                        className="min-w-[80px]"
+                                    >
+                                        保存路径
+                                    </Button>
+                                </div>
+                            </div>
+                        </Card>
+
+                        {/* 1. 多路径管理总开关 */}
+                        <Card className="p-4 border-l-4 border-l-blue-500">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className={`text-base font-bold ${textPrimary} mb-1 flex items-center`}>
+                                        <span className="mr-2">🔀</span> 多路径管理
+                                    </h3>
+                                    <p className={`text-xs ${textSecondary}`}>
+                                        启用后可配置多个下载路径，并使用分类管理和智能下载功能
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => handleToggleMultiPath(!enableMultiPath)}
+                                    disabled={saving}
+                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${enableMultiPath ? 'bg-blue-600' : 'bg-gray-300'
+                                        } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${enableMultiPath ? 'left-6.5' : 'left-0.5'
+                                        }`} />
+                                </button>
+                            </div>
+                        </Card>
+
+                        {/* 以下内容仅在多路径管理开启时可见 */}
+                        {enableMultiPath && (
+                            <>
+                                {/* 2. 路径管理 */}
+                                <Card className="p-4">
+                                    <PathManager />
+                                </Card>
+
+                                {/* 3. 智能分类管理开关 */}
+                                <Card className="p-4 border-l-4 border-l-amber-500">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <h3 className={`text-base font-bold ${textPrimary} mb-1 flex items-center`}>
+                                                <span className="mr-2">🗂️</span> 智能分类管理功能
+                                            </h3>
+                                            <p className={`text-xs ${textSecondary}`}>
+                                                启用后可使用高级的类型映射与智能路径匹配策略
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleToggleAutoDownloadOption('enable_category_management', !enableCategoryManagement)}
+                                            disabled={saving}
+                                            className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${enableCategoryManagement ? 'bg-blue-600' : 'bg-gray-300'
+                                                } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${enableCategoryManagement ? 'left-6.5' : 'left-0.5'
+                                                }`} />
+                                        </button>
+                                    </div>
+
+                                    {/* 智能分类管理的子选项 */}
+                                    {enableCategoryManagement && (
+                                        <div className={`mt-4 pt-4 border-t ${borderColor} space-y-3`}>
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className={`text-sm ${textPrimary}`}>类型精确匹配</p>
+                                                    <p className={`text-xs ${textSecondary}`}>优先使用 PT 站点提供的类型字段匹配</p>
+                                                </div>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={matchByCategory}
+                                                    onChange={(e) => handleToggleAutoDownloadOption('match_by_category', e.target.checked)}
+                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                    disabled={saving}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className={`text-sm ${textPrimary}`}>关键词评分匹配</p>
+                                                    <p className={`text-xs ${textSecondary}`}>根据标题关键词模糊匹配</p>
+                                                </div>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={matchByKeyword}
+                                                    onChange={(e) => handleToggleAutoDownloadOption('match_by_keyword', e.target.checked)}
+                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                    disabled={saving}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className={`text-sm ${textPrimary}`}>使用默认路径兜底</p>
+                                                    <p className={`text-xs ${textSecondary}`}>如果未匹配到类型，使用标记为默认的路径</p>
+                                                </div>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={fallbackToDefaultPath}
+                                                    onChange={(e) => handleToggleAutoDownloadOption('fallback_to_default_path', e.target.checked)}
+                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                    disabled={saving}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className={`text-sm ${textPrimary}`}>使用下载器默认路径</p>
+                                                    <p className={`text-xs ${textSecondary}`}>当所有规则都不匹配时，不指定路径</p>
+                                                </div>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={useDownloaderDefault}
+                                                    onChange={(e) => handleToggleAutoDownloadOption('use_downloader_default', e.target.checked)}
+                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                    disabled={saving}
+                                                />
+                                            </div>
+
+                                            {/* 一键下载 */}
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className={`text-sm ${textPrimary} font-bold`}>⚡ 一键下载</p>
+                                                    <p className={`text-xs ${textSecondary}`}>开启后，点击下载将无需弹出多路劲选择框</p>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleToggleAutoDownload(!autoDownloadEnabled)}
+                                                    disabled={saving}
+                                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${autoDownloadEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                                                        } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                >
+                                                    <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${autoDownloadEnabled ? 'left-6.5' : 'left-0.5'
+                                                        }`} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </Card>
+
+
+
+                                {/* 4. 类型映射配置 (受控) */}
+                                <div className={`transition-opacity duration-300 ${enableCategoryManagement ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
+                                    <Card className="space-y-4 relative">
+                                        {!enableCategoryManagement && <div className="absolute inset-0 z-10 bg-gray-100/10 dark:bg-black/10 cursor-not-allowed"></div>}
+                                        <div>
+                                            <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-2`}>
+                                                类型映射配置
+                                            </h3>
+                                            <p className={`text-xs ${textSecondary} mb-4`}>
+                                                配置资源类型的识别规则。添加"类型"并为其指定多个"别名"（如 movie, film）。
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <CategoryMapEditor
+                                                disabled={!enableCategoryManagement}
+                                            />
+                                        </div>
+                                    </Card>
+                                </div>
+                            </>
+                        )}
+                    </div>
                 );
 
             case 'logs':
@@ -1033,6 +1367,7 @@ const SettingsPage = () => {
                     <nav className="flex lg:flex-col space-x-1 lg:space-x-0 lg:space-y-1 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0 scrollbar-hide">
                         {[
                             { id: 'general', name: '通用', icon: '⚙️' },
+                            { id: 'category', name: '下载', icon: '⚡' },
                             { id: 'notifications', name: '通知', icon: '🔔' },
                             { id: 'backup', name: '备份', icon: '💾' },
                             { id: 'maintenance', name: '维护', icon: '🛠️' },
@@ -1049,7 +1384,7 @@ const SettingsPage = () => {
                                     : `${textSecondary} hover:bg-gray-200/50 dark:hover:bg-gray-700/50 hover:${textPrimary}`
                                     }`}
                             >
-                                <span className="mr-2 lg:mr-3">{item.icon}</span>
+                                <span className="mr-2 lg:mr-3 w-6 text-center">{item.icon}</span>
                                 {item.name}
                             </button>
                         ))}
@@ -1066,3 +1401,4 @@ const SettingsPage = () => {
 };
 
 export default SettingsPage;
+

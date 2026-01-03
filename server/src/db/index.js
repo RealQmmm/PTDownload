@@ -38,6 +38,17 @@ function initDB() {
     } catch (migErr) {
       console.error("Migration error (series_subscriptions):", migErr);
     }
+
+    // Migration: Add is_default to download_paths if not exists
+    try {
+      db.prepare('ALTER TABLE download_paths ADD COLUMN is_default INTEGER DEFAULT 0').run();
+      console.log('Migrated download_paths: added is_default column');
+    } catch (e) {
+      // Ignore "duplicate column name" error
+      if (!e.message.includes('duplicate column name')) {
+        console.error('Migration failed for download_paths:', e.message);
+      }
+    }
   } catch (err) {
     console.error('Error connecting to database:', err);
   }
@@ -127,8 +138,11 @@ function createTables() {
       name TEXT NOT NULL,
       path TEXT NOT NULL,
       description TEXT,
+      is_default INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+
 
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
@@ -250,7 +264,30 @@ function createTables() {
     { key: 'tmdb_api_key', value: '107492d807d58b01d0e5104d49af4081' },
     { key: 'tmdb_base_url', value: 'https://api.themoviedb.org/3' },
     { key: 'tmdb_image_base_url', value: 'https://image.tmdb.org/t/p/w300' },
-    { key: 'rss_cache_ttl', value: '300' } // RSS cache TTL in seconds (default: 5 minutes)
+    { key: 'rss_cache_ttl', value: '300' }, // RSS cache TTL in seconds (default: 5 minutes)
+    {
+      key: 'category_map', value: JSON.stringify({
+        '电影': ['电影', 'movie', 'movies', 'film', 'films', 'bluray', 'bd', 'dvd', '401', '402', '403', '404', '405'],
+        '剧集': ['剧集', 'tv', 'series', 'tvshow', 'drama', '美剧', '日剧', '韩剧', '国产剧', 'episode', '411', '412', '413', '414', '415'],
+        '动画': ['动画', 'anime', 'animation', 'cartoon', '动漫', '番剧', 'ova', 'ona', '421', '422', '423'],
+        '音乐': ['音乐', 'music', 'audio', 'mp3', 'flac', 'ape', 'wav', 'album', '演唱', '演唱会', 'concert', 'live', 'mv', '431', '432', '433'],
+        '综艺': ['综艺', 'variety', 'show', 'reality', '真人秀', '441', '442'],
+        '纪录片': ['纪录片', 'documentary', 'docu', 'nature', 'bbc', 'discovery', '451', '452'],
+        '软件': ['软件', 'software', 'app', 'application', 'program', '461', '462'],
+        '游戏': ['游戏', 'game', 'games', 'gaming', 'pc', 'console', '471', '472'],
+        '体育': ['体育', 'sport', 'sports', 'fitness', '481', '482'],
+        '学习': ['学习', 'education', 'tutorial', 'course', 'ebook', '电子书', '491', '492'],
+        '其他': ['其他', 'other', 'misc', 'miscellaneous', '499']
+      })
+    },
+    { key: 'auto_download_enabled', value: 'false' }, // Auto download without confirmation
+    { key: 'match_by_category', value: 'true' }, // Strategy 1: Exact category match
+    { key: 'match_by_keyword', value: 'true' }, // Strategy 2: Keyword scoring
+    { key: 'fallback_to_default_path', value: 'true' }, // Strategy 3: Default path fallback
+    { key: 'use_downloader_default', value: 'true' }, // Strategy 4: Downloader default path fallback
+    { key: 'enable_category_management', value: 'true' }, // Master switch for category/path feature
+    { key: 'default_download_path', value: '' }, // Default download path for simple mode
+    { key: 'enable_multi_path', value: 'false' }, // Multi-path management switch
   ];
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

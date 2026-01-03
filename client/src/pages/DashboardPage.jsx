@@ -339,7 +339,7 @@ const DashboardPage = ({ setActiveTab }) => {
             {/* Bottom Section: Active Tasks & Today's History */}
             <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
                 {/* Active Tasks list (Left 75%) */}
-                <Card className="xl:col-span-3 flex flex-col h-full min-h-[500px]">
+                <Card className="xl:col-span-3 flex flex-col h-full xl:min-h-[500px]">
                     <div className="flex justify-between items-center mb-6">
                         <div className="flex items-center">
                             <h2 className={`text-xl font-bold ${textPrimary} flex items-center`}>
@@ -511,7 +511,7 @@ const DashboardPage = ({ setActiveTab }) => {
                 </Card>
 
                 {/* Today's History (Right 25%) */}
-                <Card className="xl:col-span-1 flex flex-col h-full min-h-[500px]">
+                <Card className="xl:col-span-1 flex flex-col h-full xl:min-h-[500px]">
                     <h2 className={`text-lg font-bold ${textPrimary} mb-4 flex items-center`}>
                         <span className="mr-2">📁</span> 今日已下载
                         {todayDownloads.length > 0 && (
@@ -521,7 +521,7 @@ const DashboardPage = ({ setActiveTab }) => {
                         )}
                     </h2>
 
-                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4 max-h-[500px]">
+                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4 xl:max-h-[500px]">
                         {todayDownloads.length > 0 ? (
                             todayDownloads.map((item, idx) => (
                                 <div key={idx} className="relative pl-4 border-l-2 border-blue-500/30 py-1">
