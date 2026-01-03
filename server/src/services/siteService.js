@@ -166,6 +166,14 @@ class SiteService {
                         sql += ', last_checkin_at = ?';
                         params.push(now);
                         if (enableLogs) console.log(`[Checkin] ${site.name} detected as already checked in today`);
+                    } else {
+                        // If not checked in today, clear last_checkin_at if it's not today
+                        const lastCheckinDate = site.last_checkin_at ? new Date(site.last_checkin_at).toDateString() : null;
+                        const todayDate = new Date().toDateString();
+                        if (lastCheckinDate && lastCheckinDate !== todayDate) {
+                            sql += ', last_checkin_at = NULL';
+                            if (enableLogs) console.log(`[Checkin] ${site.name} clearing outdated checkin record`);
+                        }
                     }
 
                     sql += ' WHERE id = ?';
@@ -262,6 +270,14 @@ class SiteService {
                     sql += ', last_checkin_at = ?';
                     params.push(now);
                     if (enableLogs) console.log(`[Checkin] ${site.name} detected as already checked in (via refresh)`);
+                } else {
+                    // If not checked in today, clear last_checkin_at if it's not today
+                    const lastCheckinDate = site.last_checkin_at ? new Date(site.last_checkin_at).toDateString() : null;
+                    const todayDate = new Date().toDateString();
+                    if (lastCheckinDate && lastCheckinDate !== todayDate) {
+                        sql += ', last_checkin_at = NULL';
+                        if (enableLogs) console.log(`[Checkin] ${site.name} clearing outdated checkin record (via refresh)`);
+                    }
                 }
 
                 sql += ' WHERE id = ?';

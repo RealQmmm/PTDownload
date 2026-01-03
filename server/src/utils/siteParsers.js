@@ -277,8 +277,10 @@ const parseUserStats = (html, type) => {
             html.includes('signed_in') ||
             html.includes('checked_in') ||
             html.includes('attendance_yes') ||
-            // Check for disabled checkin button (common pattern)
-            html.includes('disabled') && (html.includes('签到') || html.includes('checkin') || html.includes('attendance'));
+            // Check for disabled checkin button (more specific pattern to avoid false positives)
+            // The disabled attribute should be on or near the checkin element, not just anywhere on the page
+            const disabledCheckinPattern = /<[^>]*disabled[^>]*(签到|checkin|attendance)[^>]*>|<[^>]*(签到|checkin|attendance)[^>]*disabled[^>]*>/i;
+        const hasDisabledCheckin = disabledCheckinPattern.test(html);
 
         // Debug logging (only if system logs enabled)
         const { getDB } = require('../db');
