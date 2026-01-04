@@ -132,11 +132,55 @@ class NotificationService {
      */
     async notifyNewTorrent(taskName, torrentTitle, sizeStr) {
         const config = await this.getSettings();
-        if (!config.enabled || !config.notifyOnDownloadStart) return;
+
+        const loggerService = require('./loggerService');
+
+        if (!config.enabled) {
+            loggerService.log(`📢 通知未发送: 通知功能已禁用`, 'info');
+            return { success: false, reason: 'disabled' };
+        }
+
+        if (!config.notifyOnDownloadStart) {
+            loggerService.log(`📢 通知未发送: 资源下载通知已禁用`, 'info');
+            return { success: false, reason: 'download_notify_disabled' };
+        }
 
         const title = `✨ RSS 匹配成功: ${taskName}`;
         const message = `${torrentTitle}\n体积: ${sizeStr}`;
-        await this.send(title, message, config);
+
+        // 记录通知接收端信息
+        const receivers = config.receivers || [];
+        const enabledReceivers = receivers.filter(r => r.enabled);
+
+        if (enabledReceivers.length === 0) {
+            loggerService.log(`📢 通知未发送: 未配置有效的通知接收端`, 'warning');
+            return { success: false, reason: 'no_receivers' };
+        }
+
+        // 构建接收端信息字符串 - 类型、备注、URL 在一行显示
+        const receiverInfo = enabledReceivers.map(r => {
+            const type = r.type === 'bark' ? 'Bark' : r.type === 'webhook' ? 'Webhook' : r.type;
+            const name = r.name || '未命名';
+            const url = r.url || '';
+            return `[${type}] ${name} ${url}`;
+        }).join(' | ');
+
+        loggerService.log(`📢 发送通知: ${torrentTitle} → ${receiverInfo}`, 'success');
+
+        const result = await this.send(title, message, config);
+
+        // 记录发送结果
+        if (result.success) {
+            if (result.partial) {
+                loggerService.log(`📢 通知部分成功: ${result.message}`, 'warning');
+            } else {
+                loggerService.log(`📢 通知发送成功: ${result.message}`, 'success');
+            }
+        } else {
+            loggerService.log(`📢 通知发送失败: ${result.error || '未知错误'}`, 'error');
+        }
+
+        return result;
     }
 
     /**

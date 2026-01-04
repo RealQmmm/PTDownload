@@ -835,7 +835,9 @@ const SettingsPage = () => {
                                 <div className="space-y-4">
                                     {notifySettings.notification_receivers.map((receiver, index) => (
                                         <div key={receiver.id} className={`p-4 rounded-lg border ${borderColor} ${darkMode ? 'bg-gray-800/30' : 'bg-gray-50'}`}>
-                                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
+                                            {/* 第一行：类型、备注、URL */}
+                                            <div className="flex flex-col lg:flex-row gap-2 mb-3">
+                                                {/* 类型选择 */}
                                                 <Select
                                                     value={receiver.type}
                                                     onChange={(e) => {
@@ -843,71 +845,68 @@ const SettingsPage = () => {
                                                         updated[index].type = e.target.value;
                                                         setNotifySettings({ ...notifySettings, notification_receivers: updated });
                                                     }}
-                                                    containerClassName="w-full sm:w-32 flex-shrink-0"
+                                                    containerClassName="w-full lg:w-32 flex-shrink-0"
                                                 >
                                                     <option value="bark">Bark</option>
                                                     <option value="webhook">Webhook</option>
                                                 </Select>
-                                                <div className="flex-1 flex space-x-2">
-                                                    <Input
-                                                        value={receiver.name}
+
+                                                {/* 备注名称 */}
+                                                <Input
+                                                    value={receiver.name}
+                                                    onChange={(e) => {
+                                                        const updated = [...notifySettings.notification_receivers];
+                                                        updated[index].name = e.target.value;
+                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                    }}
+                                                    placeholder="备注名称"
+                                                    containerClassName="w-full lg:w-48 flex-shrink-0"
+                                                />
+
+                                                {/* URL */}
+                                                <Input
+                                                    value={receiver.url}
+                                                    onChange={(e) => {
+                                                        const updated = [...notifySettings.notification_receivers];
+                                                        updated[index].url = e.target.value;
+                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                    }}
+                                                    placeholder={receiver.type === 'bark' ? "https://api.day.app/Key" : "https://example.com/api"}
+                                                    containerClassName="flex-1 min-w-0"
+                                                />
+
+                                                {/* 删除按钮 */}
+                                                <Button
+                                                    variant="danger"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        const updated = notifySettings.notification_receivers.filter((_, i) => i !== index);
+                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                    }}
+                                                    className="flex-shrink-0"
+                                                >
+                                                    🗑️
+                                                </Button>
+                                            </div>
+
+                                            {/* 第二行：Webhook Method（仅 Webhook 类型显示） */}
+                                            {receiver.type === 'webhook' && (
+                                                <div className="flex items-center space-x-2">
+                                                    <span className={`text-xs ${textSecondary} w-16`}>Method:</span>
+                                                    <Select
+                                                        value={receiver.method || 'GET'}
                                                         onChange={(e) => {
                                                             const updated = [...notifySettings.notification_receivers];
-                                                            updated[index].name = e.target.value;
+                                                            updated[index].method = e.target.value;
                                                             setNotifySettings({ ...notifySettings, notification_receivers: updated });
                                                         }}
-                                                        placeholder="备注名称"
-                                                        containerClassName="flex-1"
-                                                    />
-                                                    <Button
-                                                        variant="danger"
-                                                        size="sm"
-                                                        onClick={() => {
-                                                            const updated = notifySettings.notification_receivers.filter((_, i) => i !== index);
-                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                        }}
-                                                        className="flex-shrink-0"
+                                                        className="w-24"
                                                     >
-                                                        🗑️
-                                                    </Button>
+                                                        <option value="GET">GET</option>
+                                                        <option value="POST">POST</option>
+                                                    </Select>
                                                 </div>
-                                            </div>
-
-                                            <div className="space-y-3">
-                                                {receiver.type === 'webhook' && (
-                                                    <div className="flex items-center space-x-2">
-                                                        <span className={`text-xs ${textSecondary} w-16`}>Method:</span>
-                                                        <Select
-                                                            value={receiver.method || 'GET'}
-                                                            onChange={(e) => {
-                                                                const updated = [...notifySettings.notification_receivers];
-                                                                updated[index].method = e.target.value;
-                                                                setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                            }}
-                                                            className="w-24"
-                                                        >
-                                                            <option value="GET">GET</option>
-                                                            <option value="POST">POST</option>
-                                                        </Select>
-                                                    </div>
-                                                )}
-
-                                                <div className="flex items-center space-x-2">
-                                                    <span className={`text-xs ${textSecondary} w-16`}>URL:</span>
-                                                    <div className="flex-1">
-                                                        <Input
-                                                            value={receiver.url}
-                                                            onChange={(e) => {
-                                                                const updated = [...notifySettings.notification_receivers];
-                                                                updated[index].url = e.target.value;
-                                                                setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                            }}
-                                                            placeholder={receiver.type === 'bark' ? "https://api.day.app/Key" : "https://example.com/api"}
-                                                            containerClassName="w-full"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
+                                            )}
                                         </div>
                                     ))}
                                     {notifySettings.notification_receivers.length === 0 && (
