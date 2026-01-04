@@ -37,9 +37,27 @@ const LogsPage = () => {
     useEffect(() => {
         fetchLogs();
         fetchConfig();
-        // Refresh every 30 seconds
-        const interval = setInterval(fetchLogs, 30000);
-        return () => clearInterval(interval);
+
+        // Refresh every 60 seconds (optimized from 30s)
+        let interval = setInterval(fetchLogs, 60000);
+
+        // Pause polling when page is hidden
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                clearInterval(interval);
+            } else {
+                // Resume polling when page becomes visible
+                fetchLogs();
+                interval = setInterval(fetchLogs, 60000);
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            clearInterval(interval);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
     }, []);
 
     const handleToggleSystemLogs = async () => {

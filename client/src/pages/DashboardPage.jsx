@@ -239,9 +239,54 @@ const DashboardPage = ({ setActiveTab }) => {
 
     useEffect(() => {
         fetchTorrentData();
-        const interval = setInterval(fetchTorrentData, 5000); // 5 seconds for live speed updates
-        return () => clearInterval(interval);
-    }, []);
+
+        // Smart polling: adjust interval based on active torrents
+        let interval;
+
+        const startPolling = () => {
+            const activeTorrents = allTorrents.filter(t =>
+                (Number(t.dlspeed) || 0) > 0 || (Number(t.upspeed) || 0) > 0
+            );
+
+            // Dynamic interval based on activity
+            let currentInterval;
+            if (activeTorrents.length > 0) {
+                currentInterval = 10000; // 10 seconds when active (optimized from 5s)
+            } else if (allTorrents.length > 0) {
+                currentInterval = 20000; // 20 seconds when idle
+            } else {
+                currentInterval = 30000; // 30 seconds when no torrents
+            }
+
+            if (interval) clearInterval(interval);
+            interval = setInterval(fetchTorrentData, currentInterval);
+        };
+
+        // Start initial polling
+        startPolling();
+
+        // Restart polling when torrent list changes
+        const restartTimer = setTimeout(startPolling, 1000);
+
+        // Pause polling when page is hidden
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                if (interval) clearInterval(interval);
+            } else {
+                // Resume polling when page becomes visible
+                fetchTorrentData();
+                startPolling();
+            }
+        };
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        return () => {
+            if (interval) clearInterval(interval);
+            clearTimeout(restartTimer);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, [allTorrents.length]); // Re-run when torrent count changes
 
     // Only show loading on initial fetch when we have no data
     if (loading && allTorrents.length === 0 && historyData.length === 0) {
