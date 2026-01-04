@@ -117,7 +117,7 @@ const TasksPage = () => {
             const res = await authenticatedFetch('/api/settings');
             const data = await res.json();
             setDefaultDownloadPath(data.default_download_path || '');
-            setEnableMultiPath(data.enable_multi_path === 'true');
+            setEnableMultiPath(data.enable_multi_path === 'true' || data.enable_multi_path === true);
         } catch (err) {
             console.error('Fetch settings failed:', err);
         }
@@ -143,6 +143,12 @@ const TasksPage = () => {
             category: '',
             enabled: 1
         });
+
+        // If multi-path is disabled, pre-set to default path
+        if (!enableMultiPath && defaultDownloadPath) {
+            setFormData(prev => ({ ...prev, save_path: defaultDownloadPath }));
+        }
+
         setShowModal(true);
     };
 
@@ -462,6 +468,7 @@ const TasksPage = () => {
                 onClose={() => setShowModal(false)}
                 title={editingTask ? '编辑自动任务' : '创建新 RSS 任务'}
                 size="lg"
+                className="w-full max-w-[95vw] sm:max-w-4xl overflow-x-hidden"
                 footer={
                     <>
                         <Button variant="ghost" onClick={() => setShowModal(false)}>取消</Button>
@@ -495,38 +502,42 @@ const TasksPage = () => {
                         <div>
                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">执行周期</label>
                             <div className="flex space-x-2">
-                                <Input
-                                    required
-                                    type="number"
-                                    min="1"
-                                    value={parseCron(formData.cron).value}
-                                    onChange={(e) => {
-                                        const current = parseCron(formData.cron);
-                                        const val = e.target.value;
-                                        let newCron = '';
-                                        if (current.unit === 'm') newCron = `*/${val} * * * *`;
-                                        else if (current.unit === 'h') newCron = `0 */${val} * * *`;
-                                        else if (current.unit === 'd') newCron = `0 0 */${val} * *`;
-                                        setFormData({ ...formData, cron: newCron });
-                                    }}
-                                    className="text-center"
-                                />
-                                <Select
-                                    value={parseCron(formData.cron).unit}
-                                    onChange={(e) => {
-                                        const current = parseCron(formData.cron);
-                                        const unit = e.target.value;
-                                        let newCron = '';
-                                        if (unit === 'm') newCron = `*/${current.value} * * * *`;
-                                        else if (unit === 'h') newCron = `0 */${current.value} * * *`;
-                                        else if (unit === 'd') newCron = `0 0 */${current.value} * *`;
-                                        setFormData({ ...formData, cron: newCron });
-                                    }}
-                                >
-                                    <option value="m">分钟</option>
-                                    <option value="h">小时</option>
-                                    <option value="d">天</option>
-                                </Select>
+                                <div className="flex-1 min-w-0">
+                                    <Input
+                                        required
+                                        type="number"
+                                        min="1"
+                                        value={parseCron(formData.cron).value}
+                                        onChange={(e) => {
+                                            const current = parseCron(formData.cron);
+                                            const val = e.target.value;
+                                            let newCron = '';
+                                            if (current.unit === 'm') newCron = `*/${val} * * * *`;
+                                            else if (current.unit === 'h') newCron = `0 */${val} * * *`;
+                                            else if (current.unit === 'd') newCron = `0 0 */${val} * *`;
+                                            setFormData({ ...formData, cron: newCron });
+                                        }}
+                                        className="text-center"
+                                    />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <Select
+                                        value={parseCron(formData.cron).unit}
+                                        onChange={(e) => {
+                                            const current = parseCron(formData.cron);
+                                            const unit = e.target.value;
+                                            let newCron = '';
+                                            if (unit === 'm') newCron = `*/${current.value} * * * *`;
+                                            else if (unit === 'h') newCron = `0 */${current.value} * * *`;
+                                            else if (unit === 'd') newCron = `0 0 */${current.value} * *`;
+                                            setFormData({ ...formData, cron: newCron });
+                                        }}
+                                    >
+                                        <option value="m">分钟</option>
+                                        <option value="h">小时</option>
+                                        <option value="d">天</option>
+                                    </Select>
+                                </div>
                             </div>
                             {parseCron(formData.cron).isComplex && (
                                 <p className="text-[10px] text-amber-500 mt-1">检测到复杂 Cron 表达式，已重置为简单模式</p>
@@ -694,6 +705,7 @@ const TasksPage = () => {
                                 <Select
                                     value={formData.save_path}
                                     onChange={(e) => setFormData({ ...formData, save_path: e.target.value })}
+                                    className="flex-1"
                                 >
                                     <option value="">请选择路径</option>
                                     {enableMultiPath ? (

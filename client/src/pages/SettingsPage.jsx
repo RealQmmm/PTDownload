@@ -61,6 +61,9 @@ const SettingsPage = () => {
     const [defaultDownloadPath, setDefaultDownloadPath] = useState('');
     // Multi-path management switch
     const [enableMultiPath, setEnableMultiPath] = useState(false);
+    // Create series subfolder
+    const [createSeriesSubfolder, setCreateSeriesSubfolder] = useState(false);
+
 
     // Theme helpers
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
@@ -138,7 +141,8 @@ const SettingsPage = () => {
 
             // Load default download path and multi-path switch
             setDefaultDownloadPath(data.default_download_path || '');
-            setEnableMultiPath(data.enable_multi_path === 'true');
+            setEnableMultiPath(data.enable_multi_path === 'true' || data.enable_multi_path === true);
+            setCreateSeriesSubfolder(data.create_series_subfolder === 'true' || data.create_series_subfolder === true);
         } catch (err) {
             console.error('Fetch settings failed:', err);
         }
@@ -546,11 +550,38 @@ const SettingsPage = () => {
         }
     };
 
+    const handleToggleSeriesSubfolder = async (newValue) => {
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await authenticatedFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ create_series_subfolder: newValue })
+            });
+            if (res.ok) {
+                setCreateSeriesSubfolder(newValue);
+                setMessage({
+                    type: 'success',
+                    text: newValue ? '剧集子文件夹已启用' : '剧集子文件夹已禁用'
+                });
+            } else {
+                setMessage({ type: 'error', text: '保存失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+
     const renderContent = () => {
         switch (subTab) {
             case 'general':
                 return (
-                    <div className="space-y-6">
+                    <div key="general" className="space-y-6">
                         {message && (
                             <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                                 {message.text}
@@ -754,7 +785,7 @@ const SettingsPage = () => {
 
             case 'notifications':
                 return (
-                    <div className="space-y-4">
+                    <div key="notifications" className="space-y-4">
                         {message && (
                             <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                                 {message.text}
@@ -804,7 +835,7 @@ const SettingsPage = () => {
                                 <div className="space-y-4">
                                     {notifySettings.notification_receivers.map((receiver, index) => (
                                         <div key={receiver.id} className={`p-4 rounded-lg border ${borderColor} ${darkMode ? 'bg-gray-800/30' : 'bg-gray-50'}`}>
-                                            <div className="flex items-center space-x-2 mb-3">
+                                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3">
                                                 <Select
                                                     value={receiver.type}
                                                     onChange={(e) => {
@@ -812,12 +843,12 @@ const SettingsPage = () => {
                                                         updated[index].type = e.target.value;
                                                         setNotifySettings({ ...notifySettings, notification_receivers: updated });
                                                     }}
-                                                    className="w-32"
+                                                    containerClassName="w-full sm:w-32 flex-shrink-0"
                                                 >
                                                     <option value="bark">Bark</option>
                                                     <option value="webhook">Webhook</option>
                                                 </Select>
-                                                <div className="flex-1">
+                                                <div className="flex-1 flex space-x-2">
                                                     <Input
                                                         value={receiver.name}
                                                         onChange={(e) => {
@@ -826,18 +857,20 @@ const SettingsPage = () => {
                                                             setNotifySettings({ ...notifySettings, notification_receivers: updated });
                                                         }}
                                                         placeholder="备注名称"
+                                                        containerClassName="flex-1"
                                                     />
+                                                    <Button
+                                                        variant="danger"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const updated = notifySettings.notification_receivers.filter((_, i) => i !== index);
+                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                        }}
+                                                        className="flex-shrink-0"
+                                                    >
+                                                        🗑️
+                                                    </Button>
                                                 </div>
-                                                <Button
-                                                    variant="danger"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        const updated = notifySettings.notification_receivers.filter((_, i) => i !== index);
-                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                    }}
-                                                >
-                                                    🗑️
-                                                </Button>
                                             </div>
 
                                             <div className="space-y-3">
@@ -870,6 +903,7 @@ const SettingsPage = () => {
                                                                 setNotifySettings({ ...notifySettings, notification_receivers: updated });
                                                             }}
                                                             placeholder={receiver.type === 'bark' ? "https://api.day.app/Key" : "https://example.com/api"}
+                                                            containerClassName="w-full"
                                                         />
                                                     </div>
                                                 </div>
@@ -902,7 +936,7 @@ const SettingsPage = () => {
 
             case 'backup':
                 return (
-                    <div className="space-y-4">
+                    <div key="backup" className="space-y-4">
                         {message && (
                             <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                                 {message.text}
@@ -961,7 +995,7 @@ const SettingsPage = () => {
 
             case 'maintenance':
                 return (
-                    <div className="space-y-4">
+                    <div key="maintenance" className="space-y-4">
                         {message && (
                             <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                                 {message.text}
@@ -1086,22 +1120,24 @@ const SettingsPage = () => {
 
             case 'network':
                 return (
-                    <Card>
-                        <h3 className={`text-lg font-medium ${textPrimary} mb-4`}>代理设置</h3>
-                        <div className="space-y-4">
-                            <Input
-                                label="HTTP 代理"
-                                placeholder="http://127.0.0.1:7890"
-                                disabled
-                            />
-                            <p className="text-xs text-yellow-500">代理功能开发中...</p>
-                        </div>
-                    </Card>
+                    <div key="network">
+                        <Card>
+                            <h3 className={`text-lg font-medium ${textPrimary} mb-4`}>代理设置</h3>
+                            <div className="space-y-4">
+                                <Input
+                                    label="HTTP 代理"
+                                    placeholder="http://127.0.0.1:7890"
+                                    disabled
+                                />
+                                <p className="text-xs text-yellow-500">代理功能开发中...</p>
+                            </div>
+                        </Card>
+                    </div>
                 );
 
             case 'security':
                 return (
-                    <div className="space-y-4">
+                    <div key="security" className="space-y-4">
                         {message && (
                             <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                                 {message.text}
@@ -1141,7 +1177,7 @@ const SettingsPage = () => {
 
             case 'about':
                 return (
-                    <div className="text-center py-10">
+                    <div key="about" className="text-center py-10">
                         <div className="text-4xl mb-4">📦</div>
                         <h2 className={`text-2xl font-bold ${textPrimary} mb-2`}>{siteName}</h2>
                         <p className={textSecondary}>Version 0.1.0 (Alpha)</p>
@@ -1150,53 +1186,74 @@ const SettingsPage = () => {
                             <p className="mt-2">Made with ❤️ for PT users.</p>
                         </div>
                     </div>
-                )
-
-                    ;
+                );
 
             case 'category':
                 return (
-                    <div className="space-y-6">
+                    <div key="category" className="space-y-6">
                         {message && (
                             <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                                 {message.text}
                             </div>
                         )}
 
-                        {/* 0. 默认下载路径 (始终显示) */}
-                        <Card className="p-4 border-l-4 border-l-green-500">
-                            <div className="space-y-3">
-                                <div>
-                                    <h3 className={`text-base font-bold ${textPrimary} mb-1 flex items-center`}>
-                                        <span className="mr-2">📂</span> 默认下载路径
-                                    </h3>
-                                    <p className={`text-xs ${textSecondary}`}>
-                                        所有下载任务默认使用的存储路径，如果未启用多路径管理则使用此路径
-                                    </p>
-                                </div>
-                                <div className="flex items-center space-x-3">
+                        {/* 0. 默认下载路径和自动创建剧集子文件夹 (并排显示) */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            {/* 默认下载路径 */}
+                            <Card>
+                                <h3 className={`text-base font-bold ${textPrimary} mb-1 flex items-center`}>
+                                    <span className="mr-2">📂</span> 默认下载路径
+                                </h3>
+                                <p className={`text-xs ${textSecondary} mb-3`}>
+                                    所有下载任务默认使用的存储路径，如果未启用多路径管理则使用此路径
+                                </p>
+                                <div className="flex items-center space-x-2">
                                     <Input
                                         value={defaultDownloadPath}
                                         onChange={(e) => setDefaultDownloadPath(e.target.value)}
                                         placeholder="例如: /downloads 或留空使用下载器默认"
-                                        className="flex-1"
+                                        containerClassName="flex-1"
+                                        className="py-1.5"
                                     />
                                     <Button
                                         onClick={handleSaveDefaultPath}
                                         disabled={saving}
                                         size="sm"
-                                        className="min-w-[80px]"
+                                        className="whitespace-nowrap"
                                     >
-                                        保存路径
+                                        保存
                                     </Button>
                                 </div>
-                            </div>
-                        </Card>
+                            </Card>
+
+                            {/* 自动创建剧集子文件夹 */}
+                            <Card>
+                                <div className="flex items-start justify-between">
+                                    <div className="flex-1 mr-4">
+                                        <h3 className={`text-base font-bold ${textPrimary} mb-1 flex items-center`}>
+                                            <span className="mr-2">📁</span> 自动创建剧集子文件夹
+                                        </h3>
+                                        <p className={`text-xs ${textSecondary}`}>
+                                            检测到种子名称包含季数标识（如 S01, Season 1）时，自动创建父文件夹来组织集数。适用于剧集、综艺等多集内容
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => handleToggleSeriesSubfolder(!createSeriesSubfolder)}
+                                        disabled={saving}
+                                        className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer flex-shrink-0 ${createSeriesSubfolder ? 'bg-blue-600' : 'bg-gray-300'
+                                            } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${createSeriesSubfolder ? 'left-6.5' : 'left-0.5'
+                                            }`} />
+                                    </button>
+                                </div>
+                            </Card>
+                        </div>
 
                         {/* 1. 多路径管理总开关 */}
-                        <Card className="p-4 border-l-4 border-l-blue-500">
-                            <div className="flex items-center justify-between">
-                                <div>
+                        <Card>
+                            <div className="flex items-start justify-between">
+                                <div className="flex-1 mr-4">
                                     <h3 className={`text-base font-bold ${textPrimary} mb-1 flex items-center`}>
                                         <span className="mr-2">🔀</span> 多路径管理
                                     </h3>
@@ -1207,7 +1264,7 @@ const SettingsPage = () => {
                                 <button
                                     onClick={() => handleToggleMultiPath(!enableMultiPath)}
                                     disabled={saving}
-                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${enableMultiPath ? 'bg-blue-600' : 'bg-gray-300'
+                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer flex-shrink-0 ${enableMultiPath ? 'bg-blue-600' : 'bg-gray-300'
                                         } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${enableMultiPath ? 'left-6.5' : 'left-0.5'
@@ -1220,14 +1277,14 @@ const SettingsPage = () => {
                         {enableMultiPath && (
                             <>
                                 {/* 2. 路径管理 */}
-                                <Card className="p-4">
+                                <Card>
                                     <PathManager />
                                 </Card>
 
                                 {/* 3. 智能分类管理开关 */}
-                                <Card className="p-4 border-l-4 border-l-amber-500">
-                                    <div className="flex items-center justify-between">
-                                        <div>
+                                <Card>
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex-1 mr-4">
                                             <h3 className={`text-base font-bold ${textPrimary} mb-1 flex items-center`}>
                                                 <span className="mr-2">🗂️</span> 智能分类管理功能
                                             </h3>
@@ -1350,7 +1407,7 @@ const SettingsPage = () => {
                 );
 
             case 'logs':
-                return <LogsPage />;
+                return <div key="logs"><LogsPage /></div>;
 
             default:
                 return null;

@@ -118,7 +118,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
 
                 // Load default download path and multi-path switch
                 setDefaultDownloadPath(settingsData.default_download_path || '');
-                setEnableMultiPath(settingsData.enable_multi_path === 'true');
+                setEnableMultiPath(settingsData.enable_multi_path === 'true' || settingsData.enable_multi_path === true);
 
                 if (settingsData.category_map) {
                     try {

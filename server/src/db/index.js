@@ -288,6 +288,7 @@ function createTables() {
     { key: 'enable_category_management', value: 'true' }, // Master switch for category/path feature
     { key: 'default_download_path', value: '' }, // Default download path for simple mode
     { key: 'enable_multi_path', value: 'false' }, // Multi-path management switch
+    { key: 'create_series_subfolder', value: 'false' }, // Create subfolder for series downloads
   ];
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

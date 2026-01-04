@@ -180,11 +180,17 @@ class SeriesService {
             }
         }
 
-        // Auto-append Series Name to path for unified directory structure
-        if (finalSavePath) {
+        // Check if series subfolder creation is enabled
+        // Only auto-append series name if the setting is enabled
+        const setting = this._getDB().prepare("SELECT value FROM settings WHERE key = 'create_series_subfolder'").get();
+        const createSeriesSubfolder = setting?.value === 'true';
+
+        if (createSeriesSubfolder && finalSavePath) {
             const safeName = pathUtils.sanitizeFilename(name);
             finalSavePath = pathUtils.join(finalSavePath, safeName);
+            console.log(`[Series] Auto-created subfolder for: ${name}`);
         }
+
 
         const taskId = taskService.createTask({
             name: `[追剧] ${name} ${season ? 'S' + season : ''} `,

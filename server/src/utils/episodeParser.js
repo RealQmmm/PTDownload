@@ -102,6 +102,72 @@ const episodeParser = {
             season,
             episodes: [...new Set(episodes)].sort((a, b) => a - b)
         };
+    },
+
+    /**
+     * Check if title has season identifier (S01, Season 1, etc.)
+     * @param {string} title 
+     * @returns {boolean}
+     */
+    hasSeasonIdentifier: (title) => {
+        if (!title) return false;
+        const cleanTitle = title.toUpperCase();
+
+        // Match S01, S1, Season 1, Season 01, etc.
+        const seasonRegex = /(?:^|[\s.\[\(])(?:S|Season)[\s.]?(\d+)(?=[\s.\-\]\)]|$)/i;
+        return seasonRegex.test(cleanTitle);
+    },
+
+    /**
+     * Extract series name from title for folder naming
+     * @param {string} title 
+     * @returns {string}
+     */
+    extractSeriesName: (title) => {
+        if (!title) return 'Unknown Series';
+
+        // Remove common patterns to get clean series name
+        let cleaned = title
+            // Remove season/episode identifiers
+            .replace(/S\d{1,2}E\d{1,2}(?:-E?\d{1,2})?/gi, '')
+            .replace(/Season\s*\d{1,2}/gi, '')
+            .replace(/\d{1,2}x\d{2,3}/gi, '')
+            // Remove resolution
+            .replace(/\d{3,4}p/gi, '')
+            .replace(/(?:720|1080|2160|4K|8K)p?/gi, '')
+            // Remove quality/source
+            .replace(/(?:WEB-?DL|BluRay|BDRip|HDTV|WEBRip|DVDRip|REMUX)/gi, '')
+            // Remove codecs
+            .replace(/(?:H\.?264|H\.?265|HEVC|x264|x265|AVC)/gi, '')
+            // Remove audio
+            .replace(/(?:DDP|DD|AAC|AC3|TrueHD|DTS|FLAC|Atmos)[\d.]*(?:[\s.][\d.]+)?/gi, '')
+            // Remove year (but keep if it's part of the title)
+            .replace(/\b(19|20)\d{2}\b/g, '')
+            // Remove group tags [xxx] or (xxx)
+            .replace(/[\[\(][^\]\)]*[\]\)]/g, '')
+            // Remove file extension
+            .replace(/\.(mkv|mp4|avi|ts|m2ts)$/i, '')
+            // Replace dots, dashes, underscores with spaces
+            .replace(/[._\-]+/g, ' ')
+            // Remove multiple spaces
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        // If cleaned name is too short or empty, use first part of original title
+        if (cleaned.length < 3) {
+            const parts = title.split(/[.\-_\s]+/);
+            cleaned = parts.slice(0, Math.min(3, parts.length)).join(' ');
+        }
+
+        // Remove invalid filename characters
+        cleaned = cleaned.replace(/[<>:"/\\|?*]/g, '');
+
+        // Limit length
+        if (cleaned.length > 100) {
+            cleaned = cleaned.substring(0, 100).trim();
+        }
+
+        return cleaned || 'Unknown Series';
     }
 };
 

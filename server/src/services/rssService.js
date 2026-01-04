@@ -332,18 +332,40 @@ class RSSService {
                                 }
                             }
 
+                            // Determine final save path (with series subfolder if enabled)
+                            let finalSavePath = task.save_path;
+                            try {
+                                const setting = db.prepare("SELECT value FROM settings WHERE key = 'create_series_subfolder'").get();
+                                const createSeriesSubfolder = setting?.value === 'true';
+
+                                if (createSeriesSubfolder && finalSavePath && item.title) {
+                                    const episodeParser = require('../utils/episodeParser');
+
+                                    // Check if title has season identifier
+                                    if (episodeParser.hasSeasonIdentifier(item.title)) {
+                                        const seriesName = episodeParser.extractSeriesName(item.title);
+                                        const pathUtils = require('../utils/pathUtils');
+                                        finalSavePath = pathUtils.join(finalSavePath, seriesName);
+                                        if (enableLogs) console.log(`[RSS][Series Subfolder] Using subfolder: ${seriesName}`);
+                                    }
+                                }
+                            } catch (err) {
+                                if (enableLogs) console.warn(`[RSS][Series Subfolder] Error: ${err.message}`);
+                                // Continue with original savePath if error occurs
+                            }
+
                             let result;
                             if (torrentData && !item.link.startsWith('magnet:')) {
                                 // If we have the file data, pass it along with save path, category, and file selection
                                 result = await downloaderService.addTorrentFromData(targetClient, torrentData, {
-                                    savePath: task.save_path,
+                                    savePath: finalSavePath,
                                     category: task.category,
                                     fileIndices: fileIndices
                                 });
                             } else {
                                 // Magnet or fallback (file selection not supported for magnets)
                                 result = await downloaderService.addTorrent(targetClient, item.link, {
-                                    savePath: task.save_path,
+                                    savePath: finalSavePath,
                                     category: task.category
                                 });
                             }

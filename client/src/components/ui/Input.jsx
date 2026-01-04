@@ -5,10 +5,11 @@ const Input = forwardRef(({
     error,
     className = '',
     type = 'text',
+    containerClassName = '',
     ...props
 }, ref) => {
     return (
-        <div className="w-full">
+        <div className={`w-full ${containerClassName}`}>
             {label && (
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                     {label}

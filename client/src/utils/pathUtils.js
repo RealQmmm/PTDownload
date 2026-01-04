@@ -72,24 +72,44 @@ export const suggestPathByTorrentName = (torrentItem, downloadPaths, options = {
                     for (const keyword of keywords) {
                         if (name.includes(keyword)) {
                             score += 10; // 基础匹配分数
-
-                            // 如果是剧集，额外检查季数标识
-                            if (category === '剧集' && /s\d{1,2}|season\s*\d{1,2}/i.test(name)) {
-                                score += 5;
-                            }
-
-                            // 如果是电影，检查年份标识
-                            if (category === '电影' && /\d{4}/.test(name)) {
-                                score += 3;
-                            }
-
                             break; // 找到匹配就跳出
+                        }
+                    }
+
+                    // 剧集特征检测（独立于关键词匹配）
+                    if (category === '剧集') {
+                        // 强特征：季数标识（S01, S02, Season 1 等）
+                        if (/s\d{1,2}(?![0-9])|season\s*\d{1,2}/i.test(name)) {
+                            score += 15; // 季数标识是强特征，给予更高分数
+                        }
+                        // 弱特征：集数标识（E01, EP01, Episode 等）
+                        if (/e\d{1,3}|ep\d{1,3}|episode/i.test(name)) {
+                            score += 8;
+                        }
+                    }
+
+                    // 电影特征检测（独立于关键词匹配）
+                    if (category === '电影') {
+                        // 年份标识（1900-2099）
+                        if (/\b(19|20)\d{2}\b/.test(name)) {
+                            score += 5;
+                        }
+                        // 电影特有格式标识
+                        if (/bluray|bdrip|remux|hdtv/i.test(name)) {
+                            score += 3;
+                        }
+                    }
+
+                    // 动画特征检测
+                    if (category === '动画') {
+                        if (/\[.*\].*\d{2,3}[vp]?$/i.test(name) || /ova|ona/i.test(name)) {
+                            score += 8;
                         }
                     }
                 }
             }
 
-            // 直接名称匹配加分
+            // 直接名称匹配加分（路径名称出现在种子名称中）
             if (name.includes(pathName)) {
                 score += 15;
             }
@@ -97,10 +117,24 @@ export const suggestPathByTorrentName = (torrentItem, downloadPaths, options = {
             return { path, score };
         });
 
+        // 打印所有路径的评分（用于调试）
+        console.log('[PathSuggest] All scores:', scores.map(s => `${s.path.name}: ${s.score}`).join(', '));
+
         // 找到最高分的路径
-        const bestMatch = scores.reduce((best, current) =>
-            current.score > best.score ? current : best
-        );
+        // 如果评分相同，优先选择剧集路径（因为季数标识是强特征）
+        const bestMatch = scores.reduce((best, current) => {
+            if (current.score > best.score) {
+                return current;
+            } else if (current.score === best.score && current.score > 0) {
+                // 评分相同时，优先选择剧集路径
+                const currentIsEpisode = current.path.name.includes('剧集') || current.path.name.toLowerCase().includes('series');
+                const bestIsEpisode = best.path.name.includes('剧集') || best.path.name.toLowerCase().includes('series');
+                if (currentIsEpisode && !bestIsEpisode) {
+                    return current;
+                }
+            }
+            return best;
+        });
 
         console.log('[PathSuggest] Best match score:', bestMatch.score, 'Path:', bestMatch.path?.name);
 

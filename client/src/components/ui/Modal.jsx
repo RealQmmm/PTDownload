@@ -9,7 +9,8 @@ const Modal = ({
     children,
     footer,
     size = 'md', // sm, md, lg, xl, full
-    closeOnOverlayClick = true
+    closeOnOverlayClick = true,
+    className = '' // 新增：自定义类名
 }) => {
     const [isVisible, setIsVisible] = useState(false);
     const [isAnimating, setIsAnimating] = useState(false);
@@ -51,7 +52,7 @@ const Modal = ({
             {/* Modal Content */}
             <div
                 className={`
-                    relative w-full ${sizes[size]} 
+                    relative w-full ${className || sizes[size]} 
                     bg-white dark:bg-surface-900 
                     rounded-2xl shadow-2xl 
                     border border-gray-100 dark:border-gray-800
@@ -74,7 +75,7 @@ const Modal = ({
                 </div>
 
                 {/* Body */}
-                <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 custom-scrollbar">
                     {children}
                 </div>
 

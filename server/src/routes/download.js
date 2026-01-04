@@ -9,7 +9,33 @@ const parseTorrent = require('parse-torrent');
 // Add torrent to client
 router.post('/', async (req, res) => {
     try {
-        const { clientId, torrentUrl, savePath, category } = req.body;
+        let { clientId, torrentUrl, savePath, category, title } = req.body;
+
+        // Check if series subfolder creation is enabled
+        if (savePath && title) {
+            try {
+                const { getDB } = require('../db');
+                const db = getDB();
+                const setting = db.prepare("SELECT value FROM settings WHERE key = 'create_series_subfolder'").get();
+                const createSeriesSubfolder = setting?.value === 'true';
+
+                if (createSeriesSubfolder) {
+                    const episodeParser = require('../utils/episodeParser');
+
+                    // Check if title has season identifier
+                    if (episodeParser.hasSeasonIdentifier(title)) {
+                        const seriesName = episodeParser.extractSeriesName(title);
+                        const pathUtils = require('../utils/pathUtils');
+                        savePath = pathUtils.join(savePath, seriesName);
+                        console.log(`[Series Subfolder] Created subfolder for: ${seriesName}`);
+                    }
+                }
+            } catch (err) {
+                console.error('[Series Subfolder] Error:', err.message);
+                // Continue with original savePath if error occurs
+            }
+        }
+
         const options = { savePath, category };
 
         if (!torrentUrl) {
