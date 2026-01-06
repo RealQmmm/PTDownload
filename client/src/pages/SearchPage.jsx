@@ -362,32 +362,32 @@ const SearchPage = ({ searchState, setSearchState }) => {
     };
 
     return (
-        <div className="p-4 md:p-8 h-full flex flex-col">
-            <div className="mb-6 md:mb-8">
-                <h1 className={`text-2xl md:text-3xl font-bold mb-4 md:mb-6 ${textPrimary}`}>资源搜索</h1>
+        <div className="p-2 sm:p-4 md:p-8 h-full flex flex-col">
+            <div className="mb-2 sm:mb-4 md:mb-8">
+                <h1 className={`hidden sm:block text-2xl md:text-3xl font-bold mb-4 md:mb-6 ${textPrimary}`}>资源搜索</h1>
 
-                <form onSubmit={handleSearch} className="flex gap-2">
+                <form onSubmit={handleSearch} className="flex gap-1 sm:gap-2">
                     <div className="flex-1 min-w-0">
                         <Input
                             placeholder="输入关键词..."
                             value={query}
                             onChange={(e) => setQuery(e.target.value)}
-                            className="text-sm"
+                            className="text-base sm:text-sm"
                         />
                     </div>
-                    <div className="w-20 sm:w-32 shrink-0">
+                    <div className="w-24 sm:w-32 shrink-0">
                         <Select
                             value={selectedSite}
                             onChange={(e) => setSelectedSite(e.target.value)}
-                            className="text-sm"
+                            className="text-base sm:text-sm"
                         >
-                            <option value="">全部</option>
+                            <option value="">全部站点</option>
                             {sites.filter(s => s.enabled === 1 || s.enabled === true || s.enabled === '1').map(site => (
                                 <option key={site.id} value={site.name}>{site.name}</option>
                             ))}
                         </Select>
                     </div>
-                    <Button type="submit" disabled={loading} className="w-16 sm:w-20 shrink-0 text-sm whitespace-nowrap">
+                    <Button type="submit" disabled={loading} className="px-3 sm:px-4 shrink-0 text-xs sm:text-sm whitespace-nowrap">
                         搜索
                     </Button>
                 </form>
@@ -403,7 +403,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                     </div>
                 ) : results.length > 0 ? (
                     <div className="flex-1 overflow-hidden flex flex-col">
-                        <Card className="flex-1 overflow-hidden flex flex-col p-0">
+                        <Card noPadding className="flex-1 overflow-hidden flex flex-col border-0 sm:border bg-transparent sm:bg-white dark:sm:bg-gray-800 shadow-none sm:shadow-md rounded-none sm:rounded-2xl">
                             {/* Desktop Table View */}
                             <div className="hidden lg:block overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
                                 <table className="w-full text-left border-collapse">
@@ -486,9 +486,9 @@ const SearchPage = ({ searchState, setSearchState }) => {
                             </div>
 
                             {/* Mobile Card View */}
-                            <div className="lg:hidden p-1 sm:p-3 overflow-y-auto space-y-2">
+                            <div className="lg:hidden p-0 sm:p-2 overflow-y-auto space-y-3 flex-1 custom-scrollbar">
                                 {sortedResults.map((item, index) => (
-                                    <div key={index} className={`${bgSecondary} rounded-lg border ${borderColor} p-2 sm:p-3 shadow-sm`}>
+                                    <div key={index} className={`${bgSecondary} rounded-lg border ${borderColor} p-3 shadow-sm mx-1`}>
                                         <div className="flex justify-between items-start mb-1.5 gap-2">
                                             <div className="flex gap-1 flex-wrap flex-1 min-w-0">
                                                 <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap`}>
@@ -527,7 +527,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                             </div>
                         </Card>
 
-                        <div className={`mt-4 p-3 ${bgSecondary} rounded-lg border ${borderColor} ${textSecondary} text-xs text-center lg:text-right`}>
+                        <div className={`mt-2 p-2 ${bgSecondary} rounded-lg border ${borderColor} ${textSecondary} text-[10px] sm:text-xs text-center lg:text-right`}>
                             共找到 {results.length} 个结果
                         </div>
                     </div>
@@ -639,6 +639,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                         value={customPath}
                                         onChange={(e) => setCustomPath(e.target.value)}
                                         placeholder="请输入完整的物理路径..."
+                                        className="text-base sm:text-sm"
                                         autoFocus
                                     />
                                 </div>

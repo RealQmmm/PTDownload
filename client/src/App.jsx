@@ -244,7 +244,7 @@ function App() {
                 {/* Main Content */}
                 <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative bg-surface-50 dark:bg-surface-950 transition-colors duration-300">
                     {/* Mobile Header */}
-                    <header className={`lg:hidden flex items-center justify-between p-4 border-b shrink-0 ${computedDarkMode ? 'bg-surface-900 border-gray-800' : 'bg-white border-gray-200'}`}>
+                    <header className={`lg:hidden flex items-center justify-between p-2 sm:p-4 border-b shrink-0 ${computedDarkMode ? 'bg-surface-900 border-gray-800' : 'bg-white border-gray-200'}`}>
                         <button
                             onClick={() => setSidebarOpen(true)}
                             className={`p-2 rounded-lg ${computedDarkMode ? 'hover:bg-gray-800 text-gray-200' : 'hover:bg-gray-100 text-gray-700'} transition-colors`}

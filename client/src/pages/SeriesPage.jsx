@@ -288,7 +288,7 @@ const SeriesPage = () => {
                                 </div>
 
                                 <div className="mt-auto flex justify-between items-center text-xs">
-                                    <span className={textSecondary}>来源: {sub.site_name || '未知'}</span>
+                                    <span className={textSecondary}>追剧来源: {sub.site_name || '未知'}</span>
                                     <div className="space-x-2 whitespace-nowrap">
                                         <button
                                             onClick={async () => {
@@ -354,6 +354,7 @@ const SeriesPage = () => {
                         value={formData.name}
                         onChange={e => setFormData({ ...formData, name: e.target.value })}
                         placeholder="例如: 西部世界"
+                        className="text-base sm:text-sm"
                     />
                     <div>
                         <Input
@@ -361,6 +362,7 @@ const SeriesPage = () => {
                             value={formData.alias || ''}
                             onChange={e => setFormData({ ...formData, alias: e.target.value })}
                             placeholder="例如: Westworld"
+                            className="text-base sm:text-sm"
                         />
                         <p className={`text-[10px] ${textSecondary} mt-1`}>如果种子名称是英文，请填写英文原名。</p>
                     </div>
@@ -371,11 +373,13 @@ const SeriesPage = () => {
                             value={formData.season}
                             onChange={e => setFormData({ ...formData, season: e.target.value })}
                             placeholder="例如: 1"
+                            className="text-base sm:text-sm"
                         />
                         <Select
                             label="画质偏好"
                             value={formData.quality}
                             onChange={e => setFormData({ ...formData, quality: e.target.value })}
+                            className="text-base sm:text-sm"
                         >
                             <option value="">不限 / Any</option>
                             <option value="4K">4K / 2160p</option>
@@ -388,6 +392,7 @@ const SeriesPage = () => {
                         required
                         value={formData.rss_source_id}
                         onChange={e => setFormData({ ...formData, rss_source_id: e.target.value })}
+                        className="text-base sm:text-sm"
                     >
                         <option value="">请选择 RSS 源</option>
                         {rssSources.map(src => (

@@ -91,6 +91,7 @@ export default function LoginPage({ onLogin, siteName, themeMode, setThemeMode, 
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             placeholder="请输入用户名"
+                            className="text-base sm:text-sm"
                         />
                         <Input
                             label="密码"
@@ -99,6 +100,7 @@ export default function LoginPage({ onLogin, siteName, themeMode, setThemeMode, 
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="请输入密码"
+                            className="text-base sm:text-sm"
                         />
                     </div>
 

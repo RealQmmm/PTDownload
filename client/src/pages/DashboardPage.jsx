@@ -594,7 +594,7 @@ const DashboardPage = ({ setActiveTab }) => {
                         {todayDownloads.length > 0 ? (
                             todayDownloads.map((item, idx) => (
                                 <div key={idx} className="relative pl-4 border-l-2 border-blue-500/30 py-1">
-                                    <p className={`text-xs font-medium ${textPrimary} line-clamp-2 leading-relaxed mb-1`} title={item.item_title || 'Unknown'}>
+                                    <p className={`text-xs font-medium ${textPrimary} whitespace-nowrap overflow-x-auto custom-scrollbar leading-relaxed mb-1 pb-1`} title={item.item_title || 'Unknown'}>
                                         {item.item_title || 'Unknown'}
                                     </p>
                                     <div className="flex justify-between items-center text-[10px] text-gray-500">
