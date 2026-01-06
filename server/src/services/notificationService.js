@@ -48,6 +48,9 @@ class NotificationService {
             return {
                 enabled: settingsMap['notify_enabled'] === 'true',
                 notifyOnDownloadStart: settingsMap['notify_on_download_start'] === 'true',
+                // RSS match notification: default to true for backward compatibility
+                // If the key doesn't exist, assume user wants RSS notifications
+                notifyOnRssMatch: settingsMap['notify_on_rss_match'] !== 'false',
                 receivers: receivers.filter(r => r.enabled)
             };
         } catch (err) {
@@ -140,9 +143,11 @@ class NotificationService {
             return { success: false, reason: 'disabled' };
         }
 
-        if (!config.notifyOnDownloadStart) {
-            loggerService.log(`📢 通知未发送: 资源下载通知已禁用`, 'info');
-            return { success: false, reason: 'download_notify_disabled' };
+        // Use RSS-specific notification setting, NOT the download_start setting
+        // RSS match is a different event than manual download start
+        if (!config.notifyOnRssMatch) {
+            loggerService.log(`📢 通知未发送: RSS匹配通知已禁用`, 'info');
+            return { success: false, reason: 'rss_notify_disabled' };
         }
 
         const title = `✨ RSS 匹配成功: ${taskName}`;

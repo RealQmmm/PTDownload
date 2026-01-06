@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const timeUtils = require('./utils/timeUtils');
 const { initDB } = require('./db');
 const authMiddleware = require('./middleware/auth');
 const authService = require('./services/authService');
@@ -88,7 +89,7 @@ setInterval(() => {
 
 // Basic Route
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date() });
+  res.json({ status: 'ok', timestamp: timeUtils.getLocalISOString() });
 });
 
 // Import Routes

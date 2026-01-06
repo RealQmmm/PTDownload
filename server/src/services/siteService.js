@@ -1,4 +1,5 @@
 const { getDB } = require('../db');
+const timeUtils = require('../utils/timeUtils');
 const axios = require('axios');
 const loggerService = require('./loggerService');
 const notificationService = require('./notificationService');
@@ -107,7 +108,7 @@ class SiteService {
         if (newBytes > currentBytes && currentBytes > 0) {
             const db = this._getDB();
             const delta = newBytes - currentBytes;
-            const today = new Date().toISOString().split('T')[0];
+            const today = timeUtils.getLocalDateString();
 
             db.prepare(`
                 INSERT INTO site_daily_stats (site_id, date, uploaded_bytes)
@@ -148,7 +149,7 @@ class SiteService {
                 (html.includes('Login') && !html.includes('Logout'));
 
             const status = isLogin ? 1 : 0;
-            const now = new Date().toISOString();
+            const now = timeUtils.getLocalISOString();
 
             if (status === 0) {
                 // Cookie is valid, parse user stats
@@ -219,7 +220,7 @@ class SiteService {
 
             if (site.type === 'Mock') {
                 const stats = siteParsers.parseUserStats('', 'Mock');
-                const now = new Date().toISOString();
+                const now = timeUtils.getLocalISOString();
                 db.prepare('UPDATE sites SET username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?, cookie_status = 0 WHERE id = ?')
                     .run(stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now, id);
                 return stats;
@@ -251,14 +252,14 @@ class SiteService {
                 }
 
                 db.prepare('UPDATE sites SET cookie_status = 1, last_checked_at = ? WHERE id = ?')
-                    .run(new Date().toISOString(), id);
+                    .run(timeUtils.getLocalISOString(), id);
                 return null;
             }
 
             const stats = siteParsers.parseUserStats(html, site.type);
 
             if (stats) {
-                const now = new Date().toISOString();
+                const now = timeUtils.getLocalISOString();
 
                 // Update heatmap if there's an increase
                 this._updateHeatmapData(id, site.upload, stats.upload);
@@ -333,7 +334,7 @@ class SiteService {
         if (site.type === 'Mock') {
             if (enableLogs) console.log(`[Checkin] Mock checkin successful for ${site.name}`);
             const db = this._getDB();
-            db.prepare('UPDATE sites SET last_checkin_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+            db.prepare('UPDATE sites SET last_checkin_at = ? WHERE id = ?').run(timeUtils.getLocalISOString(), id);
             return true;
         }
 
@@ -388,7 +389,7 @@ class SiteService {
             }
 
             const db = this._getDB();
-            db.prepare('UPDATE sites SET last_checkin_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+            db.prepare('UPDATE sites SET last_checkin_at = ? WHERE id = ?').run(timeUtils.getLocalISOString(), id);
 
             loggerService.log(`站点 ${site.name} 自动签到成功`, 'success');
             return true;

@@ -169,17 +169,30 @@ class RSSService {
 
                             // Only apply if we detected valid episode info
                             if (candidateInfo && candidateInfo.episodes.length > 0) {
-                                const historyItems = db.prepare('SELECT item_title FROM task_history WHERE task_id = ?').all(task.id);
                                 const downloadedEpisodes = new Set();
-                                const targetSeason = candidateInfo.season;
+                                const targetSeason = candidateInfo.season !== null ? candidateInfo.season : 1;
+
+                                // === Source 1: Query series_episodes table (most reliable) ===
+                                // Find the series subscription linked to this task (if any)
+                                const subscription = db.prepare('SELECT id, season, name, alias FROM series_subscriptions WHERE task_id = ?').get(task.id);
+                                if (subscription) {
+                                    const seriesEpisodes = db.prepare(
+                                        'SELECT episode FROM series_episodes WHERE subscription_id = ? AND season = ?'
+                                    ).all(subscription.id, targetSeason);
+
+                                    seriesEpisodes.forEach(ep => downloadedEpisodes.add(ep.episode));
+
+                                    if (enableLogs && seriesEpisodes.length > 0) {
+                                        console.log(`[RSS] Found ${seriesEpisodes.length} episodes in series_episodes table for season ${targetSeason}`);
+                                    }
+                                }
+
+                                // === Source 2: Parse from this task's history ===
+                                const historyItems = db.prepare('SELECT item_title FROM task_history WHERE task_id = ?').all(task.id);
 
                                 historyItems.forEach(hItem => {
                                     const hInfo = episodeParser.parse(hItem.item_title);
                                     if (hInfo) {
-                                        // Strict Season Matching: Only consider history items from the same season
-                                        // If candidate has no season (unlikely for good PT), we match strictly or loosely?
-                                        // Logic: If candidate has season, history MUST match it.
-                                        // If candidate has NO season, we match anything (risky but okay for pure anime usage sometimes)
                                         if (targetSeason !== null) {
                                             if (hInfo.season === targetSeason) {
                                                 hInfo.episodes.forEach(ep => downloadedEpisodes.add(ep));
@@ -190,11 +203,54 @@ class RSSService {
                                     }
                                 });
 
-                                // Check if ALL candidate episodes exist in history
+                                // === Source 3: Scan ALL history for matching series name (catches manual/external downloads) ===
+                                // This is important for detecting downloads added directly to the client
+                                if (subscription) {
+                                    const seriesName = (subscription.name || '').toLowerCase().trim();
+                                    const seriesAlias = (subscription.alias || '').toLowerCase().trim();
+
+                                    // Get all history records (including task_id = NULL)
+                                    const allHistory = db.prepare('SELECT item_title FROM task_history WHERE task_id IS NULL OR task_id != ?').all(task.id);
+
+                                    allHistory.forEach(hItem => {
+                                        const titleLower = (hItem.item_title || '').toLowerCase();
+
+                                        // Check if title matches series name or alias
+                                        let isMatch = seriesName && titleLower.includes(seriesName);
+                                        if (!isMatch && seriesAlias) {
+                                            isMatch = titleLower.includes(seriesAlias);
+                                        }
+
+                                        // Normalize and try again
+                                        if (!isMatch) {
+                                            const normalizedTitle = titleLower.replace(/[\s._\-\[\](){}+]/g, '');
+                                            const normalizedName = seriesName.replace(/[\s._\-\[\](){}+]/g, '');
+                                            isMatch = normalizedName && normalizedTitle.includes(normalizedName);
+
+                                            if (!isMatch && seriesAlias) {
+                                                const normalizedAlias = seriesAlias.replace(/[\s._\-\[\](){}+]/g, '');
+                                                isMatch = normalizedAlias && normalizedTitle.includes(normalizedAlias);
+                                            }
+                                        }
+
+                                        if (isMatch) {
+                                            const hInfo = episodeParser.parse(hItem.item_title);
+                                            if (hInfo && hInfo.season === targetSeason) {
+                                                hInfo.episodes.forEach(ep => downloadedEpisodes.add(ep));
+                                            }
+                                        }
+                                    });
+
+                                    if (enableLogs && downloadedEpisodes.size > 0) {
+                                        console.log(`[RSS] Total tracked episodes for S${targetSeason}: ${Array.from(downloadedEpisodes).sort((a, b) => a - b).join(', ')}`);
+                                    }
+                                }
+
+                                // Check if ALL candidate episodes exist in any source
                                 const isRedundant = candidateInfo.episodes.every(ep => downloadedEpisodes.has(ep));
 
                                 if (isRedundant) {
-                                    if (enableLogs) console.log(`[RSS] Smart Skip: ${item.title} (Episodes ${candidateInfo.episodes.join(', ')} already downloaded)`);
+                                    if (enableLogs) console.log(`[RSS] Smart Skip: ${item.title} (Episodes ${candidateInfo.episodes.join(', ')} already downloaded, total tracked: ${downloadedEpisodes.size})`);
                                     loggerService.log(`匹配到资源但已存在: ${item.title} (原因: 剧集 ${candidateInfo.episodes.join(', ')} 已下载)`, 'success', task.id, items.length, matchCount);
                                     continue; // Skip processing this item
                                 }
@@ -354,6 +410,86 @@ class RSSService {
                                 // Continue with original savePath if error occurs
                             }
 
+                            // === FINAL CHECK: Verify episode doesn't exist before pre-recording ===
+                            // This catches cases where same episode exists with different hash
+                            // (e.g., different release groups for same episode)
+                            try {
+                                const subscription = db.prepare('SELECT id, season FROM series_subscriptions WHERE task_id = ?').get(task.id);
+                                if (subscription) {
+                                    const candidateInfo = episodeParser.parse(item.title);
+                                    if (candidateInfo && candidateInfo.episodes.length > 0) {
+                                        const targetSeason = candidateInfo.season !== null ? candidateInfo.season : (subscription.season || 1);
+
+                                        // Check if ANY of the candidate episodes already exist in series_episodes
+                                        const existingEpisodes = db.prepare(`
+                                            SELECT episode FROM series_episodes 
+                                            WHERE subscription_id = ? AND season = ? AND episode IN (${candidateInfo.episodes.join(',')})
+                                        `).all(subscription.id, targetSeason);
+
+                                        if (existingEpisodes.length > 0) {
+                                            const existingEpNumbers = existingEpisodes.map(e => e.episode);
+                                            const allExist = candidateInfo.episodes.every(ep => existingEpNumbers.includes(ep));
+
+                                            if (allExist) {
+                                                if (enableLogs) console.log(`[RSS] Final Skip: ${item.title} - All episodes already in series_episodes table`);
+                                                loggerService.log(`匹配到资源但已存在: ${item.title} (原因: 剧集 S${targetSeason}E${candidateInfo.episodes.join(',E')} 已在剧集表中)`, 'success', task.id, items.length, matchCount);
+                                                continue; // Skip - episodes already downloaded with different hash
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (finalCheckErr) {
+                                if (enableLogs) console.warn(`[RSS] Final episode check error: ${finalCheckErr.message}`);
+                                // Continue anyway - better to potentially duplicate than miss a download
+                            }
+
+                            // === STEP 1: PRE-RECORD to task_history BEFORE submitting to downloader ===
+                            // This prevents race condition with statsService scanning and marking as "manual download"
+                            const timeUtils = require('../utils/timeUtils');
+                            const preRecordResult = db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, item_hash, download_time) VALUES (?, ?, ?, ?, ?, ?)')
+                                .run(task.id, item.guid, item.title, item.size, torrentHash, timeUtils.getLocalISOString());
+                            const preRecordId = preRecordResult.lastInsertRowid;
+
+                            if (enableLogs) console.log(`[RSS] Pre-recorded to task_history (ID: ${preRecordId}): ${item.title}`);
+
+                            // === STEP 2: SEND NOTIFICATION immediately after matching ===
+                            // Notify user as soon as we know we're going to download
+                            try {
+                                const FormatUtils = require('../utils/formatUtils');
+                                await notificationService.notifyNewTorrent(task.name, item.title, FormatUtils.formatBytes(item.size));
+                            } catch (notifyErr) {
+                                console.error('[RSS] Notification failed:', notifyErr.message);
+                            }
+
+                            // === STEP 3: Pre-record episodes to series_episodes table ===
+                            try {
+                                const subscription = db.prepare('SELECT id, season FROM series_subscriptions WHERE task_id = ?').get(task.id);
+                                if (subscription) {
+                                    const candidateInfo = episodeParser.parse(item.title);
+                                    if (candidateInfo && candidateInfo.episodes.length > 0) {
+                                        const season = candidateInfo.season !== null ? candidateInfo.season : (subscription.season || 1);
+                                        const insertEpStmt = db.prepare(`
+                                            INSERT OR IGNORE INTO series_episodes 
+                                            (subscription_id, season, episode, torrent_hash, torrent_title, download_time)
+                                            VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
+                                        `);
+
+                                        let insertedCount = 0;
+                                        candidateInfo.episodes.forEach(ep => {
+                                            const epResult = insertEpStmt.run(subscription.id, season, ep, torrentHash, item.title);
+                                            if (epResult.changes > 0) insertedCount++;
+                                        });
+
+                                        if (enableLogs && insertedCount > 0) {
+                                            console.log(`[RSS] Pre-recorded ${insertedCount} episodes to series_episodes: S${season}E${candidateInfo.episodes.join(',E')}`);
+                                        }
+                                    }
+                                }
+                            } catch (epErr) {
+                                if (enableLogs) console.warn(`[RSS] Failed to pre-record episodes: ${epErr.message}`);
+                            }
+
+                            // === STEP 4: NOW submit to downloader ===
                             let result;
                             if (torrentData && !item.link.startsWith('magnet:')) {
                                 // If we have the file data, pass it along with save path, category, and file selection
@@ -371,24 +507,21 @@ class RSSService {
                             }
 
                             if (result.success) {
-                                db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, item_hash) VALUES (?, ?, ?, ?, ?)')
-                                    .run(task.id, item.guid, item.title, item.size, torrentHash);
-
                                 let successMsg = `[RSS] Successfully added: ${item.title}`;
                                 if (fileIndices && fileIndices.length > 0) {
                                     successMsg += ` (${fileIndices.length} files selected)`;
                                 }
                                 if (enableLogs) console.log(successMsg);
-
-                                // Send notification
-                                try {
-                                    const FormatUtils = require('../utils/formatUtils');
-                                    await notificationService.notifyNewTorrent(task.name, item.title, FormatUtils.formatBytes(item.size));
-                                } catch (notifyErr) {
-                                    console.error('[RSS] Notification failed:', notifyErr.message);
-                                }
                             } else {
-                                if (enableLogs) console.error(`[RSS] Failed to add ${item.title}: ${result.message}`);
+                                // === STEP 5: ROLLBACK if downloader failed ===
+                                // Delete the pre-recorded task_history entry since download actually failed
+                                if (enableLogs) console.error(`[RSS] Failed to add ${item.title}: ${result.message}. Rolling back pre-record.`);
+                                try {
+                                    db.prepare('DELETE FROM task_history WHERE id = ?').run(preRecordId);
+                                    if (enableLogs) console.log(`[RSS] Rolled back task_history entry ID: ${preRecordId}`);
+                                } catch (rollbackErr) {
+                                    console.error(`[RSS] Rollback failed: ${rollbackErr.message}`);
+                                }
                             }
                         } catch (err) {
                             if (enableLogs) console.error(`[RSS] Error processing item ${item.title}: ${err.message}`);

@@ -1,5 +1,6 @@
 const cheerio = require('cheerio');
 const { getDB } = require('../db');
+const timeUtils = require('../utils/timeUtils');
 
 // Get category map from database
 const getCategoryMap = () => {
@@ -37,7 +38,7 @@ const normalizeCategory = (category) => {
 };
 
 const parseDate = (dateStr) => {
-    if (!dateStr || dateStr === 'Unknown') return new Date().toISOString();
+    if (!dateStr || dateStr === 'Unknown') return timeUtils.getLocalISOString();
 
     dateStr = dateStr.trim();
 
@@ -90,7 +91,7 @@ const parseDate = (dateStr) => {
     }
 
     if (matched) {
-        return date.toISOString().replace('T', ' ').substring(0, 19);
+        return timeUtils.getLocalDateTimeString(date);
     }
 
     return dateStr;

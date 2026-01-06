@@ -1,5 +1,6 @@
 const schedule = require('node-schedule');
 const taskService = require('./taskService');
+const timeUtils = require('../utils/timeUtils');
 
 class SchedulerService {
     constructor() {
@@ -73,7 +74,7 @@ class SchedulerService {
         // Define the job using RecurrenceRule or cron string
         // Cron: */interval * * * *
         this.cookieJob = schedule.scheduleJob(`*/${interval} * * * *`, async () => {
-            if (this._isLogEnabled()) console.log(`[${new Date().toLocaleString()}] Periodic cookie check triggered...`);
+            if (this._isLogEnabled()) console.log(`[${timeUtils.getLocalDateTimeString()}] Periodic cookie check triggered...`);
             const results = await siteService.checkAllCookies();
             const valid = results.filter(r => r === true).length;
             if (this._isLogEnabled() || results.some(r => r === false)) {
@@ -98,7 +99,7 @@ class SchedulerService {
         const siteService = require('./siteService');
         const loggerService = require('./loggerService');
         this.checkinJob = schedule.scheduleJob(`${minute} ${hour} * * *`, async () => {
-            if (this._isLogEnabled()) console.log(`[${new Date().toLocaleString()}] Daily site check-in triggered...`);
+            if (this._isLogEnabled()) console.log(`[${timeUtils.getLocalDateTimeString()}] Daily site check-in triggered...`);
             const successCount = await siteService.checkinAllSites();
             loggerService.log(`每日自动签到完成，成功 ${successCount} 个站点`, 'success');
         });
@@ -135,7 +136,7 @@ class SchedulerService {
             // 1. Delete logs older than X days
             const dateThreshold = new Date();
             dateThreshold.setDate(dateThreshold.getDate() - days);
-            const dateStr = dateThreshold.toISOString().split('T')[0];
+            const dateStr = timeUtils.getLocalDateString(dateThreshold);
 
             const delDate = db.prepare('DELETE FROM task_logs WHERE run_time < ?').run(dateStr);
             console.log(`[Cleanup] Deleted ${delDate.changes} logs older than ${dateStr}`);
@@ -156,7 +157,7 @@ class SchedulerService {
             // 3. Delete site heatmap data older than 180 days
             const heatmapThreshold = new Date();
             heatmapThreshold.setDate(heatmapThreshold.getDate() - 180);
-            const heatmapDateStr = heatmapThreshold.toISOString().split('T')[0];
+            const heatmapDateStr = timeUtils.getLocalDateString(heatmapThreshold);
             const delHeatmap = db.prepare('DELETE FROM site_daily_stats WHERE date < ?').run(heatmapDateStr);
             console.log(`[Cleanup] Deleted ${delHeatmap.changes} heatmap records older than ${heatmapDateStr}`);
 
@@ -218,7 +219,7 @@ class SchedulerService {
     }
 
     async executeTask(task) {
-        if (this._isLogEnabled()) console.log(`[${new Date().toLocaleString()}] Executing task: ${task.name} (Type: ${task.type})`);
+        if (this._isLogEnabled()) console.log(`[${timeUtils.getLocalDateTimeString()}] Executing task: ${task.name} (Type: ${task.type})`);
 
         if (task.type === 'rss') {
             const rssService = require('./rssService');

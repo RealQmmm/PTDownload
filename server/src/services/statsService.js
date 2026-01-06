@@ -1,4 +1,5 @@
 const { getDB } = require('../db');
+const timeUtils = require('../utils/timeUtils');
 const clientService = require('./clientService');
 const downloaderService = require('./downloaderService');
 const loggerService = require('./loggerService');
@@ -6,10 +7,7 @@ const loggerService = require('./loggerService');
 class StatsService {
     // Helper to get local date string YYYY-MM-DD
     getLocalDateString(date = new Date()) {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        return timeUtils.getLocalDateString(date);
     }
 
     constructor() {
@@ -226,13 +224,28 @@ class StatsService {
 
                 // If we haven't seen this hash before, import it
                 if (!knownHashes.has(tHash)) {
+                    // BACKUP PROTECTION: Wait 30 seconds before importing new torrents
+                    // Primary protection is RSS service pre-recording to task_history before submitting to downloader
+                    // This is a secondary safeguard for edge cases (e.g., RSS service crash after download but before record)
+                    if (t.added_on) {
+                        const addedTime = new Date(t.added_on).getTime();
+                        const now = Date.now();
+                        const ageSeconds = (now - addedTime) / 1000;
+
+                        // Skip torrents added less than 30 seconds ago
+                        if (ageSeconds < 30) {
+                            if (enableLogs) console.log(`[Stats] Skipping recently added torrent (${Math.round(ageSeconds)}s old): ${t.name}`);
+                            continue;
+                        }
+                    }
+
                     // Comprehensive finished check: progress is 100% OR in done states
                     const isFinished = t.progress >= 1 ||
                         ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished', 'checkingUP', 'forcedUP', 'moving'].includes(t.state);
 
-                    const downloadTime = t.added_on || new Date().toISOString();
+                    const downloadTime = t.added_on || timeUtils.getLocalISOString();
                     // CRITICAL: Ensure finishTime is NEVER null if finished
-                    const finishTime = isFinished ? (t.completion_on || new Date().toISOString()) : null;
+                    const finishTime = isFinished ? (t.completion_on || timeUtils.getLocalISOString()) : null;
 
                     try {
                         insertStmt.run(
@@ -308,7 +321,7 @@ class StatsService {
                         ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished', 'checkingUP', 'forcedUP', 'moving'].includes(torrent.state);
 
                     if (isFinished) {
-                        const finishTime = torrent.completion_on || new Date().toISOString();
+                        const finishTime = torrent.completion_on || timeUtils.getLocalISOString();
                         const downloadTime = torrent.added_on || item.download_time;
 
                         db.prepare('UPDATE task_history SET is_finished = 1, finish_time = ?, download_time = ? WHERE id = ?')
@@ -322,7 +335,7 @@ class StatsService {
                     // LOOPHOLE FIX: If torrent is MISSING from client but was in our unfinished list
                     // It was likely deleted or moved. In PT usage, this usually means it finished.
                     // We mark it as finished to avoid it being stuck in "Downloading" forever.
-                    const now = new Date().toISOString();
+                    const now = timeUtils.getLocalISOString();
                     db.prepare('UPDATE task_history SET is_finished = 1, finish_time = ? WHERE id = ?')
                         .run(now, item.id);
                     if (enableLogs) console.log(`[Stats] Marked missing torrent as finished (cleanup): "${item.item_title}"`);
@@ -331,10 +344,22 @@ class StatsService {
 
             // 4. DELETE ORPHANED RECORDS
             // Check all task_history records and delete those not found in any downloader
+            // SAFETY: Only delete records older than 24 hours to avoid race conditions
             const allHistory = db.prepare('SELECT * FROM task_history').all();
             let deletedCount = 0;
+            const now = new Date();
 
             for (const historyItem of allHistory) {
+                // Safety check: Don't delete records added in the last 24 hours
+                // This prevents race conditions where a torrent was just added but hasn't synced to client API yet
+                if (historyItem.download_time) {
+                    const recordAge = now - new Date(historyItem.download_time);
+                    const twentyFourHours = 24 * 60 * 60 * 1000;
+                    if (recordAge < twentyFourHours) {
+                        continue; // Skip recently added records
+                    }
+                }
+
                 const existsInDownloader = allTorrents.find(t => {
                     // Match by hash (most reliable)
                     if (historyItem.item_hash && t.hash) {
@@ -463,7 +488,7 @@ class StatsService {
                     const isFinished = torrent.progress >= 1 ||
                         ['seeding', 'complete', 'uploading', 'pausedUP', 'stalledUP', 'queuedUP', 'finished', 'checkingUP', 'forcedUP', 'moving'].includes(torrent.state);
 
-                    const finishTime = torrent.completion_on || (isFinished ? (item.finish_time || new Date().toISOString()) : null);
+                    const finishTime = torrent.completion_on || (isFinished ? (item.finish_time || timeUtils.getLocalISOString()) : null);
                     const downloadTime = torrent.added_on || item.download_time;
                     const itemHash = torrent.hash || item.item_hash;
                     const itemSize = torrent.size || item.item_size;
@@ -562,7 +587,7 @@ class StatsService {
                         ep.episode,
                         item.item_hash,
                         item.item_title,
-                        item.download_time || new Date().toISOString()
+                        item.download_time || timeUtils.getLocalISOString()
                     );
                     if (result.changes > 0) inserted++;
                 });

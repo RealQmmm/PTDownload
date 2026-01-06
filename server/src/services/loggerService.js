@@ -1,11 +1,12 @@
 const { getDB } = require('../db');
+const timeUtils = require('../utils/timeUtils');
 
 class LoggerService {
     log(message, status = 'success', taskId = null, found = 0, matched = 0) {
         const db = getDB();
         try {
             // Using local ISO style time
-            const localTime = new Date().toLocaleString('sv-SE').replace(' ', 'T');
+            const localTime = timeUtils.getLocalISOString();
             db.prepare('INSERT INTO task_logs (task_id, run_time, status, message, items_found, items_matched) VALUES (?, ?, ?, ?, ?, ?)')
                 .run(taskId, localTime, status, message, found, matched);
 

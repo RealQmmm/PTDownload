@@ -1,4 +1,5 @@
 const { getDB } = require('../db');
+const timeUtils = require('../utils/timeUtils');
 const taskService = require('./taskService');
 const pathUtils = require('../utils/pathUtils');
 const episodeParser = require('../utils/episodeParser');
@@ -186,9 +187,13 @@ class SeriesService {
         const createSeriesSubfolder = setting?.value === 'true';
 
         if (createSeriesSubfolder && finalSavePath) {
+            // Format: "剧集名 S01" (Name + Season)
             const safeName = pathUtils.sanitizeFilename(name);
-            finalSavePath = pathUtils.join(finalSavePath, safeName);
-            console.log(`[Series] Auto-created subfolder for: ${name}`);
+            const seasonNum = parseInt(season) || 1;
+            const seasonStr = `S${String(seasonNum).padStart(2, '0')}`;
+            const folderName = `${safeName} ${seasonStr}`;
+            finalSavePath = pathUtils.join(finalSavePath, folderName);
+            console.log(`[Series] Auto-created subfolder: ${folderName}`)
         }
 
 
@@ -426,7 +431,7 @@ class SeriesService {
 
             const transaction = db.transaction((eps) => {
                 for (const ep of eps) {
-                    insertStmt.run(id, ep.season, ep.episode, ep.hash, ep.title, ep.time || new Date().toISOString());
+                    insertStmt.run(id, ep.season, ep.episode, ep.hash, ep.title, ep.time || timeUtils.getLocalISOString());
                 }
             });
 

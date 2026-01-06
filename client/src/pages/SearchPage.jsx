@@ -64,6 +64,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const [fallbackToDefaultPath, setFallbackToDefaultPath] = useState(true);
     const [useDownloaderDefault, setUseDownloaderDefault] = useState(true);
     const [categoryMap, setCategoryMap] = useState(null);
+    const [createSeriesSubfolder, setCreateSeriesSubfolder] = useState(false);
 
     // Sorting state
     const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
@@ -119,6 +120,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 // Load default download path and multi-path switch
                 setDefaultDownloadPath(settingsData.default_download_path || '');
                 setEnableMultiPath(settingsData.enable_multi_path === 'true' || settingsData.enable_multi_path === true);
+                setCreateSeriesSubfolder(settingsData.create_series_subfolder === 'true' || settingsData.create_series_subfolder === true);
 
                 if (settingsData.category_map) {
                     try {
@@ -187,7 +189,8 @@ const SearchPage = ({ searchState, setSearchState }) => {
                     match_by_keyword: matchByKeyword,
                     fallback_to_default_path: fallbackToDefaultPath,
                     use_downloader_default: useDownloaderDefault,
-                    category_map: categoryMap
+                    category_map: categoryMap,
+                    create_series_subfolder: createSeriesSubfolder
                 };
 
                 // 使用智能路径推荐（分类管理开启时才匹配）
@@ -234,7 +237,12 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 // 分类管理开启但智能下载关闭：显示模态框（已预选路径）
                 // 分类管理关闭：显示模态框（用户手动选择）
                 setPendingDownload(item);
-                setShowClientModal(true);
+
+                // 使用 setTimeout 确保 selectedPath 状态更新后再显示模态框
+                // React 状态更新是异步的，不这样做的话模态框可能显示旧的选中状态
+                setTimeout(() => {
+                    setShowClientModal(true);
+                }, 0);
                 return;
             }
 
@@ -556,33 +564,48 @@ const SearchPage = ({ searchState, setSearchState }) => {
                         <div>
                             <div className="flex items-center justify-between mb-2">
                                 <label className={`block text-[10px] font-bold uppercase ${textSecondary} tracking-wider`}>保存位置</label>
-                                {autoDownloadEnabled && pendingDownload && suggestPathByTorrentName(pendingDownload, downloadPaths) && (
-                                    <span className="text-[10px] text-blue-500 font-medium flex items-center">
-                                        <span className="mr-1">✨</span>
-                                        智能推荐
-                                        {pendingDownload.category && (
-                                            <span className="ml-1 text-[9px] opacity-70">({pendingDownload.category})</span>
-                                        )}
-                                    </span>
-                                )}
+                                {autoDownloadEnabled && pendingDownload && suggestPathByTorrentName(pendingDownload, downloadPaths, {
+                                    match_by_category: matchByCategory,
+                                    match_by_keyword: matchByKeyword,
+                                    fallback_to_default_path: fallbackToDefaultPath,
+                                    use_downloader_default: useDownloaderDefault,
+                                    category_map: categoryMap,
+                                    create_series_subfolder: createSeriesSubfolder
+                                }) && (
+                                        <span className="text-[10px] text-blue-500 font-medium flex items-center">
+                                            <span className="mr-1">✨</span>
+                                            智能推荐
+                                            {pendingDownload.category && (
+                                                <span className="ml-1 text-[9px] opacity-70">({pendingDownload.category})</span>
+                                            )}
+                                        </span>
+                                    )}
                             </div>
                             <div className="grid grid-cols-2 gap-2">
-                                {downloadPaths.map((p) => (
-                                    <button
-                                        key={p.id}
-                                        onClick={() => {
-                                            setSelectedPath(p.path);
-                                            setIsCustomPath(false);
-                                        }}
-                                        className={`p-3 rounded-xl border text-xs font-medium transition-all text-left ${!isCustomPath && selectedPath === p.path
-                                            ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20'
-                                            : `${bgSecondary} ${borderColor} ${textPrimary} hover:border-blue-500/50`
-                                            }`}
-                                    >
-                                        <div className="font-bold mb-0.5">{p.name}</div>
-                                        <div className={`text-[10px] opacity-70 truncate`}>{p.path}</div>
-                                    </button>
-                                ))}
+                                {downloadPaths.map((p) => {
+                                    // 判断是否选中：精确匹配或者路径以该基础路径开头（考虑系列子文件夹的情况）
+                                    const isSelected = !isCustomPath && (
+                                        selectedPath === p.path ||
+                                        (selectedPath && selectedPath.startsWith(p.path + '/')) ||
+                                        (selectedPath && selectedPath.startsWith(p.path + '\\'))
+                                    );
+                                    return (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => {
+                                                setSelectedPath(p.path);
+                                                setIsCustomPath(false);
+                                            }}
+                                            className={`p-3 rounded-xl border text-xs font-medium transition-all text-left ${isSelected
+                                                ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20'
+                                                : `${bgSecondary} ${borderColor} ${textPrimary} hover:border-blue-500/50`
+                                                }`}
+                                        >
+                                            <div className="font-bold mb-0.5">{p.name}</div>
+                                            <div className={`text-[10px] opacity-70 truncate`}>{p.path}</div>
+                                        </button>
+                                    );
+                                })}
                                 {/* Default and Custom Options */}
                                 <button
                                     onClick={() => {

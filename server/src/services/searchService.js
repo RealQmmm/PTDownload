@@ -2,7 +2,9 @@ const axios = require('axios');
 const siteService = require('./siteService');
 const siteParsers = require('../utils/siteParsers');
 const cheerio = require('cheerio');
+
 const FormatUtils = require('../utils/formatUtils');
+const timeUtils = require('../utils/timeUtils');
 
 const { getDB } = require('../db');
 
@@ -242,7 +244,7 @@ class SearchService {
                         sizeBytes: size,
                         seeders,
                         leechers,
-                        date: pubDate ? new Date(pubDate).toISOString().replace('T', ' ').substring(0, 19) : new Date().toISOString().replace('T', ' ').substring(0, 19),
+                        date: pubDate ? timeUtils.getLocalDateTimeString(new Date(pubDate)) : timeUtils.getLocalDateTimeString(),
                         siteName: site.name,
                         isFree: title.toLowerCase().includes('free') || desc.toLowerCase().includes('free'), // Heuristic
                         freeType: ''

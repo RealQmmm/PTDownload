@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const timeUtils = require('../utils/timeUtils');
 const clientService = require('../services/clientService');
 const siteService = require('../services/siteService');
 const downloaderService = require('../services/downloaderService');
@@ -137,7 +138,7 @@ router.post('/', async (req, res) => {
 
                     // For manual downloads, task_id is NULL
                     db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, download_time, item_hash) VALUES (?, ?, ?, ?, ?, ?)')
-                        .run(null, torrentUrl, title, sizeBytes, new Date().toISOString(), torrentHash);
+                        .run(null, torrentUrl, title, sizeBytes, timeUtils.getLocalISOString(), torrentHash);
 
                     // Send notification
                     const notificationService = require('../services/notificationService');

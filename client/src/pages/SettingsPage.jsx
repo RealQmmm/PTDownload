@@ -32,6 +32,7 @@ const SettingsPage = () => {
     const [notifySettings, setNotifySettings] = useState({
         notify_enabled: false,
         notify_on_download_start: false,
+        notify_on_rss_match: true,  // RSS匹配通知默认开启
         notification_receivers: []
     });
     const [securitySettings, setSecuritySettings] = useState({
@@ -100,6 +101,8 @@ const SettingsPage = () => {
             const newNotifySettings = {
                 notify_enabled: data.notify_enabled === 'true',
                 notify_on_download_start: data.notify_on_download_start === 'true',
+                // RSS匹配通知默认开启(除非显式设为false)
+                notify_on_rss_match: data.notify_on_rss_match !== 'false',
                 notification_receivers: []
             };
 
@@ -793,10 +796,27 @@ const SettingsPage = () => {
                         )}
 
                         <Card className="space-y-6">
+                            {/* RSS 自动追剧通知 */}
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <h3 className={`text-sm font-bold ${textPrimary}`}>资源下载通知</h3>
-                                    <p className={`text-[10px] ${textSecondary}`}>当 RSS 自动匹配或手动搜索点击下载时发送通知</p>
+                                    <h3 className={`text-sm font-bold ${textPrimary}`}>RSS 自动追剧通知 ⭐</h3>
+                                    <p className={`text-[10px] ${textSecondary}`}>当 RSS 自动追剧匹配到新资源并开始下载时发送通知（推荐开启）</p>
+                                </div>
+                                <button
+                                    onClick={() => setNotifySettings({ ...notifySettings, notify_on_rss_match: !notifySettings.notify_on_rss_match })}
+                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${notifySettings.notify_on_rss_match ? 'bg-blue-600' : 'bg-gray-300'}`}
+                                >
+                                    <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${notifySettings.notify_on_rss_match ? 'left-6.5' : 'left-0.5'}`} />
+                                </button>
+                            </div>
+
+                            <hr className={borderColor} />
+
+                            {/* 手工下载通知 */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h3 className={`text-sm font-bold ${textPrimary}`}>手工下载通知</h3>
+                                    <p className={`text-[10px] ${textSecondary}`}>当在搜索页面手动点击下载时发送通知</p>
                                 </div>
                                 <button
                                     onClick={() => setNotifySettings({ ...notifySettings, notify_on_download_start: !notifySettings.notify_on_download_start })}
@@ -921,7 +941,7 @@ const SettingsPage = () => {
                                 <Button
                                     variant="secondary"
                                     onClick={handleTestNotify}
-                                    disabled={saving || !notifySettings.notify_on_download_start}
+                                    disabled={saving || (!notifySettings.notify_on_rss_match && !notifySettings.notify_on_download_start)}
                                 >
                                     发送测试通知
                                 </Button>
