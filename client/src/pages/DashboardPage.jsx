@@ -176,11 +176,35 @@ const DashboardPage = ({ setActiveTab }) => {
     const [todayDownloads, setTodayDownloads] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
+    // Configurable polling intervals (in seconds)
+    const [pollingSettings, setPollingSettings] = useState({
+        activeInterval: 10,  // Default: 10 seconds when active
+        idleInterval: 30     // Default: 30 seconds when idle/no torrents
+    });
 
     // Theme-aware classes
     const borderColor = darkMode ? 'border-gray-700' : 'border-gray-100';
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
     const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-500';
+
+    // Fetch polling settings on mount
+    useEffect(() => {
+        const fetchPollingSettings = async () => {
+            try {
+                const res = await authenticatedFetch('/api/settings');
+                if (res.ok) {
+                    const data = await res.json();
+                    setPollingSettings({
+                        activeInterval: parseInt(data.dashboard_active_interval) || 10,
+                        idleInterval: parseInt(data.dashboard_idle_interval) || 30
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to fetch polling settings:', err);
+            }
+        };
+        fetchPollingSettings();
+    }, []);
 
     const fetchTorrentData = async () => {
         try {
@@ -248,14 +272,14 @@ const DashboardPage = ({ setActiveTab }) => {
                 (Number(t.dlspeed) || 0) > 0 || (Number(t.upspeed) || 0) > 0
             );
 
-            // Dynamic interval based on activity
+            // Dynamic interval based on activity (using configurable values)
             let currentInterval;
             if (activeTorrents.length > 0) {
-                currentInterval = 10000; // 10 seconds when active (optimized from 5s)
-            } else if (allTorrents.length > 0) {
-                currentInterval = 20000; // 20 seconds when idle
+                // Active: use configured active interval (in seconds, convert to ms)
+                currentInterval = pollingSettings.activeInterval * 1000;
             } else {
-                currentInterval = 30000; // 30 seconds when no torrents
+                // Idle or no torrents: use configured idle interval
+                currentInterval = pollingSettings.idleInterval * 1000;
             }
 
             if (interval) clearInterval(interval);
@@ -286,7 +310,7 @@ const DashboardPage = ({ setActiveTab }) => {
             clearTimeout(restartTimer);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [allTorrents.length]); // Re-run when torrent count changes
+    }, [allTorrents.length, pollingSettings]); // Re-run when torrent count or polling settings change
 
     // Only show loading on initial fetch when we have no data
     if (loading && allTorrents.length === 0 && historyData.length === 0) {

@@ -49,6 +49,9 @@ const SettingsPage = () => {
     const [cookieCheckInterval, setCookieCheckInterval] = useState('60');
     const [checkinTime, setCheckinTime] = useState('09:00');
     const [rssCacheTTL, setRssCacheTTL] = useState('300');
+    // Dashboard polling intervals
+    const [dashboardActiveInterval, setDashboardActiveInterval] = useState('10');
+    const [dashboardIdleInterval, setDashboardIdleInterval] = useState('30');
 
     const [autoDownloadEnabled, setAutoDownloadEnabled] = useState(false);
     // Auto download sub-options
@@ -131,6 +134,9 @@ const SettingsPage = () => {
             setCookieCheckInterval(data.cookie_check_interval || '60');
             setCheckinTime(data.checkin_time || '09:00');
             setRssCacheTTL(data.rss_cache_ttl || '300');
+            // Dashboard polling intervals
+            setDashboardActiveInterval(data.dashboard_active_interval || '10');
+            setDashboardIdleInterval(data.dashboard_idle_interval || '30');
 
 
 
@@ -165,6 +171,8 @@ const SettingsPage = () => {
                     cookie_check_interval: cookieCheckInterval,
                     checkin_time: checkinTime,
                     rss_cache_ttl: rssCacheTTL,
+                    dashboard_active_interval: dashboardActiveInterval,
+                    dashboard_idle_interval: dashboardIdleInterval,
                     ...logSettings,
                     ...securitySettings,
                     ...tmdbSettings
@@ -650,6 +658,34 @@ const SettingsPage = () => {
                                         onChange={(e) => setRssCacheTTL(e.target.value)}
                                     />
                                 </div>
+                            </div>
+
+                            <hr className={borderColor} />
+
+                            <div>
+                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>仪表盘刷新设置</h3>
+                                <p className={`text-xs ${textSecondary} mb-4`}>根据任务活跃状态智能调整数据刷新频率，减少不必要的请求</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <Input
+                                        label="活跃时刷新间隔 (秒)"
+                                        type="number"
+                                        min="5"
+                                        max="60"
+                                        value={dashboardActiveInterval}
+                                        onChange={(e) => setDashboardActiveInterval(e.target.value)}
+                                        placeholder="10"
+                                    />
+                                    <Input
+                                        label="空闲时刷新间隔 (秒)"
+                                        type="number"
+                                        min="10"
+                                        max="300"
+                                        value={dashboardIdleInterval}
+                                        onChange={(e) => setDashboardIdleInterval(e.target.value)}
+                                        placeholder="30"
+                                    />
+                                </div>
+                                <p className={`text-[10px] ${textSecondary} mt-2`}>活跃时：有任务正在上传或下载时的刷新间隔；空闲时：无活跃任务或无任何任务时的刷新间隔</p>
                             </div>
 
                             <hr className={borderColor} />
