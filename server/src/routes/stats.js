@@ -113,15 +113,33 @@ router.get('/history', async (req, res) => {
 router.get('/today-downloads', (req, res) => {
     try {
         const db = require('../db').getDB();
-        const today = statsService.getLocalDateString();
+        const timeUtils = require('../utils/timeUtils');
+        const todayLocalStr = timeUtils.getLocalDateString();
 
-        const downloads = db.prepare(`
+        // Query all finished and filter in JavaScript to handle mixed time formats
+        const allFinished = db.prepare(`
             SELECT th.*, IFNULL(t.name, '手动下载') as task_name 
             FROM task_history th
             LEFT JOIN tasks t ON th.task_id = t.id
-            WHERE th.is_finished = 1 AND date(th.finish_time, 'localtime') = date(?)
+            WHERE th.is_finished = 1 AND th.finish_time IS NOT NULL
             ORDER BY th.finish_time DESC
-        `).all(today);
+        `).all();
+
+        const downloads = allFinished.filter(row => {
+            if (!row.finish_time) return false;
+            try {
+                let finishDate;
+                if (row.finish_time.endsWith('Z') || row.finish_time.includes('+')) {
+                    finishDate = new Date(row.finish_time);
+                } else {
+                    finishDate = new Date(row.finish_time + '+08:00');
+                }
+                const finishLocalStr = timeUtils.getLocalDateString(finishDate);
+                return finishLocalStr === todayLocalStr;
+            } catch (e) {
+                return false;
+            }
+        });
 
         res.json({ success: true, downloads });
     } catch (err) {
@@ -177,13 +195,49 @@ router.get('/dashboard', async (req, res) => {
         const history = statsService.getHistory(7);
 
         // Detailed Today's Downloads
-        const downloads = db.prepare(`
+        // Note: finish_time in DB may be stored as:
+        //   1. UTC with Z suffix: "2026-01-06T20:35:18.000Z"
+        //   2. Local time without timezone: "2026-01-06T20:35:18"
+        // We need to handle both cases by comparing dates in local timezone
+        const timeUtils = require('../utils/timeUtils');
+        const todayLocalStr = timeUtils.getLocalDateString(); // e.g., '2026-01-07'
+
+        // Query all finished downloads and filter by local date in JavaScript
+        const allFinished = db.prepare(`
             SELECT th.*, IFNULL(t.name, '手动下载') as task_name 
             FROM task_history th
             LEFT JOIN tasks t ON th.task_id = t.id
-            WHERE th.is_finished = 1 AND date(th.finish_time, 'localtime') = date(?)
+            WHERE th.is_finished = 1 AND th.finish_time IS NOT NULL
             ORDER BY th.finish_time DESC
-        `).all(todayStr);
+        `).all();
+
+        // Filter to today's downloads by comparing local date
+        const downloads = allFinished.filter(row => {
+            if (!row.finish_time) return false;
+            try {
+                // Parse finish_time
+                let finishDate;
+                if (row.finish_time.endsWith('Z') || row.finish_time.includes('+')) {
+                    // UTC format: convert to local
+                    finishDate = new Date(row.finish_time);
+                } else {
+                    // Assumed local time: append +08:00 to interpret as Beijing time
+                    finishDate = new Date(row.finish_time + '+08:00');
+                }
+                // Get local date string
+                const finishLocalStr = timeUtils.getLocalDateString(finishDate);
+                return finishLocalStr === todayLocalStr;
+            } catch (e) {
+                console.error('Error parsing finish_time:', row.finish_time, e);
+                return false;
+            }
+        });
+
+        // Debug logging
+        console.log(`[TodayDownloads] Today: ${todayLocalStr}, Found: ${downloads.length} (from ${allFinished.length} finished)`);
+        if (downloads.length > 0) {
+            downloads.slice(0, 3).forEach(d => console.log(`  - ${d.finish_time} | ${d.item_title?.substring(0, 40)}`));
+        }
 
         res.json({
             success: true,

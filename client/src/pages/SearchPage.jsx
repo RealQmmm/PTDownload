@@ -393,7 +393,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 </form>
             </div>
 
-            <div className="flex-1 overflow-hidden flex flex-col">
+            <div className="flex-1 flex flex-col lg:overflow-hidden">
                 {loading ? (
                     <div className={`flex-1 flex justify-center items-center ${textSecondary}`}>
                         <div className="animate-pulse flex flex-col items-center">
@@ -402,10 +402,11 @@ const SearchPage = ({ searchState, setSearchState }) => {
                         </div>
                     </div>
                 ) : results.length > 0 ? (
-                    <div className="flex-1 overflow-hidden flex flex-col">
-                        <Card noPadding className="flex-1 overflow-hidden flex flex-col border-0 sm:border bg-transparent sm:bg-white dark:sm:bg-gray-800 shadow-none sm:shadow-md rounded-none sm:rounded-2xl">
+                    <div className="flex-1 flex flex-col lg:overflow-hidden">
+                        {/* Desktop: Card wrapper with internal scroll */}
+                        <Card noPadding className="hidden lg:flex flex-1 overflow-hidden flex-col border bg-white dark:bg-gray-800 shadow-md rounded-2xl">
                             {/* Desktop Table View */}
-                            <div className="hidden lg:block overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
+                            <div className="overflow-x-auto overflow-y-auto flex-1 custom-scrollbar">
                                 <table className="w-full text-left border-collapse">
                                     <thead className={`${bgSecondary} ${textSecondary} sticky top-0 z-10`}>
                                         <tr>
@@ -484,50 +485,48 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                     </tbody>
                                 </table>
                             </div>
+                        </Card>
 
-                            {/* Mobile Card View */}
-                            <div className="lg:hidden p-0 sm:p-2 overflow-y-auto space-y-3 flex-1 custom-scrollbar">
-                                {sortedResults.map((item, index) => (
-                                    <div key={index} className={`${bgSecondary} rounded-lg border ${borderColor} p-3 shadow-sm mx-1`}>
-                                        <div className="flex justify-between items-start mb-1.5 gap-2">
-                                            <div className="flex gap-1 flex-wrap flex-1 min-w-0">
-                                                <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap`}>
-                                                    {item.siteName}
+                        {/* Mobile Card View - Outside Card, no internal scroll */}
+                        <div className="lg:hidden space-y-2">
+                            {sortedResults.map((item, index) => (
+                                <div key={index} className={`${darkMode ? 'bg-gray-800/50' : 'bg-white'} rounded-lg p-3`}>
+                                    <div className="flex justify-between items-start mb-1 gap-2">
+                                        <div className="flex gap-1 flex-wrap flex-1 min-w-0">
+                                            <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap`}>
+                                                {item.siteName}
+                                            </span>
+                                            {item.category && (
+                                                <span className={`${getCategoryColor(item.category, darkMode)} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap`}>
+                                                    {getCategoryIcon(item.category)} {item.category}
                                                 </span>
-                                                {item.category && (
-                                                    <span className={`${getCategoryColor(item.category, darkMode)} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap`}>
-                                                        {getCategoryIcon(item.category)} {item.category}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="flex gap-1 shrink-0">
-                                                {item.isHot && <span className="px-1 py-0.5 rounded bg-orange-500/20 text-orange-400 text-[9px] font-medium whitespace-nowrap">🔥</span>}
-                                                {item.isFree && <span className="px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[9px] font-medium whitespace-nowrap">🎁</span>}
-                                            </div>
+                                            )}
+                                            {item.isFree && <span className="px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[9px] font-medium whitespace-nowrap">🎁</span>}
                                         </div>
-                                        <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} font-bold text-xs sm:text-sm line-clamp-2 mb-1.5 leading-tight block`}>
-                                            {item.name}
-                                        </a>
-                                        {item.subtitle && <p className={`${textSecondary} text-[10px] line-clamp-1 mb-2`}>{item.subtitle}</p>}
-                                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 mb-2 text-[10px] sm:text-xs">
-                                            <div className="text-gray-500 truncate">大小: <span className={`${textPrimary} font-mono`}>{item.size}</span></div>
-                                            <div className="text-gray-500 truncate">时间: <span className={`${textPrimary} font-mono text-[9px] sm:text-[10px]`}>{item.date}</span></div>
-                                            <div className="text-green-500 font-bold font-mono">↑ {item.seeders}</div>
-                                            <div className="text-red-400 font-mono">↓ {item.leechers}</div>
+                                    </div>
+                                    <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} font-bold text-xs line-clamp-2 mb-1 leading-tight block`}>
+                                        {item.name}
+                                    </a>
+                                    <div className="flex items-center justify-between text-[10px] mb-2">
+                                        <div className="flex gap-2">
+                                            <span className={textSecondary}>{item.size}</span>
+                                            <span className="text-green-500 font-bold">↑{item.seeders}</span>
+                                            <span className="text-red-400">↓{item.leechers}</span>
                                         </div>
                                         <Button
-                                            className="w-full text-xs sm:text-sm py-1.5 sm:py-2"
+                                            size="xs"
+                                            className="py-1 px-2 text-[10px]"
                                             onClick={() => handleDownloadClick(item)}
                                             disabled={downloading === item.link || !item.torrentUrl}
                                         >
-                                            {downloading === item.link ? '⏳ 添加中...' : '📥 下载'}
+                                            {downloading === item.link ? '...' : '下载'}
                                         </Button>
                                     </div>
-                                ))}
-                            </div>
-                        </Card>
+                                </div>
+                            ))}
+                        </div>
 
-                        <div className={`mt-2 p-2 ${bgSecondary} rounded-lg border ${borderColor} ${textSecondary} text-[10px] sm:text-xs text-center lg:text-right`}>
+                        <div className={`mt-2 py-2 ${textSecondary} text-[10px] text-center lg:text-right`}>
                             共找到 {results.length} 个结果
                         </div>
                     </div>

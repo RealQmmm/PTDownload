@@ -593,15 +593,15 @@ const DashboardPage = ({ setActiveTab }) => {
                     <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4 xl:max-h-[500px]">
                         {todayDownloads.length > 0 ? (
                             todayDownloads.map((item, idx) => (
-                                <div key={idx} className="relative pl-4 border-l-2 border-blue-500/30 py-1">
-                                    <p className={`text-xs font-medium ${textPrimary} whitespace-nowrap overflow-x-auto custom-scrollbar leading-relaxed mb-1 pb-1`} title={item.item_title || 'Unknown'}>
+                                <div key={idx} className="relative pl-4 border-l-2 border-blue-500/30 py-1.5">
+                                    <p className={`text-xs font-medium ${textPrimary} line-clamp-2 leading-snug mb-1.5`} title={item.item_title || 'Unknown'}>
                                         {item.item_title || 'Unknown'}
                                     </p>
                                     <div className="flex justify-between items-center text-[10px] text-gray-500">
-                                        <span className="bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                                        <span className="bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded uppercase tracking-tighter truncate max-w-[70%]">
                                             {item.task_name}
                                         </span>
-                                        <span className="font-mono">
+                                        <span className="font-mono flex-shrink-0">
                                             {item.finish_time ?
                                                 new Date(item.finish_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) :
                                                 '--:--'}
