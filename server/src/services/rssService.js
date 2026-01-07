@@ -107,9 +107,7 @@ class RSSService {
             if (!site) throw new Error('Associated site not found');
 
             // 2. Fetch RSS feed with caching
-            const rssData = await this.getRSSFeed(task.rss_url, {
-                'Cookie': site.cookies || ''
-            });
+            const rssData = await this.getRSSFeed(task.rss_url, siteService.getAuthHeaders(site));
 
             // 3. Parse XML
             const $ = cheerio.load(rssData, { xmlMode: true });
@@ -276,10 +274,7 @@ class RSSService {
                                 // Download torrent file to memory to extract hash
                                 try {
                                     const torrentRes = await axios.get(item.link, {
-                                        headers: {
-                                            'Cookie': site.cookies || '',
-                                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                                        },
+                                        headers: siteService.getAuthHeaders(site),
                                         responseType: 'arraybuffer',
                                         timeout: 15000
                                     });

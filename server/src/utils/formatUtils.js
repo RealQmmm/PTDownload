@@ -39,21 +39,17 @@ class FormatUtils {
         return isNaN(val) ? 0 : Math.floor(val);
     }
 
-    /**
-     * Format bytes to human readable string
-     * @param {number} bytes 
-     * @param {number} decimals 
-     * @returns {string} e.g. "1.50 GB"
-     */
     static formatBytes(bytes, decimals = 2) {
-        if (!bytes) return '0 B';
+        const numBytes = parseFloat(bytes);
+        if (isNaN(numBytes) || numBytes <= 0) return '0 B';
+
         const k = 1024;
         const dm = decimals < 0 ? 0 : decimals;
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
 
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        const i = Math.floor(Math.log(numBytes) / Math.log(k));
 
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        return parseFloat((numBytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
     }
 }
 

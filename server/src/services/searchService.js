@@ -70,6 +70,10 @@ class SearchService {
             const pageResultsPromises = Array.from({ length: maxPages }, async (_, i) => {
                 const currentPage = i;
                 try {
+                    if (siteService._isMTeamV2(site)) {
+                        return await this._searchMTeamV2(site, query, currentPage + 1);
+                    }
+
                     if (site.type === 'Mock') {
                         if (currentPage > 0) return []; // Mock only has one page
                         await new Promise(r => setTimeout(r, 500));
@@ -93,10 +97,7 @@ class SearchService {
 
                     searchUrl.searchParams.append('notsticky', '1');
 
-                    const headers = {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                        'Cookie': site.cookies || ''
-                    };
+                    const headers = siteService.getAuthHeaders(site);
 
                     const https = require('https');
                     const response = await axios.get(searchUrl.toString(), {
@@ -149,9 +150,110 @@ class SearchService {
         }
     }
 
+    async _searchMTeamV2(site, query, pageNum) {
+        try {
+            const apiUrl = 'https://api.m-team.cc/api/torrent/search';
+            const logSetting = getDB().prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
+            const enableLogs = logSetting && logSetting.value === 'true';
+
+            const payload = {
+                keyword: query || '',
+                pageNumber: pageNum,
+                pageSize: 100,
+                mode: 'NORMAL' // M-Team API mode: NORMAL or ADULT
+            };
+
+            if (enableLogs) console.log(`[M-Team V2 Search] Requesting API: ${apiUrl} for query "${query}" page ${pageNum}`);
+
+            const https = require('https');
+            const response = await axios.post(apiUrl, payload, {
+                headers: {
+                    ...siteService.getAuthHeaders(site),
+                    'Content-Type': 'application/json'
+                },
+                timeout: 15000,
+                httpsAgent: new https.Agent({
+                    rejectUnauthorized: false,
+                    servername: 'api.m-team.cc'
+                })
+            });
+
+            if (enableLogs) console.log(`[M-Team V2 Search] Status: ${response.status}, Data present: ${!!response.data}`);
+
+            if (response.data && response.data.code === '0' && response.data.data) {
+                const list = response.data.data.data || [];
+                if (enableLogs) console.log(`[M-Team V2 Search] Found ${list.length} items`);
+                return list.map(item => {
+                    const status = item.status || {};
+                    const promotion = item.promotion || {};
+
+                    let freeType = '';
+                    if (promotion.free) freeType = 'Free';
+                    if (promotion.twoUp) freeType = promotion.free ? '2xFree' : '2x';
+                    if (promotion.halfDown) freeType = '50%';
+
+                    return {
+                        id: String(item.id),
+                        name: item.name,
+                        subtitle: item.nameEn || '',
+                        link: `${site.url}/details.php?id=${item.id}`,
+                        torrentUrl: `${site.url}/download.php?id=${item.id}`,
+                        size: FormatUtils.formatBytes(parseInt(item.size) || 0),
+                        seeders: parseInt(status.seeders) || 0,
+                        leechers: parseInt(status.leechers) || 0,
+                        date: item.times || item.createdDate || '',
+                        isFree: !!(promotion.free || promotion.twoUp || promotion.halfDown),
+                        freeType: freeType,
+                        category: this._getMTeamCategory(item.category),
+                        categoryId: item.category
+                    };
+                });
+            }
+            return [];
+        } catch (err) {
+            console.error(`[M-Team V2 Search] Failed:`, err.response ? JSON.stringify(err.response.data) : err.message);
+            return [];
+        }
+    }
+
+    _getMTeamCategory(id) {
+        const catId = parseInt(id);
+        // M-Team V2 Category Mapping
+        const mapping = {
+            401: '电影',
+            419: '电影', // Movie-HK/TW
+            420: '电影', // Movie-Foreign
+            421: '电影', // Movie-En
+            439: '电影', // Movie-Misc
+            444: '电影', // Movie-Original
+
+            402: '剧集', // Series
+            403: '剧集', // TV-Series
+            405: '剧集', // TV-HK/TW
+            435: '剧集', // TV-Foreign
+
+            413: '动画', // Anime
+            414: '动画', // Animation
+
+            406: '音乐', // MV
+            408: '音乐', // Audio/Music
+
+            412: '纪录片',
+            410: '软件',
+            411: '游戏',
+            407: '体育',
+            409: '其他'
+        };
+        return mapping[catId] || '其他';
+    }
+
     async searchViaRSS(sites) {
         const promises = sites.map(async (site) => {
             try {
+                if (siteService._isMTeamV2(site)) {
+                    return await this._searchMTeamV2(site, '', 1);
+                }
+
                 if (site.type === 'Mock') {
                     // Mock site fallback to standard parser
                     return siteParsers.parse('', 'Mock', site.url);
@@ -178,10 +280,7 @@ class SearchService {
                 // Note: We don't append 'search' param here because this mode is now strictly for 
                 // "Recent Items" (no query). Keyword searches fallback to web parsing.
 
-                const headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Cookie': site.cookies || ''
-                };
+                const headers = siteService.getAuthHeaders(site);
 
                 const https = require('https');
                 const response = await axios.get(rssUrlObj.toString(), {

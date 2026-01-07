@@ -86,15 +86,22 @@ router.get('/export', (req, res) => {
         tables.forEach(table => {
             let rows = db.prepare(`SELECT * FROM ${table}`).all();
 
-            // Decrypt cookies locally for export so backup is portable
+            // Decrypt cookies and api_key locally for export so backup is portable
             if (table === 'sites') {
                 const cryptoUtils = require('../utils/cryptoUtils');
                 rows = rows.map(site => {
+                    // Decrypt cookies
                     if (site.cookies && cryptoUtils.isEncrypted(site.cookies)) {
                         try {
-                            // Decrypt so the exported JSON has plaintext cookies
-                            // When importing, the system will re-encrypt them with its own key
                             site.cookies = cryptoUtils.decrypt(site.cookies);
+                        } catch (e) {
+                            // Keep as is if decryption fails
+                        }
+                    }
+                    // Decrypt api_key
+                    if (site.api_key && cryptoUtils.isEncrypted(site.api_key)) {
+                        try {
+                            site.api_key = cryptoUtils.decrypt(site.api_key);
                         } catch (e) {
                             // Keep as is if decryption fails
                         }
@@ -164,11 +171,16 @@ router.post('/import', async (req, res) => {
                             const insertStmt = db.prepare(`INSERT INTO ${table} (${validColumns.join(',')}) VALUES (${placeholders})`);
 
                             backupContent[table].forEach(row => {
-                                // Special handling for sites.cookies: Auto-encrypt if plaintext
-                                if (table === 'sites' && row.cookies) {
+                                // Special handling for sites.cookies and sites.api_key: Auto-encrypt if plaintext
+                                if (table === 'sites') {
                                     const cryptoUtils = require('../utils/cryptoUtils');
-                                    if (!cryptoUtils.isEncrypted(row.cookies)) {
+                                    // Encrypt cookies if plain
+                                    if (row.cookies && !cryptoUtils.isEncrypted(row.cookies)) {
                                         row.cookies = cryptoUtils.encrypt(row.cookies);
+                                    }
+                                    // Encrypt api_key if plain
+                                    if (row.api_key && !cryptoUtils.isEncrypted(row.api_key)) {
+                                        row.api_key = cryptoUtils.encrypt(row.api_key);
                                     }
                                 }
 

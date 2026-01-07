@@ -43,7 +43,8 @@ class SiteService {
             // Return decrypted for application use
             return {
                 ...site,
-                cookies: cryptoUtils.decrypt(site.cookies)
+                cookies: cryptoUtils.decrypt(site.cookies),
+                api_key: cryptoUtils.decrypt(site.api_key)
             };
         });
 
@@ -53,41 +54,45 @@ class SiteService {
     getSiteById(id) {
         const db = this._getDB();
         const site = db.prepare('SELECT * FROM sites WHERE id = ?').get(id);
-        if (site && site.cookies) {
-            site.cookies = cryptoUtils.decrypt(site.cookies);
+        if (site) {
+            if (site.cookies) site.cookies = cryptoUtils.decrypt(site.cookies);
+            if (site.api_key) site.api_key = cryptoUtils.decrypt(site.api_key);
         }
         return site;
     }
 
     createSite(site) {
         const db = this._getDB();
-        const { name, url, cookies, default_rss_url, type, enabled = 1, auto_checkin = 0 } = site;
+        const { name, url, cookies, api_key, default_rss_url, type, enabled = 1, auto_checkin = 0 } = site;
 
         const encryptedCookies = cryptoUtils.encrypt(cookies);
+        const encryptedApiKey = cryptoUtils.encrypt(api_key);
 
         const info = db.prepare(
-            'INSERT INTO sites (name, url, cookies, default_rss_url, type, enabled, auto_checkin, cookie_status, last_checked_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL)'
-        ).run(name, url, encryptedCookies, default_rss_url || null, type, enabled, auto_checkin);
+            'INSERT INTO sites (name, url, cookies, api_key, default_rss_url, type, enabled, auto_checkin, cookie_status, last_checked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)'
+        ).run(name, url, encryptedCookies, encryptedApiKey, default_rss_url || null, type, enabled, auto_checkin);
         return info.lastInsertRowid;
     }
 
     updateSite(id, site) {
         const db = this._getDB();
-        const { name, url, cookies, default_rss_url, type, enabled, auto_checkin, cookie_status } = site;
+        const { name, url, cookies, api_key, default_rss_url, type, enabled, auto_checkin, cookie_status } = site;
 
-        // If cookies are changed, reset cookie_status to 0 (assume ok until checked)
+        // If cookies or api_key are changed, reset cookie_status to 0 (assume ok until checked)
         // Note: we must compare against current DB value (decrypted) or handle logic carefully.
         // Since 'site' comes from UI (plaintext), and we want to encrypt.
 
         const oldSite = this.getSiteById(id); // Returns decrypted
-        const status = cookies !== oldSite.cookies ? 0 : (cookie_status ?? oldSite.cookie_status);
+        const authChanged = cookies !== oldSite.cookies || api_key !== oldSite.api_key;
+        const status = authChanged ? 0 : (cookie_status ?? oldSite.cookie_status);
 
-        // Encrypt new value
+        // Encrypt new values
         const encryptedCookies = cryptoUtils.encrypt(cookies);
+        const encryptedApiKey = cryptoUtils.encrypt(api_key);
 
         return db.prepare(
-            'UPDATE sites SET name = ?, url = ?, cookies = ?, default_rss_url = ?, type = ?, enabled = ?, auto_checkin = ?, cookie_status = ? WHERE id = ?'
-        ).run(name, url, encryptedCookies, default_rss_url || null, type, enabled, auto_checkin, status, id);
+            'UPDATE sites SET name = ?, url = ?, cookies = ?, api_key = ?, default_rss_url = ?, type = ?, enabled = ?, auto_checkin = ?, cookie_status = ? WHERE id = ?'
+        ).run(name, url, encryptedCookies, encryptedApiKey, default_rss_url || null, type, enabled, auto_checkin, status, id);
     }
 
     deleteSite(id) {
@@ -100,24 +105,147 @@ class SiteService {
         return db.prepare('UPDATE sites SET enabled = ? WHERE id = ?').run(enabled, id);
     }
 
-    _updateHeatmapData(siteId, currentUploadStr, newUploadStr) {
+    /**
+     * 构建站点请求的认证头
+     * M-Team 等站点使用 API Key 时，通过 x-api-key header 传递
+     * 其他站点继续使用 Cookie
+     * @param {object} site - 站点对象
+     * @returns {object} - 请求头对象
+     */
+    getAuthHeaders(site) {
+        const headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        };
+
+        // 如果有 API Key，优先使用 API Key（M-Team 等支持 API 的站点）
+        if (site.api_key) {
+            headers['x-api-key'] = site.api_key;
+        }
+
+        // 如果有 Cookie，也添加（某些站点可能同时需要）
+        if (site.cookies) {
+            headers['Cookie'] = site.cookies;
+        }
+
+        return headers;
+    }
+
+    _isMTeamV2(site) {
+        return site && site.url && (site.url.includes('m-team.cc') || site.url.includes('m-team.io')) && site.api_key;
+    }
+
+    async _refreshMTeamV2Stats(id, site) {
+        const db = this._getDB();
         const FormatUtils = require('../utils/formatUtils');
-        const currentBytes = FormatUtils.parseSizeToBytes(currentUploadStr);
-        const newBytes = FormatUtils.parseSizeToBytes(newUploadStr);
+        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
+        const enableLogs = logSetting && logSetting.value === 'true';
 
-        if (newBytes > currentBytes && currentBytes > 0) {
-            const db = this._getDB();
-            const delta = newBytes - currentBytes;
-            const today = timeUtils.getLocalDateString();
+        try {
+            // M-Team V2 API 必须在 api.m-team.cc 域名下调用
+            const apiUrl = 'https://api.m-team.cc/api/member/profile';
 
+            if (enableLogs) console.log(`[M-Team V2] Calling API: ${apiUrl}`);
+
+            const https = require('https');
+            const response = await axios.post(apiUrl, {}, {
+                headers: {
+                    ...this.getAuthHeaders(site),
+                    'Content-Type': 'application/json'
+                },
+                timeout: 15000,
+                httpsAgent: new https.Agent({
+                    rejectUnauthorized: false,
+                    servername: 'api.m-team.cc'
+                })
+            });
+
+            if (enableLogs) {
+                console.log(`[M-Team V2] Full Data for ${site.name}:`, JSON.stringify(response.data));
+            }
+
+            if (response.data && response.data.code === '0' && response.data.data) {
+                const data = response.data.data;
+                const mCount = data.memberCount || {};
+
+                const stats = {
+                    username: data.username,
+                    upload: FormatUtils.formatBytes(mCount.uploaded || 0),
+                    download: FormatUtils.formatBytes(mCount.downloaded || 0),
+                    ratio: String(mCount.shareRate || '0.0'),
+                    bonus: String(mCount.bonus || '0'),
+                    level: String(data.roleName || data.role || ''),
+                    isCheckedIn: false
+                };
+
+                if (enableLogs) {
+                    console.log(`[M-Team V2] Parsed Stats for ${site.name}:`, JSON.stringify(stats));
+                    console.log(`[M-Team V2] Raw Uploaded: ${mCount.uploaded}, Downloaded: ${mCount.downloaded}`);
+                }
+
+                const now = timeUtils.getLocalISOString();
+                this._updateHeatmapData(id, site.upload, stats.upload, site.download, stats.download);
+
+                db.prepare('UPDATE sites SET username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?, cookie_status = 0, last_checked_at = ? WHERE id = ?')
+                    .run(stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now, now, id);
+
+                return stats;
+            }
+            return null;
+        } catch (err) {
+            const errorMsg = err.response ? JSON.stringify(err.response.data) : err.message;
+            console.error(`[M-Team V2] Refresh failed for ${site.name}:`, errorMsg);
+            return null;
+        }
+    }
+
+
+    _updateHeatmapData(siteId, currentUploadStr, newUploadStr, currentDownloadStr = null, newDownloadStr = null) {
+        const FormatUtils = require('../utils/formatUtils');
+        const db = this._getDB();
+        const today = timeUtils.getLocalDateString();
+
+        // 获取站点信息以判断是否是新添加的
+        const site = db.prepare('SELECT created_at FROM sites WHERE id = ?').get(siteId);
+        const isNewSiteToday = site && site.created_at && new Date(site.created_at).toLocaleDateString() === new Date().toLocaleDateString();
+
+        // 处理上传增量
+        const currentUpBytes = FormatUtils.parseSizeToBytes(currentUploadStr);
+        const newUpBytes = FormatUtils.parseSizeToBytes(newUploadStr);
+        let upDelta = 0;
+        if (newUpBytes > currentUpBytes) {
+            if (currentUpBytes > 0) {
+                upDelta = newUpBytes - currentUpBytes;
+            } else if (isNewSiteToday) {
+                // 如果是今天新加的站点，第一笔数据也计入今日增量
+                upDelta = newUpBytes;
+            }
+        }
+
+        // 处理下载增量
+        let downDelta = 0;
+        if (newDownloadStr) {
+            const currentDownBytes = FormatUtils.parseSizeToBytes(currentDownloadStr);
+            const newDownBytes = FormatUtils.parseSizeToBytes(newDownloadStr);
+            if (newDownBytes > currentDownBytes) {
+                if (currentDownBytes > 0) {
+                    downDelta = newDownBytes - currentDownBytes;
+                } else if (isNewSiteToday) {
+                    downDelta = newDownBytes;
+                }
+            }
+        }
+
+        if (upDelta > 0 || downDelta > 0) {
             db.prepare(`
-                INSERT INTO site_daily_stats (site_id, date, uploaded_bytes)
-                VALUES (?, ?, ?)
+                INSERT INTO site_daily_stats (site_id, date, uploaded_bytes, downloaded_bytes)
+                VALUES (?, ?, ?, ?)
                 ON CONFLICT(site_id, date) DO UPDATE SET
-                uploaded_bytes = uploaded_bytes + ?
-            `).run(siteId, today, delta, delta);
+                uploaded_bytes = uploaded_bytes + ?,
+                downloaded_bytes = downloaded_bytes + ?
+            `).run(siteId, today, upDelta, downDelta, upDelta, downDelta);
 
-            console.log(`[Heatmap] Updated site ${siteId} with delta: ${delta} bytes`);
+            if (upDelta > 0) console.log(`[Heatmap] Site ${siteId} upload delta: ${upDelta} bytes`);
+            if (downDelta > 0) console.log(`[Heatmap] Site ${siteId} download delta: ${downDelta} bytes`);
         }
     }
 
@@ -125,17 +253,19 @@ class SiteService {
         const site = this.getSiteById(id);
         if (!site || !site.url || site.type === 'Mock') return true;
 
+        if (this._isMTeamV2(site)) {
+            const stats = await this._refreshMTeamV2Stats(id, site);
+            return !!stats;
+        }
+
         const db = this._getDB();
         const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
         const enableLogs = logSetting && logSetting.value === 'true';
 
         try {
-            if (enableLogs) console.log(`Checking cookie for site: ${site.name} (${site.url})`);
+            if (enableLogs) console.log(`Checking auth for site: ${site.name} (${site.url})`);
             const response = await axios.get(site.url, {
-                headers: {
-                    'Cookie': site.cookies || '',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                },
+                headers: this.getAuthHeaders(site),
                 timeout: 10000,
                 maxRedirects: 5,
                 validateStatus: (status) => status < 400
@@ -157,8 +287,8 @@ class SiteService {
                 const stats = siteParsers.parseUserStats(html, site.type);
 
                 if (stats) {
-                    // Update heatmap if there's an increase
-                    this._updateHeatmapData(id, site.upload, stats.upload);
+                    // Update heatmap if there's an increase (both upload and download)
+                    this._updateHeatmapData(id, site.upload, stats.upload, site.download, stats.download);
 
                     let sql = 'UPDATE sites SET cookie_status = 0, last_checked_at = ?, username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?';
                     const params = [now, stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now];
@@ -216,6 +346,11 @@ class SiteService {
 
         try {
             if (enableLogs) console.log(`Refreshing user stats for site: ${site.name}`);
+
+            if (this._isMTeamV2(site)) {
+                return await this._refreshMTeamV2Stats(id, site);
+            }
+
             let html = '';
 
             if (site.type === 'Mock') {
@@ -227,10 +362,7 @@ class SiteService {
             }
 
             const response = await axios.get(site.url, {
-                headers: {
-                    'Cookie': site.cookies || '',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                },
+                headers: this.getAuthHeaders(site),
                 timeout: 10000,
                 maxRedirects: 5,
                 validateStatus: (status) => status < 400
@@ -261,8 +393,8 @@ class SiteService {
             if (stats) {
                 const now = timeUtils.getLocalISOString();
 
-                // Update heatmap if there's an increase
-                this._updateHeatmapData(id, site.upload, stats.upload);
+                // Update heatmap if there's an increase (both upload and download)
+                this._updateHeatmapData(id, site.upload, stats.upload, site.download, stats.download);
 
                 let sql = 'UPDATE sites SET cookie_status = 0, username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?, last_checked_at = ?';
                 const params = [stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now, now];
@@ -331,6 +463,37 @@ class SiteService {
 
         if (enableLogs) console.log(`[Checkin] Starting checkin for: ${site.name}`);
 
+        if (this._isMTeamV2(site)) {
+            try {
+                // M-Team V2 签到 API
+                const apiUrl = 'https://api.m-team.cc/api/member/checkin';
+                const https = require('https');
+                const response = await axios.post(apiUrl, {}, {
+                    headers: {
+                        ...this.getAuthHeaders(site),
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 10000,
+                    httpsAgent: new https.Agent({
+                        rejectUnauthorized: false,
+                        servername: 'api.m-team.cc'
+                    })
+                });
+
+                if (enableLogs) console.log(`[M-Team V2] Checkin Response:`, JSON.stringify(response.data));
+
+                if (response.data && (response.data.code === '0' || response.data.message === 'SUCCESS' || response.data.message?.includes('already'))) {
+                    db.prepare('UPDATE sites SET last_checkin_at = ? WHERE id = ?').run(timeUtils.getLocalISOString(), id);
+                    loggerService.log(`站点 ${site.name} 自动签到成功 (API)`, 'success');
+                    return true;
+                }
+                throw new Error(response.data.message || 'API Error');
+            } catch (err) {
+                const errorMsg = err.response ? JSON.stringify(err.response.data) : err.message;
+                console.error(`[M-Team V2] Checkin failed:`, errorMsg);
+            }
+        }
+
         if (site.type === 'Mock') {
             if (enableLogs) console.log(`[Checkin] Mock checkin successful for ${site.name}`);
             const db = this._getDB();
@@ -346,10 +509,7 @@ class SiteService {
             ];
 
             const response = await axios.get(checkinUrls[0], {
-                headers: {
-                    'Cookie': site.cookies || '',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                },
+                headers: this.getAuthHeaders(site),
                 timeout: 15000,
                 maxRedirects: 5,
                 validateStatus: (status) => status < 500 // Allow 404/403 for some attendance pages if handled
@@ -366,10 +526,7 @@ class SiteService {
                 // Try the second URL if the first one failed or didn't confirm sign-in
                 try {
                     const resp2 = await axios.get(checkinUrls[1], {
-                        headers: {
-                            'Cookie': site.cookies || '',
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                        },
+                        headers: this.getAuthHeaders(site),
                         timeout: 10000
                     });
                     const stats2 = siteParsers.parseUserStats(resp2.data, site.type);

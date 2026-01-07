@@ -92,6 +92,7 @@ const SitesPage = () => {
         name: '',
         url: '',
         cookies: '',
+        api_key: '',
         default_rss_url: '',
         type: 'NexusPHP',
         enabled: 1,
@@ -130,7 +131,7 @@ const SitesPage = () => {
             setShowModal(false);
             setEditingSite(null);
 
-            setFormData({ name: '', url: '', cookies: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0 });
+            setFormData({ name: '', url: '', cookies: '', api_key: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0 });
             fetchSites();
         } catch (err) {
             alert('保存失败: ' + err.message);
@@ -149,7 +150,7 @@ const SitesPage = () => {
 
     const handleAdd = () => {
         setEditingSite(null);
-        setFormData({ name: '', url: '', cookies: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0 });
+        setFormData({ name: '', url: '', cookies: '', api_key: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0 });
         setShowModal(true);
     };
 
@@ -160,6 +161,7 @@ const SitesPage = () => {
                 name: site.name,
                 url: site.url,
                 cookies: site.cookies || '',
+                api_key: site.api_key || '',
                 default_rss_url: site.default_rss_url || '',
                 type: site.type || 'NexusPHP',
                 enabled: site.enabled,
@@ -289,7 +291,9 @@ const SitesPage = () => {
                                             {site.username && (
                                                 <div className="flex items-center">
                                                     <span className="w-1 h-1 rounded-full bg-gray-500/50 mx-1"></span>
-                                                    <span className={`text-[10px] ${textSecondary} font-medium`}>{site.username}</span>
+                                                    <span className={`text-[10px] ${textSecondary} font-medium`}>
+                                                        {site.username}{site.level ? ` (${site.level})` : ''}
+                                                    </span>
                                                 </div>
                                             )}
                                         </div>
@@ -334,20 +338,24 @@ const SitesPage = () => {
 
                             {/* User Stats Overview */}
                             {site.enabled ? (
-                                <div className={`grid grid-cols-3 gap-2 mb-4 p-3 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'} border ${borderColor}`}>
+                                <div className={`grid grid-cols-4 gap-2 mb-4 p-3 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'} border ${borderColor}`}>
                                     <div className="space-y-0.5">
-                                        <p className={`text-[10px] ${textSecondary} uppercase`}>上传量</p>
-                                        <p className={`text-xs font-bold ${textPrimary}`}>{site.upload || '--'}</p>
+                                        <p className={`text-[10px] ${textSecondary} uppercase`}>上传</p>
+                                        <p className={`text-xs font-bold ${textPrimary} truncate`}>{site.upload || '--'}</p>
                                     </div>
                                     <div className="space-y-0.5">
-                                        <p className={`text-[10px] ${textSecondary} uppercase`}>下载量</p>
-                                        <p className={`text-xs font-bold ${textPrimary}`}>{site.download || '--'}</p>
+                                        <p className={`text-[10px] ${textSecondary} uppercase`}>下载</p>
+                                        <p className={`text-xs font-bold ${textPrimary} truncate`}>{site.download || '--'}</p>
                                     </div>
                                     <div className="space-y-0.5">
                                         <p className={`text-[10px] ${textSecondary} uppercase`}>分享率</p>
                                         <p className={`text-xs font-bold ${parseFloat(site.ratio) < 1 ? 'text-red-400' : 'text-green-400'}`}>
                                             {site.ratio || '--'}
                                         </p>
+                                    </div>
+                                    <div className="space-y-0.5">
+                                        <p className={`text-[10px] ${textSecondary} uppercase`}>魔力值</p>
+                                        <p className={`text-xs font-bold ${textPrimary} truncate`}>{site.bonus || '--'}</p>
                                     </div>
                                 </div>
                             ) : (
@@ -442,15 +450,32 @@ const SitesPage = () => {
                         <option value="Mock">Mock (Testing)</option>
                         <option value="Other">Other</option>
                     </Select>
-                    <div>
-                        <label className={`block text-xs font-bold uppercase ${textSecondary} mb-1`}>Cookies (可选)</label>
-                        <textarea
-                            value={formData.cookies}
-                            onChange={(e) => setFormData({ ...formData, cookies: e.target.value })}
-                            placeholder="粘贴浏览器的 Cookie 以便进行自动任务"
-                            rows="3"
-                            className={`w-full ${darkMode ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900'} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
-                        ></textarea>
+                    <div className="space-y-4">
+                        <div>
+                            <Input
+                                label="API Key (推荐)"
+                                value={formData.api_key}
+                                onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
+                                placeholder="例如 M-Team 的 API Access Token"
+                                description="M-Team 等站点推荐使用 API Key 替代 Cookie，更安全且不易失效"
+                            />
+                            {formData.name.toLowerCase().includes('m-team') && (
+                                <p className="text-[10px] text-amber-500 mt-1 font-medium">
+                                    ⚠️ 注意：M-Team 开启 API KEY 后，请务必清空下方的 Cookies，避免多重验证导致封号。
+                                </p>
+                            )}
+                        </div>
+                        <div>
+                            <label className={`block text-xs font-bold uppercase ${textSecondary} mb-1`}>Cookies (可选)</label>
+                            <textarea
+                                value={formData.cookies}
+                                onChange={(e) => setFormData({ ...formData, cookies: e.target.value })}
+                                placeholder="粘贴浏览器的 Cookie 以便进行自动任务"
+                                rows="3"
+                                className={`w-full ${darkMode ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900'} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
+                            ></textarea>
+                            <p className="text-[10px] text-gray-500 mt-1">如果没有 API Key，请填入传统的 Cookie</p>
+                        </div>
                     </div>
                     <div className="flex items-center space-x-2 py-2">
                         <input

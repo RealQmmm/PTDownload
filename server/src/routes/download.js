@@ -58,15 +58,21 @@ router.post('/', async (req, res) => {
             return res.status(404).json({ success: false, message: '未找到下载客户端' });
         }
 
-        // Find matching site by URL to get cookies
+        // Find matching site by URL to get auth headers
         const sites = siteService.getAllSites();
-        let siteCookies = '';
+        let authHeaders = null;
+        let matchedSite = null;
+
         for (const site of sites) {
             try {
                 const siteHost = new URL(site.url).host;
                 const torrentHost = new URL(torrentUrl).host;
-                if (siteHost === torrentHost && site.cookies) {
-                    siteCookies = site.cookies;
+                // Special check for M-Team domains
+                const isMTeam = (siteHost.includes('m-team') && torrentHost.includes('m-team'));
+
+                if ((siteHost === torrentHost || isMTeam) && (site.cookies || site.api_key)) {
+                    authHeaders = siteService.getAuthHeaders(site);
+                    matchedSite = site;
                     break;
                 }
             } catch (e) {
@@ -75,20 +81,17 @@ router.post('/', async (req, res) => {
         }
 
         // For qBittorrent and Transmission, we need to provide the torrent URL directly
-        // They will fetch it themselves, but we need to check if cookies are needed
+        // They will fetch it themselves, but we need to check if auth is needed
 
         let result;
         let torrentHash = null;
 
-        // If cookies are required, we need to download the torrent first and send as base64
-        if (siteCookies) {
+        // If auth headers are available, we need to download the torrent first and send as base64
+        if (authHeaders) {
             try {
-                // Download the torrent file with cookies
+                // Download the torrent file with auth headers
                 const torrentResponse = await axios.get(torrentUrl, {
-                    headers: {
-                        'Cookie': siteCookies,
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                    },
+                    headers: authHeaders,
                     responseType: 'arraybuffer',
                     timeout: 30000
                 });
@@ -106,7 +109,7 @@ router.post('/', async (req, res) => {
                 const torrentBase64 = buffer.toString('base64');
                 result = await downloaderService.addTorrentFromData(client, torrentBase64, options);
             } catch (fetchErr) {
-                console.error('Failed to fetch torrent:', fetchErr.message);
+                console.error('Failed to fetch torrent with auth:', fetchErr.message);
                 // Fallback: try sending URL directly
                 result = await downloaderService.addTorrent(client, torrentUrl, options);
             }
@@ -120,7 +123,7 @@ router.post('/', async (req, res) => {
                     // ignore
                 }
             }
-            // No cookies needed, send URL directly
+            // No auth needed, send URL directly
             result = await downloaderService.addTorrent(client, torrentUrl, options);
         }
 

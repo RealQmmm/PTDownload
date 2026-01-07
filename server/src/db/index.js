@@ -62,6 +62,7 @@ function createTables() {
       url TEXT NOT NULL,
 
       cookies TEXT,
+      api_key TEXT,
       default_rss_url TEXT,
       type TEXT DEFAULT 'NexusPHP',
       enabled INTEGER DEFAULT 1,
@@ -335,7 +336,8 @@ function createTables() {
     'ALTER TABLE stats_checkpoint ADD COLUMN historical_total_uploaded INTEGER DEFAULT 0',
     'ALTER TABLE clients ADD COLUMN name TEXT',
     'ALTER TABLE sites ADD COLUMN default_rss_url TEXT',
-    'ALTER TABLE tasks ADD COLUMN auto_disable_on_match INTEGER DEFAULT 0'
+    'ALTER TABLE tasks ADD COLUMN auto_disable_on_match INTEGER DEFAULT 0',
+    'ALTER TABLE sites ADD COLUMN api_key TEXT'
   ];
 
   migrations.forEach(sql => {
