@@ -7,6 +7,7 @@ const siteService = require('./siteService');
 const clientService = require('./clientService');
 const notificationService = require('./notificationService');
 const loggerService = require('./loggerService');
+const appConfig = require('../utils/appConfig');
 
 class RSSService {
     constructor() {
@@ -96,8 +97,7 @@ class RSSService {
     }
     async executeTask(task) {
         const db = getDB();
-        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
-        const enableLogs = logSetting && logSetting.value === 'true';
+        const enableLogs = appConfig.isLogsEnabled();
 
         if (enableLogs) console.log(`[RSS] Executing task: ${task.name}`);
 

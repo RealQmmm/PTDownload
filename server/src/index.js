@@ -58,6 +58,10 @@ app.use(express.json());
 // Initialize Database
 initDB();
 
+// Initialize App Config (cache settings like log toggle)
+const appConfig = require('./utils/appConfig');
+appConfig.init();
+
 // Initialize Admin User
 authService.initDefaultAdmin();
 
@@ -77,10 +81,10 @@ const statsService = require('./services/statsService');
   await statsService.collectStats();
 })();
 
-// Collect every 10 seconds (Memory only)
+// Collect every 30 seconds (Memory only)
 setInterval(() => {
   statsService.collectStats();
-}, 10 * 1000);
+}, 30 * 1000);
 
 // Persist to DB every 5 minutes
 setInterval(() => {

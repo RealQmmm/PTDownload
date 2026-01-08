@@ -14,7 +14,9 @@ let db;
 
 function initDB() {
   try {
-    db = new Database(dbPath, { verbose: console.log });
+    // Production mode: disable SQL query logging for cleaner output
+    const isProduction = process.env.NODE_ENV === 'production';
+    db = new Database(dbPath, isProduction ? {} : { verbose: console.log });
     console.log(`Connected to SQLite database at ${dbPath}`);
     createTables();
 

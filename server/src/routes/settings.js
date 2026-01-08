@@ -54,6 +54,12 @@ router.post('/', (req, res) => {
             if (settings.checkin_time) schedulerService.startCheckinJob();
         }
 
+        // If enable_system_logs was updated, sync to appConfig
+        if (settings.enable_system_logs !== undefined) {
+            const appConfig = require('../utils/appConfig');
+            appConfig.setSystemLogsEnabled(settings.enable_system_logs === 'true' || settings.enable_system_logs === true);
+        }
+
         res.json({ success: true });
     } catch (err) {
         console.error('Failed to update settings:', err);

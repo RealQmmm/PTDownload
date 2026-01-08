@@ -1,6 +1,7 @@
 const schedule = require('node-schedule');
 const taskService = require('./taskService');
 const timeUtils = require('../utils/timeUtils');
+const appConfig = require('../utils/appConfig');
 
 class SchedulerService {
     constructor() {
@@ -8,10 +9,7 @@ class SchedulerService {
     }
 
     _isLogEnabled() {
-        const { getDB } = require('../db');
-        const db = getDB();
-        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
-        return logSetting && logSetting.value === 'true';
+        return appConfig.isLogsEnabled();
     }
 
     init() {

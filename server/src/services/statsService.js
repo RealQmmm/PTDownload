@@ -3,6 +3,7 @@ const timeUtils = require('../utils/timeUtils');
 const clientService = require('./clientService');
 const downloaderService = require('./downloaderService');
 const loggerService = require('./loggerService');
+const appConfig = require('../utils/appConfig');
 
 class StatsService {
     // Helper to get local date string YYYY-MM-DD
@@ -51,8 +52,7 @@ class StatsService {
         if (!this.initialized) await this.init();
 
         const db = getDB();
-        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
-        const enableLogs = logSetting && logSetting.value === 'true';
+        const enableLogs = appConfig.isLogsEnabled();
 
         try {
             const clients = clientService.getAllClients();
@@ -193,8 +193,7 @@ class StatsService {
         if (!allTorrents || allTorrents.length === 0) return;
 
         const db = getDB();
-        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
-        const enableLogs = logSetting && logSetting.value === 'true';
+        const enableLogs = appConfig.isLogsEnabled();
 
         try {
 

@@ -4,6 +4,7 @@ const axios = require('axios');
 const loggerService = require('./loggerService');
 const notificationService = require('./notificationService');
 const cryptoUtils = require('../utils/cryptoUtils');
+const appConfig = require('../utils/appConfig');
 
 class SiteService {
     constructor() {
@@ -137,8 +138,7 @@ class SiteService {
     async _refreshMTeamV2Stats(id, site) {
         const db = this._getDB();
         const FormatUtils = require('../utils/formatUtils');
-        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
-        const enableLogs = logSetting && logSetting.value === 'true';
+        const enableLogs = appConfig.isLogsEnabled();
 
         try {
             // M-Team V2 API 必须在 api.m-team.cc 域名下调用
@@ -306,8 +306,7 @@ class SiteService {
         }
 
         const db = this._getDB();
-        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
-        const enableLogs = logSetting && logSetting.value === 'true';
+        const enableLogs = appConfig.isLogsEnabled();
 
         try {
             if (enableLogs) console.log(`Checking auth for site: ${site.name} (${site.url})`);
@@ -386,8 +385,7 @@ class SiteService {
         if (!site || !site.url) return null;
 
         const db = this._getDB();
-        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
-        const enableLogs = logSetting && logSetting.value === 'true';
+        const enableLogs = appConfig.isLogsEnabled();
 
         const siteParsers = require('../utils/siteParsers');
 
@@ -505,8 +503,7 @@ class SiteService {
         if (!site || !site.url || !site.enabled) return false;
 
         const db = this._getDB();
-        const logSetting = db.prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
-        const enableLogs = logSetting && logSetting.value === 'true';
+        const enableLogs = appConfig.isLogsEnabled();
 
         if (enableLogs) console.log(`[Checkin] Starting checkin for: ${site.name}`);
 

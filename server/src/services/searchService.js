@@ -5,6 +5,7 @@ const cheerio = require('cheerio');
 
 const FormatUtils = require('../utils/formatUtils');
 const timeUtils = require('../utils/timeUtils');
+const appConfig = require('../utils/appConfig');
 
 const { getDB } = require('../db');
 
@@ -153,8 +154,7 @@ class SearchService {
     async _searchMTeamV2(site, query, pageNum) {
         try {
             const apiUrl = 'https://api.m-team.cc/api/torrent/search';
-            const logSetting = getDB().prepare("SELECT value FROM settings WHERE key = 'enable_system_logs'").get();
-            const enableLogs = logSetting && logSetting.value === 'true';
+            const enableLogs = appConfig.isLogsEnabled();
 
             const payload = {
                 keyword: query || '',
