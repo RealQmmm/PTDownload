@@ -89,24 +89,82 @@ router.post('/', async (req, res) => {
         // If auth headers are available, we need to download the torrent first and send as base64
         if (authHeaders) {
             try {
-                // Download the torrent file with auth headers
-                const torrentResponse = await axios.get(torrentUrl, {
-                    headers: authHeaders,
-                    responseType: 'arraybuffer',
-                    timeout: 30000
-                });
+                let torrentData;
 
-                // Convert to base64 for sending to the downloader
-                const buffer = Buffer.from(torrentResponse.data);
+                // Special handling for M-Team V2 API
+                const isMTeamV2 = matchedSite && matchedSite.api_key &&
+                    (matchedSite.url.includes('m-team.cc') || matchedSite.url.includes('m-team.io'));
 
+                if (isMTeamV2) {
+                    // M-Team V2: Use API to generate download token
+                    // torrentUrl format: https://xxx.m-team.cc/download.php?id=123456
+                    const urlObj = new URL(torrentUrl);
+                    const torrentId = urlObj.searchParams.get('id');
+
+                    if (!torrentId) {
+                        throw new Error('无法从 M-Team URL 提取种子 ID');
+                    }
+
+                    const https = require('https');
+
+                    // Step 1: Generate download token
+                    const tokenResponse = await axios.post(
+                        'https://api.m-team.cc/api/torrent/genDlToken',
+                        { id: torrentId },
+                        {
+                            headers: {
+                                ...authHeaders,
+                                'Content-Type': 'application/json'
+                            },
+                            timeout: 15000,
+                            httpsAgent: new https.Agent({
+                                rejectUnauthorized: false,
+                                servername: 'api.m-team.cc'
+                            })
+                        }
+                    );
+
+                    const code = tokenResponse.data?.code;
+                    if (code !== 0 && code !== '0') {
+                        throw new Error(tokenResponse.data?.message || 'M-Team API 获取下载令牌失败');
+                    }
+
+                    const downloadUrl = tokenResponse.data?.data;
+                    if (!downloadUrl) {
+                        throw new Error('M-Team API 未返回下载链接');
+                    }
+
+                    console.log(`[M-Team V2] Got download URL for torrent ${torrentId}`);
+
+                    // Step 2: Download the actual torrent file from the token URL
+                    const torrentResponse = await axios.get(downloadUrl, {
+                        responseType: 'arraybuffer',
+                        timeout: 30000,
+                        httpsAgent: new https.Agent({
+                            rejectUnauthorized: false
+                        })
+                    });
+
+                    torrentData = Buffer.from(torrentResponse.data);
+                } else {
+                    // Standard sites: Download torrent file with auth headers
+                    const torrentResponse = await axios.get(torrentUrl, {
+                        headers: authHeaders,
+                        responseType: 'arraybuffer',
+                        timeout: 30000
+                    });
+                    torrentData = Buffer.from(torrentResponse.data);
+                }
+
+                // torrentData is already a Buffer, use it directly
                 try {
-                    const parsed = parseTorrent(buffer);
+                    const parsed = parseTorrent(torrentData);
                     torrentHash = parsed.infoHash;
                 } catch (e) {
                     console.warn('Failed to parse torrent hash from buffer:', e.message);
                 }
 
-                const torrentBase64 = buffer.toString('base64');
+                const torrentBase64 = torrentData.toString('base64');
                 result = await downloaderService.addTorrentFromData(client, torrentBase64, options);
             } catch (fetchErr) {
                 console.error('Failed to fetch torrent with auth:', fetchErr.message);

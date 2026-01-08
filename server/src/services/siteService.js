@@ -163,9 +163,23 @@ class SiteService {
                 console.log(`[M-Team V2] Full Data for ${site.name}:`, JSON.stringify(response.data));
             }
 
-            if (response.data && response.data.code === '0' && response.data.data) {
+            const code = response.data?.code;
+            if (response.data && (code === 0 || code === '0') && response.data.data) {
                 const data = response.data.data;
                 const mCount = data.memberCount || {};
+
+                // M-Team V2 Role Mapping
+                const roleMap = {
+                    '1': 'User',
+                    '2': 'Power User',
+                    '3': 'Elite User',
+                    '4': 'Crazy User',
+                    '5': 'Insane User',
+                    '6': 'Veteran User',
+                    '7': 'Extreme User',
+                    '8': 'Ultimate User',
+                    '9': 'Nexus Master'
+                };
 
                 const stats = {
                     username: data.username,
@@ -173,22 +187,28 @@ class SiteService {
                     download: FormatUtils.formatBytes(mCount.downloaded || 0),
                     ratio: String(mCount.shareRate || '0.0'),
                     bonus: String(mCount.bonus || '0'),
-                    level: String(data.roleName || data.role || ''),
+                    level: data.roleName || roleMap[data.role] || String(data.role || ''),
                     isCheckedIn: false
                 };
 
                 if (enableLogs) {
                     console.log(`[M-Team V2] Parsed Stats for ${site.name}:`, JSON.stringify(stats));
-                    console.log(`[M-Team V2] Raw Uploaded: ${mCount.uploaded}, Downloaded: ${mCount.downloaded}`);
+                    console.log(`[M-Team V2] Raw Values: Up=${mCount.uploaded}, Down=${mCount.downloaded}, Role=${data.role}`);
                 }
 
                 const now = timeUtils.getLocalISOString();
-                this._updateHeatmapData(id, site.upload, stats.upload, site.download, stats.download);
+                try {
+                    this._updateHeatmapData(id, site.upload, stats.upload, site.download, stats.download);
 
-                db.prepare('UPDATE sites SET username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?, cookie_status = 0, last_checked_at = ? WHERE id = ?')
-                    .run(stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now, now, id);
+                    db.prepare('UPDATE sites SET username = ?, upload = ?, download = ?, ratio = ?, bonus = ?, level = ?, stats_updated_at = ?, cookie_status = 0, last_checked_at = ? WHERE id = ?')
+                        .run(stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now, now, id);
 
-                return stats;
+                    if (enableLogs) console.log(`[M-Team V2] Database updated for ${site.name}`);
+                    return stats;
+                } catch (dbErr) {
+                    console.error(`[M-Team V2] DB Update error:`, dbErr.message);
+                    throw dbErr;
+                }
             }
             return null;
         } catch (err) {
@@ -203,6 +223,18 @@ class SiteService {
         const FormatUtils = require('../utils/formatUtils');
         const db = this._getDB();
         const today = timeUtils.getLocalDateString();
+
+        // 自动迁移：确保 downloaded_bytes 列存在
+        try {
+            const columns = db.prepare('PRAGMA table_info(site_daily_stats)').all();
+            if (!columns.some(c => c.name === 'downloaded_bytes')) {
+                console.log('[Heatmap] Auto-migrating: Adding downloaded_bytes column...');
+                db.prepare('ALTER TABLE site_daily_stats ADD COLUMN downloaded_bytes INTEGER DEFAULT 0').run();
+                console.log('[Heatmap] Auto-migration complete: downloaded_bytes column added');
+            }
+        } catch (migErr) {
+            console.error('[Heatmap] Migration check failed:', migErr.message);
+        }
 
         // 获取站点信息以判断是否是新添加的
         const site = db.prepare('SELECT created_at FROM sites WHERE id = ?').get(siteId);
@@ -236,16 +268,31 @@ class SiteService {
         }
 
         if (upDelta > 0 || downDelta > 0) {
-            db.prepare(`
-                INSERT INTO site_daily_stats (site_id, date, uploaded_bytes, downloaded_bytes)
-                VALUES (?, ?, ?, ?)
-                ON CONFLICT(site_id, date) DO UPDATE SET
-                uploaded_bytes = uploaded_bytes + ?,
-                downloaded_bytes = downloaded_bytes + ?
-            `).run(siteId, today, upDelta, downDelta, upDelta, downDelta);
+            try {
+                db.prepare(`
+                    INSERT INTO site_daily_stats (site_id, date, uploaded_bytes, downloaded_bytes)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(site_id, date) DO UPDATE SET
+                    uploaded_bytes = uploaded_bytes + ?,
+                    downloaded_bytes = downloaded_bytes + ?
+                `).run(siteId, today, upDelta, downDelta, upDelta, downDelta);
 
-            if (upDelta > 0) console.log(`[Heatmap] Site ${siteId} upload delta: ${upDelta} bytes`);
-            if (downDelta > 0) console.log(`[Heatmap] Site ${siteId} download delta: ${downDelta} bytes`);
+                if (upDelta > 0) console.log(`[Heatmap] Site ${siteId} upload delta: ${upDelta} bytes`);
+                if (downDelta > 0) console.log(`[Heatmap] Site ${siteId} download delta: ${downDelta} bytes`);
+            } catch (sqlErr) {
+                // 如果还是失败，降级到只更新 uploaded_bytes（兼容旧表结构）
+                console.warn('[Heatmap] Full update failed, trying fallback (upload only):', sqlErr.message);
+                try {
+                    db.prepare(`
+                        INSERT INTO site_daily_stats (site_id, date, uploaded_bytes)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(site_id, date) DO UPDATE SET
+                        uploaded_bytes = uploaded_bytes + ?
+                    `).run(siteId, today, upDelta, upDelta);
+                } catch (fallbackErr) {
+                    console.error('[Heatmap] Fallback also failed:', fallbackErr.message);
+                }
+            }
         }
     }
 
@@ -482,15 +529,25 @@ class SiteService {
 
                 if (enableLogs) console.log(`[M-Team V2] Checkin Response:`, JSON.stringify(response.data));
 
-                if (response.data && (response.data.code === '0' || response.data.message === 'SUCCESS' || response.data.message?.includes('already'))) {
+                // M-Team API: code 为 "0" (字符串) 表示成功，message 可能是 "SUCCESS" 或包含 "already" / "签到" 等
+                const code = response.data?.code;
+                const message = response.data?.message || '';
+                const isSuccess = code === 0 || code === '0' ||
+                    message === 'SUCCESS' ||
+                    message.toLowerCase().includes('already') ||
+                    message.includes('签到');
+                if (response.data && isSuccess) {
                     db.prepare('UPDATE sites SET last_checkin_at = ? WHERE id = ?').run(timeUtils.getLocalISOString(), id);
                     loggerService.log(`站点 ${site.name} 自动签到成功 (API)`, 'success');
                     return true;
                 }
-                throw new Error(response.data.message || 'API Error');
+                throw new Error(message || `API Error (code: ${code})`);
             } catch (err) {
                 const errorMsg = err.response ? JSON.stringify(err.response.data) : err.message;
                 console.error(`[M-Team V2] Checkin failed:`, errorMsg);
+                loggerService.log(`站点 ${site.name} API 签到失败: ${errorMsg}`, 'error');
+                notificationService.notifyCheckinFailed(site.name, errorMsg);
+                return false;
             }
         }
 
@@ -517,32 +574,59 @@ class SiteService {
 
             if (enableLogs) console.log(`[Checkin] ${site.name} checkin response received, status: ${response.status}`);
 
-            // Double check if success by parsing the response or just assuming 200 is success
-            const siteParsers = require('../utils/siteParsers');
-            const stats = siteParsers.parseUserStats(response.data, site.type);
-            const isSuccess = response.status === 200 || (stats && stats.isCheckedIn);
+            const html = response.data || '';
 
-            if (!isSuccess) {
-                // Try the second URL if the first one failed or didn't confirm sign-in
+            // Helper function to detect checkin success from HTML content
+            const isCheckinSuccess = (content) => {
+                if (!content) return false;
+                const text = typeof content === 'string' ? content : '';
+                // Success indicators
+                return text.includes('签到成功') ||
+                    text.includes('已经签到') ||
+                    text.includes('今日已签到') ||
+                    text.includes('已签到') ||
+                    text.includes('签到已得') ||
+                    text.includes('您今天已经签到') ||
+                    text.includes('这是您的第') ||
+                    text.includes('连续签到') ||
+                    text.includes('Attendance successful') ||
+                    text.includes('You have already attended') ||
+                    text.includes('Already checked in') ||
+                    text.includes('attendance_yes') ||
+                    // Check for bonus reward text patterns
+                    /获得了?\s*\d+\s*(积分|魔力|bonus)/i.test(text);
+            };
+
+            // Check if first URL indicates success
+            let success = isCheckinSuccess(html);
+
+            if (!success && response.status !== 200) {
+                // Try the second URL if the first one failed
+                if (enableLogs) console.log(`[Checkin] ${site.name} first URL not successful (status: ${response.status}), trying fallback...`);
                 try {
                     const resp2 = await axios.get(checkinUrls[1], {
                         headers: this.getAuthHeaders(site),
                         timeout: 10000
                     });
-                    const stats2 = siteParsers.parseUserStats(resp2.data, site.type);
-                    if (resp2.status === 200 || (stats2 && stats2.isCheckedIn)) {
-                        // Success on fallback
-                    } else {
-                        throw new Error('Checkin failed on both primary and fallback URLs');
-                    }
+                    success = isCheckinSuccess(resp2.data);
                 } catch (e) {
-                    // Check if it's already checked in via HTML anyway
-                    if (response.data && response.data.includes('已经签到')) {
-                        // This is actually success
-                    } else {
-                        throw e;
-                    }
+                    if (enableLogs) console.log(`[Checkin] ${site.name} fallback URL also failed: ${e.message}`);
                 }
+            }
+
+            // If we got HTTP 200, consider it success even without explicit confirmation
+            // (some sites just redirect back without confirmation message)
+            if (!success && response.status === 200) {
+                // Do a quick sanity check - make sure it's not an error page
+                const isErrorPage = html.includes('错误') && html.includes('签到') && !html.includes('成功');
+                if (!isErrorPage) {
+                    success = true;
+                    if (enableLogs) console.log(`[Checkin] ${site.name} assuming success based on HTTP 200`);
+                }
+            }
+
+            if (!success) {
+                throw new Error('签到响应未包含成功标识');
             }
 
             const db = this._getDB();

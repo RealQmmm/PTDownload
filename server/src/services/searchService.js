@@ -180,7 +180,8 @@ class SearchService {
 
             if (enableLogs) console.log(`[M-Team V2 Search] Status: ${response.status}, Data present: ${!!response.data}`);
 
-            if (response.data && response.data.code === '0' && response.data.data) {
+            const code = response.data?.code;
+            if (response.data && (code === 0 || code === '0') && response.data.data) {
                 const list = response.data.data.data || [];
                 if (enableLogs) console.log(`[M-Team V2 Search] Found ${list.length} items`);
                 return list.map(item => {

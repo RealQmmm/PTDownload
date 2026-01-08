@@ -180,6 +180,7 @@ function createTables() {
       site_id INTEGER,
       date TEXT,
       uploaded_bytes INTEGER DEFAULT 0,
+      downloaded_bytes INTEGER DEFAULT 0,
       PRIMARY KEY (site_id, date),
       FOREIGN KEY(site_id) REFERENCES sites(id)
     );
@@ -337,16 +338,34 @@ function createTables() {
     'ALTER TABLE clients ADD COLUMN name TEXT',
     'ALTER TABLE sites ADD COLUMN default_rss_url TEXT',
     'ALTER TABLE tasks ADD COLUMN auto_disable_on_match INTEGER DEFAULT 0',
-    'ALTER TABLE sites ADD COLUMN api_key TEXT'
+    'ALTER TABLE sites ADD COLUMN api_key TEXT',
+    'ALTER TABLE site_daily_stats ADD COLUMN downloaded_bytes INTEGER DEFAULT 0'
   ];
 
   migrations.forEach(sql => {
     try {
       db.exec(sql);
+      console.log(`[Migration] Success: ${sql.substring(0, 60)}...`);
     } catch (e) {
       // Ignore "duplicate column name" errors
+      if (!e.message.includes('duplicate column name')) {
+        console.error(`[Migration] Failed: ${sql.substring(0, 60)}... Error: ${e.message}`);
+      }
     }
   });
+
+  // Explicit migration for site_daily_stats.downloaded_bytes (critical fix)
+  try {
+    const columns = db.prepare('PRAGMA table_info(site_daily_stats)').all();
+    const hasDownloadedBytes = columns.some(c => c.name === 'downloaded_bytes');
+    if (!hasDownloadedBytes) {
+      console.log('[Migration] Adding downloaded_bytes column to site_daily_stats...');
+      db.prepare('ALTER TABLE site_daily_stats ADD COLUMN downloaded_bytes INTEGER DEFAULT 0').run();
+      console.log('[Migration] Added downloaded_bytes column to site_daily_stats successfully');
+    }
+  } catch (e) {
+    console.error('[Migration] Failed to add downloaded_bytes to site_daily_stats:', e.message);
+  }
 
   console.log('Database tables initialized');
 }
