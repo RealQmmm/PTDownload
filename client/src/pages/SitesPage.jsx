@@ -75,7 +75,8 @@ const SiteHeatmap = memo(({ siteId, darkMode, borderColor, textSecondary, authen
 
 // 站点图标组件：解决重叠与加载问题
 const SiteIcon = ({ site, darkMode, getDomain, authenticatedFetch }) => {
-    const [loaded, setLoaded] = React.useState(false);
+    // 如果已经有缓存过的图标，初始化为已加载状态，避免闪烁
+    const [loaded, setLoaded] = React.useState(!!site.site_icon);
     const [error, setError] = React.useState(false);
     const [refreshKey, setRefreshKey] = React.useState(0);
     const [localIcon, setLocalIcon] = React.useState(site.site_icon);
@@ -83,6 +84,7 @@ const SiteIcon = ({ site, darkMode, getDomain, authenticatedFetch }) => {
     // 当父组件数据更新时同步本地状态
     React.useEffect(() => {
         setLocalIcon(site.site_icon);
+        if (site.site_icon) setLoaded(true);
     }, [site.site_icon]);
 
     const handleDoubleClick = async (e) => {
