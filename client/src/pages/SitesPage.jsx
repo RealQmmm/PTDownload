@@ -73,6 +73,48 @@ const SiteHeatmap = memo(({ siteId, darkMode, borderColor, textSecondary, authen
     );
 });
 
+// 站点图标组件：解决重叠与加载问题
+const SiteIcon = ({ site, darkMode, getDomain, authenticatedFetch, onRefresh, isRefreshing }) => {
+    const [loaded, setLoaded] = React.useState(false);
+    const [error, setError] = React.useState(false);
+
+    // 使用更可靠的 Favicon 镜像 (国内友好)
+    const iconSrc = site.site_icon || `https://favicon.t.610.re/v1/${getDomain(site.url)}`;
+
+    return (
+        <div
+            className={`w-12 h-12 flex-shrink-0 ${darkMode ? 'bg-blue-900/20' : 'bg-blue-50'} rounded-lg flex items-center justify-center text-2xl mr-3 group-hover:scale-110 transition-transform overflow-hidden relative cursor-pointer ${isRefreshing ? 'animate-spin' : ''}`}
+            onDoubleClick={(e) => {
+                e.preventDefault();
+                if (onRefresh) onRefresh(site.id);
+            }}
+            title="双击刷新站点"
+        >
+            {(!loaded || error) && <span className={`${isRefreshing ? 'opacity-50' : ''} absolute inset-0 flex items-center justify-center`}>🌐</span>}
+            {!error && (
+                <img
+                    src={iconSrc}
+                    alt=""
+                    className={`w-8 h-8 object-contain absolute inset-0 m-auto z-10 transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'} ${isRefreshing ? 'opacity-50' : ''}`}
+                    onLoad={(e) => {
+                        setLoaded(true);
+                        // 如果数据库没存过或者存的是 google 的（可能失效），则尝试更新
+                        if (!site.site_icon || (site.site_icon && site.site_icon.includes('google.com'))) {
+                            const iconUrl = e.target.src;
+                            authenticatedFetch(`/api/sites/${site.id}/icon`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ iconUrl })
+                            }).catch(() => { });
+                        }
+                    }}
+                    onError={() => setError(true)}
+                />
+            )}
+        </div>
+    );
+};
+
 const SitesPage = () => {
     const { darkMode, fetchStatus, authenticatedFetch } = useTheme();
     const [sites, setSites] = useState([]);
@@ -116,6 +158,14 @@ const SitesPage = () => {
     useEffect(() => {
         fetchSites();
     }, []);
+
+    const getDomain = (url) => {
+        try {
+            return new URL(url).hostname;
+        } catch (e) {
+            return '';
+        }
+    };
 
     const handleSubmit = async (e) => {
         if (e) e.preventDefault();
@@ -269,9 +319,14 @@ const SitesPage = () => {
 
                             <div className="flex justify-between items-start mb-4">
                                 <div className="flex items-center min-w-0">
-                                    <div className={`w-12 h-12 flex-shrink-0 ${darkMode ? 'bg-blue-900/20' : 'bg-blue-50'} rounded-lg flex items-center justify-center text-2xl mr-3 group-hover:scale-110 transition-transform`}>
-                                        🌐
-                                    </div>
+                                    <SiteIcon
+                                        site={site}
+                                        darkMode={darkMode}
+                                        getDomain={getDomain}
+                                        authenticatedFetch={authenticatedFetch}
+                                        onRefresh={syncSingleSiteData}
+                                        isRefreshing={refreshingId === site.id}
+                                    />
                                     <div className="min-w-0">
                                         <div className="flex items-center space-x-2">
                                             <h3 className={`font-bold text-lg ${textPrimary} truncate max-w-[120px]`} title={site.name}>{site.name}</h3>

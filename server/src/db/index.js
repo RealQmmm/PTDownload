@@ -79,6 +79,7 @@ function createTables() {
       stats_updated_at DATETIME,
       auto_checkin INTEGER DEFAULT 0,
       last_checkin_at DATETIME,
+      site_icon TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -341,7 +342,8 @@ function createTables() {
     'ALTER TABLE sites ADD COLUMN default_rss_url TEXT',
     'ALTER TABLE tasks ADD COLUMN auto_disable_on_match INTEGER DEFAULT 0',
     'ALTER TABLE sites ADD COLUMN api_key TEXT',
-    'ALTER TABLE site_daily_stats ADD COLUMN downloaded_bytes INTEGER DEFAULT 0'
+    'ALTER TABLE site_daily_stats ADD COLUMN downloaded_bytes INTEGER DEFAULT 0',
+    'ALTER TABLE sites ADD COLUMN site_icon TEXT'
   ];
 
   migrations.forEach(sql => {

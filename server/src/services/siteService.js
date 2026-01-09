@@ -22,7 +22,7 @@ class SiteService {
 
     getAllSites() {
         const db = this._getDB();
-        const sites = db.prepare('SELECT * FROM sites ORDER BY created_at DESC').all();
+        const sites = db.prepare('SELECT * FROM sites ORDER BY enabled DESC, created_at DESC').all();
 
         // Decrypt cookies and check for migration
         let migrationNeeded = false;
@@ -98,12 +98,34 @@ class SiteService {
 
     deleteSite(id) {
         const db = this._getDB();
-        return db.prepare('DELETE FROM sites WHERE id = ?').run(id);
+
+        // First delete related records to avoid foreign key constraint errors
+        try {
+            // Delete related site_daily_stats (heatmap data)
+            db.prepare('DELETE FROM site_daily_stats WHERE site_id = ?').run(id);
+
+            // Delete related rss_sources
+            db.prepare('DELETE FROM rss_sources WHERE site_id = ?').run(id);
+
+            // Delete related tasks (this will cascade to task_history and task_logs via app logic if needed)
+            db.prepare('DELETE FROM tasks WHERE site_id = ?').run(id);
+
+            // Finally delete the site itself
+            return db.prepare('DELETE FROM sites WHERE id = ?').run(id);
+        } catch (err) {
+            console.error('Failed to delete site:', err.message);
+            throw err;
+        }
     }
 
     toggleSite(id, enabled) {
         const db = this._getDB();
         return db.prepare('UPDATE sites SET enabled = ? WHERE id = ?').run(enabled, id);
+    }
+
+    updateSiteIcon(id, iconUrl) {
+        const db = this._getDB();
+        return db.prepare('UPDATE sites SET site_icon = ? WHERE id = ?').run(iconUrl, id);
     }
 
     /**
@@ -204,6 +226,7 @@ class SiteService {
                         .run(stats.username, stats.upload, stats.download, stats.ratio, stats.bonus, stats.level, now, now, id);
 
                     if (enableLogs) console.log(`[M-Team V2] Database updated for ${site.name}`);
+                    loggerService.log(`站点 ${site.name} 状态刷新成功: 上传=${stats.upload}, 下载=${stats.download}, 分享率=${stats.ratio}, 魔力值=${stats.bonus}, 等级=${stats.level}`, 'info');
                     return stats;
                 } catch (dbErr) {
                     console.error(`[M-Team V2] DB Update error:`, dbErr.message);
@@ -356,6 +379,7 @@ class SiteService {
                     sql += ' WHERE id = ?';
                     params.push(id);
                     db.prepare(sql).run(...params);
+                    loggerService.log(`站点 ${site.name} 状态检查成功: 上传=${stats.upload}, 下载=${stats.download}, 分享率=${stats.ratio}, 魔力值=${stats.bonus}, 等级=${stats.level}`, 'info');
                 } else {
                     db.prepare('UPDATE sites SET cookie_status = 0, last_checked_at = ? WHERE id = ?')
                         .run(now, id);
@@ -462,11 +486,15 @@ class SiteService {
                 params.push(id);
                 db.prepare(sql).run(...params);
 
+                loggerService.log(`站点 ${site.name} 状态刷新成功: 上传=${stats.upload}, 下载=${stats.download}, 分享率=${stats.ratio}, 魔力值=${stats.bonus}, 等级=${stats.level}`, 'info');
+
                 return stats;
             }
+            loggerService.log(`站点 ${site.name} 状态解析失败，可能站点模板已更新`, 'error');
             return null;
         } catch (err) {
             if (enableLogs) console.error(`Failed to refresh stats for ${site.name}:`, err.message);
+            loggerService.log(`站点 ${site.name} 状态刷新失败: ${err.message}`, 'error');
             return null;
         }
     }

@@ -13,7 +13,7 @@ class TaskService {
     }
 
     getAllTasks() {
-        return this._getDB().prepare('SELECT * FROM tasks ORDER BY created_at DESC').all();
+        return this._getDB().prepare('SELECT * FROM tasks ORDER BY enabled DESC, created_at DESC').all();
     }
 
     getTaskById(id) {

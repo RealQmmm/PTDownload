@@ -136,7 +136,7 @@ class SearchService {
             const allPagesResults = await Promise.all(pageResultsPromises);
             const flatResults = allPagesResults.flat();
 
-            return flatResults.map(r => ({ ...r, siteName: site.name }));
+            return flatResults.map(r => ({ ...r, siteName: site.name, siteUrl: site.url, siteIcon: site.site_icon }));
         });
 
         const resultsArrays = await Promise.all(searchPromises);
@@ -346,6 +346,8 @@ class SearchService {
                         leechers,
                         date: pubDate ? timeUtils.getLocalDateTimeString(new Date(pubDate)) : timeUtils.getLocalDateTimeString(),
                         siteName: site.name,
+                        siteUrl: site.url,
+                        siteIcon: site.site_icon,
                         isFree: title.toLowerCase().includes('free') || desc.toLowerCase().includes('free'), // Heuristic
                         freeType: ''
                     });

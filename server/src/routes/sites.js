@@ -126,6 +126,17 @@ router.post('/checkin-all', async (req, res) => {
     }
 });
 
+// Update site icon
+router.patch('/:id/icon', (req, res) => {
+    try {
+        const { iconUrl } = req.body;
+        siteService.updateSiteIcon(req.params.id, iconUrl);
+        res.json({ message: 'Icon updated successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Get site heatmap data
 router.get('/:id/heatmap', async (req, res) => {
     try {

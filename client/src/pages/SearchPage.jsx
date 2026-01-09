@@ -143,6 +143,14 @@ const SearchPage = ({ searchState, setSearchState }) => {
         }
     }, [query, results, searched, searchMode]);
 
+    const getDomain = (url) => {
+        try {
+            return new URL(url).hostname;
+        } catch (e) {
+            return '';
+        }
+    };
+
     const handleSearch = async (e) => {
         if (e) e.preventDefault();
 
@@ -321,6 +329,40 @@ const SearchPage = ({ searchState, setSearchState }) => {
         }
     };
 
+    // Download torrent file to browser
+    const downloadTorrentFile = async (item) => {
+        try {
+            const res = await authenticatedFetch('/api/download/torrent-file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    torrentUrl: item.torrentUrl,
+                    title: item.name
+                })
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                alert(data.message || '下载种子文件失败');
+                return;
+            }
+
+            // Get the response as blob and trigger download
+            const blob = await res.blob();
+            const filename = item.name.replace(/[<>:"/\\|?*]/g, '_').substring(0, 100) + '.torrent';
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (err) {
+            alert('下载种子文件失败: ' + err.message);
+        }
+    };
+
     // Sorting Logic
     const sortedResults = useMemo(() => {
         if (!sortConfig.key) return results;
@@ -433,7 +475,22 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                             <tr key={index} className={`${darkMode ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50/50'} transition-colors group`}>
                                                 <td className="p-4 align-middle">
                                                     <div className="flex flex-col gap-1.5">
-                                                        <span className={`${darkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100'} border px-2 py-1 rounded text-xs font-bold uppercase tracking-tight w-fit`}>
+                                                        <span className={`${darkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100'} border px-2 py-1 rounded text-xs font-bold uppercase tracking-tight w-fit flex items-center gap-1.5`}>
+                                                            {item.siteUrl && (
+                                                                <div className="flex items-center gap-1 relative">
+                                                                    <span className="text-[10px]">🌐</span>
+                                                                    <img
+                                                                        src={item.siteIcon || `https://favicon.t.610.re/v1/${getDomain(item.siteUrl)}`}
+                                                                        alt=""
+                                                                        className="w-3.5 h-3.5 object-contain absolute inset-0 m-auto opacity-0 transition-opacity duration-300"
+                                                                        onLoad={(e) => {
+                                                                            e.target.style.opacity = '1';
+                                                                            if (e.target.previousSibling) e.target.previousSibling.style.display = 'none';
+                                                                        }}
+                                                                        onError={(e) => e.target.style.display = 'none'}
+                                                                    />
+                                                                </div>
+                                                            )}
                                                             {item.siteName}
                                                         </span>
                                                         {item.category && (
@@ -471,14 +528,25 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                                     {item.date}
                                                 </td>
                                                 <td className="p-4 text-right pr-6 align-middle">
-                                                    <Button
-                                                        size="xs"
-                                                        variant="primary"
-                                                        onClick={() => handleDownloadClick(item)}
-                                                        disabled={downloading === item.link || !item.torrentUrl}
-                                                    >
-                                                        {downloading === item.link ? '添加中...' : '下载'}
-                                                    </Button>
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        <Button
+                                                            size="xs"
+                                                            variant="secondary"
+                                                            onClick={() => downloadTorrentFile(item)}
+                                                            disabled={!item.torrentUrl}
+                                                            title="下载种子文件"
+                                                        >
+                                                            📥
+                                                        </Button>
+                                                        <Button
+                                                            size="xs"
+                                                            variant="primary"
+                                                            onClick={() => handleDownloadClick(item)}
+                                                            disabled={downloading === item.link || !item.torrentUrl}
+                                                        >
+                                                            {downloading === item.link ? '添加中...' : '下载'}
+                                                        </Button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -493,7 +561,22 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                 <div key={index} className={`${darkMode ? 'bg-gray-800/50' : 'bg-white'} rounded-lg p-3`}>
                                     <div className="flex justify-between items-start mb-1 gap-2">
                                         <div className="flex gap-1 flex-wrap flex-1 min-w-0">
-                                            <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap`}>
+                                            <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap flex items-center gap-1`}>
+                                                {item.siteUrl && (
+                                                    <div className="flex items-center gap-1 relative">
+                                                        <span className="text-[10px]">🌐</span>
+                                                        <img
+                                                            src={item.siteIcon || `https://favicon.t.610.re/v1/${getDomain(item.siteUrl)}`}
+                                                            alt=""
+                                                            className="w-3 h-3 object-contain absolute inset-0 m-auto opacity-0 transition-opacity duration-300"
+                                                            onLoad={(e) => {
+                                                                e.target.style.opacity = '1';
+                                                                if (e.target.previousSibling) e.target.previousSibling.style.display = 'none';
+                                                            }}
+                                                            onError={(e) => e.target.style.display = 'none'}
+                                                        />
+                                                    </div>
+                                                )}
                                                 {item.siteName}
                                             </span>
                                             {item.category && (
@@ -513,14 +596,26 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                             <span className="text-green-500 font-bold">↑{item.seeders}</span>
                                             <span className="text-red-400">↓{item.leechers}</span>
                                         </div>
-                                        <Button
-                                            size="xs"
-                                            className="py-1 px-2 text-[10px]"
-                                            onClick={() => handleDownloadClick(item)}
-                                            disabled={downloading === item.link || !item.torrentUrl}
-                                        >
-                                            {downloading === item.link ? '...' : '下载'}
-                                        </Button>
+                                        <div className="flex items-center gap-1.5">
+                                            <Button
+                                                size="xs"
+                                                variant="secondary"
+                                                className="py-1 px-2 text-[10px]"
+                                                onClick={() => downloadTorrentFile(item)}
+                                                disabled={!item.torrentUrl}
+                                                title="下载种子"
+                                            >
+                                                📥
+                                            </Button>
+                                            <Button
+                                                size="xs"
+                                                className="py-1 px-2 text-[10px]"
+                                                onClick={() => handleDownloadClick(item)}
+                                                disabled={downloading === item.link || !item.torrentUrl}
+                                            >
+                                                {downloading === item.link ? '...' : '下载'}
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             ))}
