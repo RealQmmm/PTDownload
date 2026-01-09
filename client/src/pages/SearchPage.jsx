@@ -480,7 +480,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                                                 <div className="flex items-center gap-1 relative">
                                                                     <span className="text-[10px]">🌐</span>
                                                                     <img
-                                                                        src={item.siteIcon || `https://favicon.t.610.re/v1/${getDomain(item.siteUrl)}`}
+                                                                        src={item.siteIcon || (item.siteUrl ? `${item.siteUrl.replace(/\/$/, '')}/favicon.ico` : '')}
                                                                         alt=""
                                                                         className="w-3.5 h-3.5 object-contain absolute inset-0 m-auto opacity-0 transition-opacity duration-300"
                                                                         onLoad={(e) => {
@@ -566,7 +566,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                                     <div className="flex items-center gap-1 relative">
                                                         <span className="text-[10px]">🌐</span>
                                                         <img
-                                                            src={item.siteIcon || `https://favicon.t.610.re/v1/${getDomain(item.siteUrl)}`}
+                                                            src={item.siteIcon || (item.siteUrl ? `${item.siteUrl.replace(/\/$/, '')}/favicon.ico` : '')}
                                                             alt=""
                                                             className="w-3 h-3 object-contain absolute inset-0 m-auto opacity-0 transition-opacity duration-300"
                                                             onLoad={(e) => {
