@@ -273,7 +273,7 @@ class DownloaderService {
                 if (options.savePath) body += `&savepath=${encodeURIComponent(options.savePath)}`;
                 if (options.category) body += `&category=${encodeURIComponent(options.category)}`;
 
-                await axios.post(
+                const addRes = await axios.post(
                     `${baseUrl}/api/v2/torrents/add`,
                     body,
                     {
@@ -283,6 +283,15 @@ class DownloaderService {
                         }
                     }
                 );
+
+                // Check if torrent was added successfully
+                const responseText = addRes.data?.toString() || addRes.data;
+                console.log(`[qBittorrent] Add torrent response: "${responseText}"`);
+
+                if (responseText === 'Fails.' || (typeof responseText === 'string' && responseText.toLowerCase().includes('fail'))) {
+                    return { success: false, message: 'qBittorrent 添加种子失败，可能是重复种子或种子文件无效' };
+                }
+
                 return { success: true, message: '已添加至 qBittorrent' };
             }
 
@@ -381,6 +390,15 @@ class DownloaderService {
                         timeout: 30000
                     }
                 );
+
+                // Check if torrent was added successfully
+                // qBittorrent returns "Ok." on success, "Fails." on failure
+                const responseText = addRes.data?.toString() || addRes.data;
+                console.log(`[qBittorrent] Add torrent response: "${responseText}"`);
+
+                if (responseText === 'Fails.' || (typeof responseText === 'string' && responseText.toLowerCase().includes('fail'))) {
+                    return { success: false, message: 'qBittorrent 添加种子失败，可能是重复种子或种子文件无效' };
+                }
 
                 // 4. If fileIndices specified, set file priorities
                 if (fileIndices && Array.isArray(fileIndices) && fileIndices.length > 0) {

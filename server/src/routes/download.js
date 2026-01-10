@@ -6,6 +6,7 @@ const clientService = require('../services/clientService');
 const siteService = require('../services/siteService');
 const downloaderService = require('../services/downloaderService');
 const parseTorrent = require('parse-torrent');
+const { downloadMTeamTorrent } = require('../utils/mteamDownloader');
 
 // Add torrent to client
 router.post('/', async (req, res) => {
@@ -152,16 +153,18 @@ router.post('/', async (req, res) => {
 
                     // Step 2: Download the actual torrent file from the token URL
                     console.log(`[M-Team V2] Downloading torrent file...`);
-                    const torrentResponse = await axios.get(downloadUrl, {
-                        responseType: 'arraybuffer',
-                        timeout: 30000,
-                        httpsAgent: new https.Agent({
-                            rejectUnauthorized: false
-                        })
-                    });
 
-                    torrentData = Buffer.from(torrentResponse.data);
-                    console.log(`[M-Team V2] Downloaded torrent file, size: ${torrentData.length} bytes`);
+                    try {
+                        torrentData = await downloadMTeamTorrent(downloadUrl);
+                    } catch (downloadErr) {
+                        console.error(`[M-Team V2] Failed to download torrent file:`, {
+                            message: downloadErr.message,
+                            code: downloadErr.code
+                        });
+                        const mteamError = new Error(`M-Team 种子文件下载失败: ${downloadErr.message}`);
+                        mteamError.isMTeamError = true;
+                        throw mteamError;
+                    }
 
                     // Validate torrent data - check if it starts with valid bencoded dict
                     if (torrentData.length < 10) {
@@ -364,15 +367,7 @@ router.post('/torrent-file', async (req, res) => {
             console.log(`[M-Team V2 Torrent File] Got download URL, fetching torrent file...`);
 
             // Step 2: Download the actual torrent file
-            const torrentResponse = await axios.get(downloadUrl, {
-                responseType: 'arraybuffer',
-                timeout: 30000,
-                httpsAgent: new https.Agent({
-                    rejectUnauthorized: false
-                })
-            });
-
-            torrentData = Buffer.from(torrentResponse.data);
+            torrentData = await downloadMTeamTorrent(downloadUrl);
         } else if (authHeaders) {
             // Standard sites with auth
             const https = require('https');
