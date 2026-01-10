@@ -263,8 +263,8 @@ router.post('/', async (req, res) => {
                     const sizeBytes = FormatUtils.parseSizeToBytes(size);
 
                     // For manual downloads, task_id is NULL
-                    db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, download_time, item_hash) VALUES (?, ?, ?, ?, ?, ?)')
-                        .run(null, torrentUrl, title, sizeBytes, timeUtils.getLocalISOString(), torrentHash);
+                    db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, download_time, item_hash, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+                        .run(null, torrentUrl, title, sizeBytes, timeUtils.getLocalISOString(), torrentHash, req.user.id);
 
                     // Send notification
                     const notificationService = require('../services/notificationService');

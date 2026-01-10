@@ -6,7 +6,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const timeUtils = require('./utils/timeUtils');
 const { initDB } = require('./db');
-const authMiddleware = require('./middleware/auth');
+const { authMiddleware } = require('./middleware/auth');
 const authService = require('./services/authService');
 
 const app = express();

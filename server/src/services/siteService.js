@@ -64,20 +64,20 @@ class SiteService {
 
     createSite(site) {
         const db = this._getDB();
-        const { name, url, cookies, api_key, default_rss_url, type, enabled = 1, auto_checkin = 0 } = site;
+        const { name, url, cookies, api_key, default_rss_url, type, enabled = 1, auto_checkin = 0, supports_checkin = 1 } = site;
 
         const encryptedCookies = cryptoUtils.encrypt(cookies);
         const encryptedApiKey = cryptoUtils.encrypt(api_key);
 
         const info = db.prepare(
-            'INSERT INTO sites (name, url, cookies, api_key, default_rss_url, type, enabled, auto_checkin, cookie_status, last_checked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)'
-        ).run(name, url, encryptedCookies, encryptedApiKey, default_rss_url || null, type, enabled, auto_checkin);
+            'INSERT INTO sites (name, url, cookies, api_key, default_rss_url, type, enabled, auto_checkin, supports_checkin, cookie_status, last_checked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)'
+        ).run(name, url, encryptedCookies, encryptedApiKey, default_rss_url || null, type, enabled, auto_checkin, supports_checkin);
         return info.lastInsertRowid;
     }
 
     updateSite(id, site) {
         const db = this._getDB();
-        const { name, url, cookies, api_key, default_rss_url, type, enabled, auto_checkin, cookie_status } = site;
+        const { name, url, cookies, api_key, default_rss_url, type, enabled, auto_checkin, supports_checkin, cookie_status } = site;
 
         // If cookies or api_key are changed, reset cookie_status to 0 (assume ok until checked)
         // Note: we must compare against current DB value (decrypted) or handle logic carefully.
@@ -92,8 +92,8 @@ class SiteService {
         const encryptedApiKey = cryptoUtils.encrypt(api_key);
 
         return db.prepare(
-            'UPDATE sites SET name = ?, url = ?, cookies = ?, api_key = ?, default_rss_url = ?, type = ?, enabled = ?, auto_checkin = ?, cookie_status = ? WHERE id = ?'
-        ).run(name, url, encryptedCookies, encryptedApiKey, default_rss_url || null, type, enabled, auto_checkin, status, id);
+            'UPDATE sites SET name = ?, url = ?, cookies = ?, api_key = ?, default_rss_url = ?, type = ?, enabled = ?, auto_checkin = ?, supports_checkin = ?, cookie_status = ? WHERE id = ?'
+        ).run(name, url, encryptedCookies, encryptedApiKey, default_rss_url || null, type, enabled, auto_checkin, supports_checkin, status, id);
     }
 
     deleteSite(id) {
@@ -671,7 +671,7 @@ class SiteService {
         const sites = this.getAllSites();
         let successCount = 0;
         for (const site of sites) {
-            if (site.enabled && site.auto_checkin) {
+            if (site.enabled && site.supports_checkin && site.auto_checkin) {
                 const ok = await this.checkinSite(site.id);
                 if (ok) successCount++;
             }

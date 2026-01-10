@@ -228,19 +228,16 @@ const DashboardPage = ({ setActiveTab }) => {
                     });
                 }
 
-                const calculatedDlSpeed = allTorrents.reduce((acc, t) => acc + (Number(t.dlspeed) || 0), 0);
-                const calculatedUpSpeed = allTorrents.reduce((acc, t) => acc + (Number(t.upspeed) || 0), 0);
-
                 setDownloadStats({
-                    ...(data.stats || {}),
-                    totalDownloadSpeed: calculatedDlSpeed,
-                    totalUploadSpeed: calculatedUpSpeed
+                    ...(data.stats || {})
                 });
 
                 // Update speed history and save to localStorage
                 setSpeedHistory(prev => {
-                    const newDownloads = [...prev.downloads, calculatedDlSpeed].slice(-60); // Keep last 60 points
-                    const newUploads = [...prev.uploads, calculatedUpSpeed].slice(-60);
+                    const dlSpeed = Number(data.stats?.totalDownloadSpeed) || 0;
+                    const upSpeed = Number(data.stats?.totalUploadSpeed) || 0;
+                    const newDownloads = [...prev.downloads, dlSpeed].slice(-60);
+                    const newUploads = [...prev.uploads, upSpeed].slice(-60);
                     const newHistory = { downloads: newDownloads, uploads: newUploads };
                     try {
                         localStorage.setItem('speedHistory', JSON.stringify(newHistory));
@@ -403,6 +400,45 @@ const DashboardPage = ({ setActiveTab }) => {
                         <HistoryChart data={historyData} textSecondary={textSecondary} darkMode={darkMode} />
                     </div>
                 </Card>
+            </div>
+
+            {/* Quick Navigation - Only show on Desktop */}
+            <div className={`hidden md:grid md:grid-cols-4 lg:grid-cols-8 gap-4`}>
+                {[
+                    { id: 'search', name: '资源搜索', icon: '🔍', color: 'bg-blue-500' },
+                    { id: 'series', name: '我的追剧', icon: '📺', color: 'bg-purple-500' },
+                    { id: 'tasks', name: '自动任务', icon: '⏰', color: 'bg-amber-500' },
+                    { id: 'sites', name: '站点管理', icon: '🌐', color: 'bg-emerald-500' },
+                    { id: 'clients', name: '下载客户', icon: '📥', color: 'bg-indigo-500' },
+                    { id: 'settings', name: '系统设置', icon: '⚙️', color: 'bg-slate-500' },
+                    { id: 'help', name: '使用帮助', icon: '❓', color: 'bg-cyan-500' },
+                ].filter(item => {
+                    const { user } = useTheme();
+                    if (!user) return false;
+                    if (user.role === 'admin') return true;
+
+                    let permissions = null;
+                    try {
+                        permissions = user.permissions ? (typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions) : null;
+                    } catch (e) { }
+
+                    const allowedMenus = (permissions && Array.isArray(permissions.menus))
+                        ? permissions.menus
+                        : ['dashboard', 'search', 'series', 'help'];
+
+                    return allowedMenus.includes(item.id);
+                }).map(item => (
+                    <button
+                        key={item.id}
+                        onClick={() => setActiveTab(item.id)}
+                        className={`group flex flex-col items-center p-4 rounded-2xl ${darkMode ? 'bg-gray-800/50 hover:bg-gray-700/50' : 'bg-white hover:bg-gray-50'} border ${borderColor} transition-all duration-300 hover:shadow-lg hover:-translate-y-1`}
+                    >
+                        <div className={`w-12 h-12 rounded-2xl ${item.color} flex items-center justify-center text-2xl mb-3 shadow-lg shadow-${item.color.split('-')[1]}-500/20 group-hover:scale-110 transition-transform`}>
+                            {item.icon}
+                        </div>
+                        <span className={`text-xs font-bold ${textPrimary} tracking-tight`}>{item.name}</span>
+                    </button>
+                ))}
             </div>
 
             {/* Bottom Section: Active Tasks & Today's History */}

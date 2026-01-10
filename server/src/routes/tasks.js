@@ -3,9 +3,10 @@ const router = express.Router();
 const taskService = require('../services/taskService');
 const schedulerService = require('../services/schedulerService');
 
-// Get all tasks
+// Get all tasks (visible to all users)
 router.get('/', (req, res) => {
     try {
+        // All users can see all RSS tasks
         const tasks = taskService.getAllTasks();
         res.json(tasks);
     } catch (err) {
@@ -16,8 +17,9 @@ router.get('/', (req, res) => {
 // Create task
 router.post('/', (req, res) => {
     try {
-        const id = taskService.createTask(req.body);
-        const newTask = { id, ...req.body };
+        const taskData = { ...req.body, user_id: req.user.id };
+        const id = taskService.createTask(taskData);
+        const newTask = { id, ...taskData };
         if (newTask.enabled) {
             schedulerService.scheduleTask(newTask);
         }

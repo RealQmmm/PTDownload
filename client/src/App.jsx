@@ -24,6 +24,14 @@ function App() {
     })
     const [activeTab, setActiveTab] = useState('dashboard')
     const [sidebarOpen, setSidebarOpen] = useState(false)
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+        const saved = localStorage.getItem('sidebarCollapsed');
+        return saved === 'true';
+    });
+
+    useEffect(() => {
+        localStorage.setItem('sidebarCollapsed', sidebarCollapsed);
+    }, [sidebarCollapsed]);
 
     // Search state - preserved across tab switches
     const [searchState, setSearchState] = useState({
@@ -136,25 +144,65 @@ function App() {
         document.title = siteName;
     }, [siteName]);
 
+    const fetchUserProfile = async () => {
+        if (!isAuthenticated) return;
+        try {
+            const res = await authenticatedFetch('/api/auth/me');
+            if (res.ok) {
+                const data = await res.json();
+                if (data.user) {
+                    setUser(data.user);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch user profile:', err);
+        }
+    };
+
     // Fetch settings and status on mount (Authenticated)
     useEffect(() => {
         if (!isAuthenticated) return;
 
         const fetchStatusAndSettings = async () => {
             fetchStatus();
-            // We can also fetch full settings here if needed, but public name is already fetched.
+            fetchUserProfile(); // Get fresh permissions/role
         };
         fetchStatusAndSettings();
 
-        // Check status every 5 minutes
-        const interval = setInterval(fetchStatus, 5 * 60 * 1000);
+        // Check status and profile every 5 minutes
+        const interval = setInterval(() => {
+            fetchStatus();
+            fetchUserProfile();
+        }, 5 * 60 * 1000);
         return () => clearInterval(interval);
     }, [isAuthenticated]);
 
     const handleLogin = (data) => {
         setIsAuthenticated(true);
         setUser(data.user);
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        // Auto-redirect to first allowed menu
+        if (data.user.role !== 'admin') {
+            const permissions = data.user.permissions ? (typeof data.user.permissions === 'string' ? JSON.parse(data.user.permissions) : data.user.permissions) : null;
+            const allowedMenus = permissions?.menus || ['dashboard', 'search', 'series', 'help'];
+            if (!allowedMenus.includes(activeTab)) {
+                setActiveTab(allowedMenus[0]);
+            }
+        }
     };
+
+    // Keep activeTab valid after manual refresh or user change
+    useEffect(() => {
+        if (isAuthenticated && user && user.role !== 'admin') {
+            const permissions = user.permissions ? (typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions) : null;
+            const allowedMenus = permissions?.menus || ['dashboard', 'search', 'series', 'help'];
+            if (!allowedMenus.includes(activeTab)) {
+                setActiveTab(allowedMenus[0]);
+            }
+        }
+    }, [user, isAuthenticated]);
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -229,8 +277,9 @@ function App() {
 
                 {/* Sidebar */}
                 <div className={`
-                    fixed inset-y-0 left-0 z-30 transform lg:relative lg:translate-x-0 transition-transform duration-300 ease-in-out
+                    fixed inset-y-0 left-0 z-30 transform lg:relative lg:translate-x-0 transition-all duration-300 ease-in-out
                     ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+                    ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-64'}
                 `}>
                     <Sidebar
                         activeTab={activeTab}
@@ -238,6 +287,9 @@ function App() {
                             setActiveTab(tab);
                             setSidebarOpen(false);
                         }}
+                        user={user}
+                        collapsed={sidebarCollapsed}
+                        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
                     />
                 </div>
 
@@ -251,10 +303,20 @@ function App() {
                         >
                             <span className="text-2xl">☰</span>
                         </button>
-                        <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary-400 to-primary-600 truncate px-4">
+                        <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary-400 to-primary-600 truncate px-4 flex-1 text-center">
                             {siteName}
                         </h1>
-                        <div className="w-10"></div> {/* Spacer for symmetry */}
+                        <button
+                            onClick={() => {
+                                const next = themeMode === 'system' ? 'light' : themeMode === 'light' ? 'dark' : 'system';
+                                setThemeMode(next);
+                            }}
+                            className={`p-2 rounded-lg ${computedDarkMode ? 'hover:bg-gray-800 text-gray-200' : 'hover:bg-gray-100 text-gray-700'} transition-colors w-10 flex items-center justify-center`}
+                        >
+                            <span className="text-xl">
+                                {themeMode === 'light' ? '☀️' : themeMode === 'dark' ? '🌙' : '🖥️'}
+                            </span>
+                        </button>
                     </header>
 
                     <main className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">

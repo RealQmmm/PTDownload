@@ -42,6 +42,10 @@ COPY server ./
 # ../../client/dist points to /client/dist
 COPY --from=frontend-builder /app/dist /client/dist
 
+# Declare volumes for database and external storage
+# This helps Docker GUIs (Synology, Unraid, Portainer) suggest volume mappings
+VOLUME ["/data", "/external_db"]
+
 EXPOSE 3000
 
 # Use tini or a simple node command

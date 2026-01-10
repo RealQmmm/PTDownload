@@ -56,7 +56,7 @@ const SiteHeatmap = memo(({ siteId, darkMode, borderColor, textSecondary, authen
     };
 
     return (
-        <div className="mt-4 pt-4 border-t border-dashed border-gray-500/20">
+        <div className="mt-2 pt-2 border-t border-dashed border-gray-500/20">
             <div className="flex items-center justify-between mb-2">
                 <span className={`text-[10px] ${textSecondary} font-bold uppercase tracking-wider`}>上传贡献图 (最近90天)</span>
             </div>
@@ -178,7 +178,8 @@ const SitesPage = () => {
         default_rss_url: '',
         type: 'NexusPHP',
         enabled: 1,
-        auto_checkin: 0
+        auto_checkin: 0,
+        supports_checkin: 1
     });
 
     const fetchSites = async () => {
@@ -221,7 +222,7 @@ const SitesPage = () => {
             setShowModal(false);
             setEditingSite(null);
 
-            setFormData({ name: '', url: '', cookies: '', api_key: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0 });
+            setFormData({ name: '', url: '', cookies: '', api_key: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0, supports_checkin: 1 });
             fetchSites();
         } catch (err) {
             alert('保存失败: ' + err.message);
@@ -240,7 +241,7 @@ const SitesPage = () => {
 
     const handleAdd = () => {
         setEditingSite(null);
-        setFormData({ name: '', url: '', cookies: '', api_key: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0 });
+        setFormData({ name: '', url: '', cookies: '', api_key: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0, supports_checkin: 1 });
         setShowModal(true);
     };
 
@@ -255,7 +256,8 @@ const SitesPage = () => {
                 default_rss_url: site.default_rss_url || '',
                 type: site.type || 'NexusPHP',
                 enabled: site.enabled,
-                auto_checkin: site.auto_checkin || 0
+                auto_checkin: site.auto_checkin || 0,
+                supports_checkin: site.supports_checkin !== undefined ? site.supports_checkin : 1
             });
             setShowModal(true);
         }
@@ -368,7 +370,7 @@ const SitesPage = () => {
                                     <div className="min-w-0">
                                         <div className="flex items-center space-x-2">
                                             <h3 className={`font-bold text-lg ${textPrimary} truncate max-w-[120px]`} title={site.name}>{site.name}</h3>
-                                            {site.enabled && (
+                                            {site.enabled && site.supports_checkin === 1 && (
                                                 <button
                                                     onClick={() => !checkingId && manualCheckin(site.id, true)}
                                                     disabled={checkingId === site.id}
@@ -400,7 +402,12 @@ const SitesPage = () => {
                                             className={`${textSecondary} hover:text-blue-500 transition-colors p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 ${refreshingId === site.id ? 'cursor-not-allowed' : ''}`}
                                             title="手动刷新站点数据与状态"
                                         >
-                                            <span className={`text-sm inline-block ${refreshingId === site.id ? 'animate-spin' : ''}`}>🔄</span>
+                                            <svg className={`w-4 h-4 ${refreshingId === site.id ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                                                <path d="M3 3v5h5" />
+                                                <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                                                <path d="M16 16h5v5" />
+                                            </svg>
                                         </button>
                                     )}
                                     <button onClick={() => openEdit(site)} className={`${textSecondary} hover:text-blue-500 transition-colors p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700`} title="编辑站点">
@@ -412,7 +419,7 @@ const SitesPage = () => {
                                 </div>
                             </div>
 
-                            <div className="flex items-center justify-between mb-4 min-w-0">
+                            <div className="flex items-center justify-between mb-2 min-w-0">
                                 <a
                                     href={site.url}
                                     target="_blank"
@@ -422,16 +429,16 @@ const SitesPage = () => {
                                 >
                                     {site.url}
                                 </a>
-                                {isToday(site.last_checkin_at) && (
+                                {isToday(site.last_checkin_at) && site.supports_checkin === 1 && (
                                     <span className="text-[10px] text-green-500 font-bold flex items-center ml-2 shrink-0">
-                                        <span className="mr-1">✅</span> 今日已签到
+                                        <span className="mr-1">✅</span> 已签
                                     </span>
                                 )}
                             </div>
 
                             {/* User Stats Overview */}
                             {site.enabled ? (
-                                <div className={`grid grid-cols-4 gap-2 mb-4 p-3 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'} border ${borderColor}`}>
+                                <div className={`grid grid-cols-4 gap-2 mb-2 p-3 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-50'} border ${borderColor}`}>
                                     <div className="space-y-0.5">
                                         <p className={`text-[10px] ${textSecondary} uppercase`}>上传</p>
                                         <p className={`text-xs font-bold ${textPrimary} truncate`}>{site.upload || '--'}</p>
@@ -570,15 +577,36 @@ const SitesPage = () => {
                             <p className="text-[10px] text-gray-500 mt-1">如果没有 API Key，请填入传统的 Cookie</p>
                         </div>
                     </div>
-                    <div className="flex items-center space-x-2 py-2">
-                        <input
-                            type="checkbox"
-                            id="auto_checkin"
-                            checked={formData.auto_checkin === 1}
-                            onChange={(e) => setFormData({ ...formData, auto_checkin: e.target.checked ? 1 : 0 })}
-                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <label htmlFor="auto_checkin" className={`text-sm font-medium ${textPrimary}`}>启用每日自动签到</label>
+                    <div className="flex flex-col space-y-4 py-2 border-t border-gray-100 dark:border-gray-800 pt-4">
+                        <div className="flex items-center space-x-2">
+                            <input
+                                type="checkbox"
+                                id="supports_checkin"
+                                checked={formData.supports_checkin === 1}
+                                onChange={(e) => {
+                                    const supported = e.target.checked ? 1 : 0;
+                                    setFormData({
+                                        ...formData,
+                                        supports_checkin: supported,
+                                        auto_checkin: supported === 0 ? 0 : formData.auto_checkin
+                                    });
+                                }}
+                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <label htmlFor="supports_checkin" className={`text-sm font-medium ${textPrimary}`}>具备签到功能</label>
+                        </div>
+
+                        <div className={`flex items-center space-x-2 transition-opacity ${formData.supports_checkin === 1 ? 'opacity-100' : 'opacity-40 cursor-not-allowed'}`}>
+                            <input
+                                type="checkbox"
+                                id="auto_checkin"
+                                disabled={formData.supports_checkin === 0}
+                                checked={formData.auto_checkin === 1}
+                                onChange={(e) => setFormData({ ...formData, auto_checkin: e.target.checked ? 1 : 0 })}
+                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <label htmlFor="auto_checkin" className={`text-sm font-medium ${textPrimary}`}>启用每日自动签到</label>
+                        </div>
                     </div>
                 </form>
             </Modal>

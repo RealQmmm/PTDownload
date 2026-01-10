@@ -374,7 +374,7 @@ const TasksPage = () => {
                                     </div>
 
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                        <div className="flex flex-wrap items-center gap-y-2 text-xs text-gray-500 space-x-3">
+                                        <div className="flex flex-wrap items-center gap-y-2 text-xs text-gray-500 space-x-3 min-w-0 flex-1">
                                             <div className="flex items-center">
                                                 <span className="mr-1">🌐</span> {site?.name || '未知站点'}
                                             </div>
@@ -386,12 +386,12 @@ const TasksPage = () => {
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center space-x-2 w-full md:w-auto justify-end overflow-x-auto">
+                                        <div className="flex items-center space-x-2 flex-shrink-0">
                                             <Button
                                                 onClick={() => viewLogs(task)}
                                                 variant="secondary"
                                                 size="sm"
-                                                className="text-blue-500 bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800 whitespace-nowrap"
+                                                className="text-blue-500 bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800 whitespace-nowrap shrink-0"
                                             >
                                                 日志
                                             </Button>

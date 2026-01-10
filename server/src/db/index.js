@@ -110,6 +110,7 @@ function createTables() {
       level TEXT,
       stats_updated_at DATETIME,
       auto_checkin INTEGER DEFAULT 0,
+      supports_checkin INTEGER DEFAULT 1,
       last_checkin_at DATETIME,
       site_icon TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -149,10 +150,12 @@ function createTables() {
       category TEXT,
       enabled INTEGER DEFAULT 1,
       auto_disable_on_match INTEGER DEFAULT 0, -- Auto-disable after first match (for one-time tasks like movies)
+      user_id INTEGER, -- User who created the task
       last_run DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(site_id) REFERENCES sites(id),
-      FOREIGN KEY(client_id) REFERENCES clients(id)
+      FOREIGN KEY(client_id) REFERENCES clients(id),
+      FOREIGN KEY(user_id) REFERENCES users(id)
     );
 
     CREATE TABLE IF NOT EXISTS task_history (
@@ -165,8 +168,10 @@ function createTables() {
       is_finished INTEGER DEFAULT 0,
       download_time DATETIME DEFAULT CURRENT_TIMESTAMP,
       finish_time DATETIME,
+      user_id INTEGER, -- Associated user who started the download
       UNIQUE(task_id, item_guid),
-      FOREIGN KEY(task_id) REFERENCES tasks(id)
+      FOREIGN KEY(task_id) REFERENCES tasks(id),
+      FOREIGN KEY(user_id) REFERENCES users(id)
     );
 
     CREATE TABLE IF NOT EXISTS download_paths (
@@ -224,6 +229,8 @@ function createTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
+      role TEXT DEFAULT 'user',
+      permissions TEXT, -- JSON string for granular permissions
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -255,6 +262,20 @@ function createTables() {
       download_time DATETIME DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(subscription_id, season, episode),
       FOREIGN KEY(subscription_id) REFERENCES series_subscriptions(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS login_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      username TEXT,
+      ip TEXT,
+      user_agent TEXT,
+      device_name TEXT,
+      browser TEXT,
+      os TEXT,
+      status TEXT, -- success, failed
+      message TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
   `;
@@ -375,7 +396,9 @@ function createTables() {
     'ALTER TABLE tasks ADD COLUMN auto_disable_on_match INTEGER DEFAULT 0',
     'ALTER TABLE sites ADD COLUMN api_key TEXT',
     'ALTER TABLE site_daily_stats ADD COLUMN downloaded_bytes INTEGER DEFAULT 0',
-    'ALTER TABLE sites ADD COLUMN site_icon TEXT'
+    'ALTER TABLE sites ADD COLUMN site_icon TEXT',
+    'ALTER TABLE users ADD COLUMN role TEXT DEFAULT \'user\'',
+    'ALTER TABLE sites ADD COLUMN supports_checkin INTEGER DEFAULT 1'
   ];
 
   migrations.forEach(sql => {
@@ -403,6 +426,81 @@ function createTables() {
     console.error('[Migration] Failed to add downloaded_bytes to site_daily_stats:', e.message);
   }
 
+  // Migration for 2026-01-10: Add permissions to users, user_id to task_history
+  try {
+    db.prepare("ALTER TABLE users ADD COLUMN permissions TEXT").run();
+    console.log('[Migration] Added permissions column to users table');
+  } catch (e) { /* Column might already exist */ }
+
+  try {
+    db.prepare("ALTER TABLE task_history ADD COLUMN user_id INTEGER").run();
+    console.log('[Migration] Added user_id column to task_history table');
+  } catch (e) { /* Column might already exist */ }
+
+  try {
+    db.prepare("ALTER TABLE tasks ADD COLUMN user_id INTEGER").run();
+    console.log('[Migration] Added user_id column to tasks table');
+  } catch (e) { /* Column might already exist */ }
+
+  try {
+    db.prepare("ALTER TABLE series_subscriptions ADD COLUMN user_id INTEGER").run();
+    console.log('[Migration] Added user_id column to series_subscriptions table');
+  } catch (e) { /* Column might already exist */ }
+
+  // Set default permissions for existing users
+  try {
+    const fullPermissions = JSON.stringify({
+      menus: ['dashboard', 'search', 'series', 'tasks', 'sites', 'clients', 'settings', 'help'],
+      settings: ['general', 'category', 'notifications', 'backup', 'maintenance', 'network', 'logs', 'security', 'about']
+    });
+    const defaultUserPermissions = JSON.stringify({
+      menus: ['dashboard', 'search', 'series', 'help'],
+      settings: ['general', 'about']
+    });
+
+    // Fix: Ensure the 'admin' user is actually an admin if we just added the role column
+    db.prepare("UPDATE users SET role = 'admin' WHERE username = 'admin'").run();
+
+    // If no admin exists after migration, make the first user an admin
+    const adminCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'admin'").get().count;
+    if (adminCount === 0) {
+      db.prepare("UPDATE users SET role = 'admin' WHERE id = (SELECT id FROM users ORDER BY id ASC LIMIT 1)").run();
+    }
+
+    db.prepare("UPDATE users SET permissions = ? WHERE role = 'admin'").run(fullPermissions);
+    db.prepare("UPDATE users SET permissions = ? WHERE role = 'user' AND (permissions IS NULL OR permissions = '')").run(defaultUserPermissions);
+    console.log('[Migration] Updated default permissions for users (Admin fixed)');
+
+    // Migration: Associate historical tasks with the first admin
+    try {
+      const firstAdmin = db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id ASC LIMIT 1").get();
+      if (firstAdmin) {
+        db.prepare("UPDATE tasks SET user_id = ? WHERE user_id IS NULL").run(firstAdmin.id);
+        db.prepare("UPDATE task_history SET user_id = ? WHERE user_id IS NULL").run(firstAdmin.id);
+        db.prepare("UPDATE series_subscriptions SET user_id = ? WHERE user_id IS NULL").run(firstAdmin.id);
+        console.log(`[Migration] Associated historical tasks with admin ID: ${firstAdmin.id}`);
+      }
+    } catch (e) {
+      console.error('[Migration] Failed to associate historical tasks:', e.message);
+    }
+  } catch (e) {
+    console.error('[Migration] Failed to set default permissions:', e.message);
+  }
+
+  // Migration for User Status (2026-01-10)
+  try {
+    db.prepare("ALTER TABLE users ADD COLUMN enabled INTEGER DEFAULT 1").run();
+    console.log('[Migration] Added enabled column to users table');
+  } catch (e) { /* Column might already exist */ }
+
+  // Migration for Series Score (2026-01-10)
+  try {
+    db.prepare("ALTER TABLE series_subscriptions ADD COLUMN vote_average REAL DEFAULT 0").run();
+    console.log('[Migration] Added vote_average column to series_subscriptions table');
+  } catch (e) { /* Column might already exist */ }
+
+  // Final settings to ensure foreign keys
+  db.prepare('PRAGMA foreign_keys = ON').run();
   console.log('Database tables initialized');
 }
 

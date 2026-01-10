@@ -13,6 +13,7 @@ class TaskService {
     }
 
     getAllTasks() {
+        // RSS tasks are visible to all users, no user filtering
         return this._getDB().prepare('SELECT * FROM tasks ORDER BY enabled DESC, created_at DESC').all();
     }
 
@@ -21,7 +22,7 @@ class TaskService {
     }
 
     createTask(task) {
-        const { name, type = 'rss', cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled = 1, auto_disable_on_match } = task;
+        const { name, type = 'rss', cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled = 1, auto_disable_on_match, user_id } = task;
 
         // Smart auto-disable logic: if not explicitly set, determine based on category
         let finalAutoDisable = auto_disable_on_match;
@@ -33,8 +34,8 @@ class TaskService {
         }
 
         const info = this._getDB().prepare(
-            'INSERT INTO tasks (name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled, auto_disable_on_match) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        ).run(name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled, finalAutoDisable);
+            'INSERT INTO tasks (name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled, auto_disable_on_match, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(name, type, cron, site_id, rss_url, filter_config, client_id, save_path, category, enabled, finalAutoDisable, user_id);
         return info.lastInsertRowid;
     }
 

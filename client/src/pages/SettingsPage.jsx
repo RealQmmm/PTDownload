@@ -9,7 +9,7 @@ import PathManager from '../components/PathManager';
 import CategoryMapEditor from '../components/CategoryMapEditor';
 
 const SettingsPage = () => {
-    const { darkMode, themeMode, setThemeMode, siteName, setSiteName, authenticatedFetch } = useTheme();
+    const { darkMode, themeMode, setThemeMode, siteName, setSiteName, authenticatedFetch, user: me } = useTheme();
     const [subTab, setSubTab] = useState('general');
     const [tempSiteName, setTempSiteName] = useState(siteName);
     const [logSettings, setLogSettings] = useState({
@@ -68,11 +68,38 @@ const SettingsPage = () => {
     // Create series subfolder
     const [createSeriesSubfolder, setCreateSeriesSubfolder] = useState(false);
 
+    // User management states
+    const [users, setUsers] = useState([]);
+    const [currentUser, setCurrentUser] = useState(null);
+    const [showAddUserModal, setShowAddUserModal] = useState(false);
+    const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [newUserData, setNewUserData] = useState({ username: '', password: '', confirmPassword: '', role: 'user' });
+    const [newPassword, setNewPassword] = useState('');
+    const [editingUsername, setEditingUsername] = useState(false);
+    const [tempUsername, setTempUsername] = useState('');
+    const [showPermissionsModal, setShowPermissionsModal] = useState(false);
+    const [selectedPermissions, setSelectedPermissions] = useState({ menus: [], settings: [] });
+
+    // Handle subTab permission redirection
+    useEffect(() => {
+        if (me?.role !== 'admin') {
+            const permissions = me?.permissions ? (typeof me.permissions === 'string' ? JSON.parse(me.permissions) : me.permissions) : null;
+            const allowedSettings = permissions?.settings || ['general', 'about'];
+            if (!allowedSettings.includes(subTab)) {
+                if (allowedSettings.length > 0) {
+                    setSubTab(allowedSettings[0]);
+                }
+            }
+        }
+    }, [me, subTab]);
+
 
     // Theme helpers
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
     const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
     const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
+    const bgSecondary = darkMode ? 'bg-gray-900' : 'bg-gray-50';
     const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
     const activeSelectionClass = darkMode ? 'border-blue-500 bg-blue-900/20' : 'border-blue-500 bg-blue-50';
 
@@ -255,6 +282,13 @@ const SettingsPage = () => {
         }
         if (passwordData.newPassword !== passwordData.confirmPassword) {
             setMessage({ type: 'error', text: '两次输入的新密码不一致' });
+            setTimeout(() => setMessage(null), 3000);
+            return;
+        }
+
+        const pwRegex = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+        if (!pwRegex.test(passwordData.newPassword)) {
+            setMessage({ type: 'error', text: '密码不符合规范：长度需≥8位，且同时包含字母、数字和符号' });
             setTimeout(() => setMessage(null), 3000);
             return;
         }
@@ -615,6 +649,255 @@ const SettingsPage = () => {
         }
     };
 
+    // ==================== User Management Functions ====================
+
+    const fetchUsers = async () => {
+        try {
+            const res = await authenticatedFetch('/api/auth/users');
+            if (res.ok) {
+                const data = await res.json();
+                setUsers(data);
+            }
+        } catch (err) {
+            console.error('Failed to fetch users:', err);
+        }
+    };
+
+    const fetchCurrentUser = async () => {
+        try {
+            const res = await authenticatedFetch('/api/auth/me');
+            if (res.ok) {
+                const data = await res.json();
+                setCurrentUser(data.user);
+                setTempUsername(data.user?.username || '');
+            }
+        } catch (err) {
+            console.error('Failed to fetch current user:', err);
+        }
+    };
+
+    // Load users and current user when security tab is active
+    useEffect(() => {
+        if (subTab === 'security') {
+            fetchCurrentUser();
+            fetchUsers();
+        }
+    }, [subTab]);
+
+    const handleChangeUsername = async () => {
+        if (!tempUsername || tempUsername.length < 2) {
+            setMessage({ type: 'error', text: '用户名至少需要2个字符' });
+            setTimeout(() => setMessage(null), 3000);
+            return;
+        }
+        setSaving(true);
+        try {
+            const res = await authenticatedFetch('/api/auth/change-username', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ newUsername: tempUsername })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: '用户名修改成功，请重新登录' });
+                setCurrentUser({ ...currentUser, username: data.username });
+                setEditingUsername(false);
+                // Trigger re-login after 2 seconds
+                setTimeout(() => {
+                    localStorage.removeItem('token');
+                    window.location.reload();
+                }, 2000);
+            } else {
+                setMessage({ type: 'error', text: data.error || '修改失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const handleAddUser = async () => {
+        if (!newUserData.username || !newUserData.password) {
+            setMessage({ type: 'error', text: '请填写用户名和密码' });
+            setTimeout(() => setMessage(null), 3000);
+            return;
+        }
+        if (newUserData.password !== newUserData.confirmPassword) {
+            setMessage({ type: 'error', text: '两次输入的密码不一致' });
+            setTimeout(() => setMessage(null), 3000);
+            return;
+        }
+        if (newUserData.password.length < 8 || !/^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(newUserData.password)) {
+            setMessage({ type: 'error', text: '密码长度需≥8位，并包含字母、数字及符号' });
+            setTimeout(() => setMessage(null), 3000);
+            return;
+        }
+        setSaving(true);
+        try {
+            const res = await authenticatedFetch('/api/auth/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: newUserData.username,
+                    password: newUserData.password,
+                    role: newUserData.role
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: '用户创建成功' });
+                setShowAddUserModal(false);
+                setNewUserData({ username: '', password: '', confirmPassword: '', role: 'user' });
+                fetchUsers();
+            } else {
+                setMessage({ type: 'error', text: data.error || '创建失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const handleDeleteUser = async (userId, username) => {
+        if (!confirm(`确定要删除用户 "${username}" 吗？此操作不可撤销。`)) return;
+        setSaving(true);
+        try {
+            const res = await authenticatedFetch(`/api/auth/users/${userId}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: '用户已删除' });
+                fetchUsers();
+            } else {
+                setMessage({ type: 'error', text: data.error || '删除失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const handleToggleRole = async (userId, currentRole) => {
+        const newRole = currentRole === 'admin' ? 'user' : 'admin';
+        setSaving(true);
+        try {
+            const res = await authenticatedFetch(`/api/auth/users/${userId}/role`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: newRole })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: `用户角色已更新为 ${newRole === 'admin' ? '管理员' : '普通用户'}` });
+                fetchUsers();
+            } else {
+                setMessage({ type: 'error', text: data.error || '更新失败' });
+            }
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const handleToggleUserStatus = async (userId, currentEnabled) => {
+        setSaving(true);
+        try {
+            const res = await authenticatedFetch(`/api/auth/users/${userId}/status`, {
+                method: 'PUT'
+            });
+            if (res.ok) {
+                setMessage({ type: 'success', text: `用户已${currentEnabled === 1 ? '禁用' : '启用'}` });
+                fetchUsers();
+            } else {
+                const data = await res.json();
+                setMessage({ type: 'error', text: data.error || '更新失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+
+    const handleResetPassword = async () => {
+        if (!newPassword || newPassword.length < 8 || !/^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(newPassword)) {
+            setMessage({ type: 'error', text: '密码长度需≥8位，并包含字母、数字及符号' });
+            setTimeout(() => setMessage(null), 3000);
+            return;
+        }
+        setSaving(true);
+        try {
+            const res = await authenticatedFetch(`/api/auth/users/${selectedUser.id}/reset-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ newPassword })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: '密码重置成功' });
+                setShowResetPasswordModal(false);
+                setNewPassword('');
+                setSelectedUser(null);
+            } else {
+                setMessage({ type: 'error', text: data.error || '重置失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const handleOpenPermissions = (user) => {
+        setSelectedUser(user);
+        let perms = { menus: [], settings: [] };
+        if (user.permissions) {
+            try {
+                perms = typeof user.permissions === 'string' ? JSON.parse(user.permissions) : user.permissions;
+            } catch (e) {
+                console.error('Parse permissions error', e);
+            }
+        }
+        // Ensure arrays exist
+        perms.menus = perms.menus || [];
+        perms.settings = perms.settings || [];
+        setSelectedPermissions(perms);
+        setShowPermissionsModal(true);
+    };
+
+    const handleSavePermissions = async () => {
+        setSaving(true);
+        try {
+            const res = await authenticatedFetch(`/api/auth/users/${selectedUser.id}/permissions`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ permissions: selectedPermissions })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: '权限更新成功' });
+                setShowPermissionsModal(false);
+                fetchUsers(); // Refresh user list
+            } else {
+                setMessage({ type: 'error', text: data.error || '更新失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
 
     const renderContent = () => {
         switch (subTab) {
@@ -816,32 +1099,6 @@ const SettingsPage = () => {
                             </div>
                         </Card>
 
-
-                        {/* Theme Section */}
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700">
-                            <div>
-                                <p className={`text-sm font-medium ${textPrimary}`}>视觉主题</p>
-                                <p className={`text-[10px] ${textSecondary}`}>选择您偏好的界面显示模式</p>
-                            </div>
-                            <div className={`flex items-center ${darkMode ? 'bg-gray-700/50' : 'bg-gray-100'} p-1 rounded-lg mt-2 sm:mt-0`}>
-                                {[
-                                    { id: 'light', name: '浅色', icon: '☀️' },
-                                    { id: 'dark', name: '深色', icon: '🌙' },
-                                    { id: 'system', name: '系统', icon: '🖥️' }
-                                ].map((mode) => (
-                                    <button
-                                        key={mode.id}
-                                        onClick={() => setThemeMode(mode.id)}
-                                        className={`px-3 py-1.5 text-xs rounded-md transition-all flex items-center space-x-1.5 ${themeMode === mode.id
-                                            ? 'bg-blue-600 text-white shadow-sm font-bold'
-                                            : `${textSecondary} hover:${textPrimary}`}`}
-                                    >
-                                        <span>{mode.icon}</span>
-                                        <span>{mode.name}</span>
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
 
                         <div className="flex justify-end">
                             <Button onClick={handleSaveGeneral} disabled={saving}>
@@ -1242,34 +1499,412 @@ const SettingsPage = () => {
                             </div>
                         )}
 
-                        <Card className="space-y-6">
-                            <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider`}>修改密码</h3>
-                            <div className="space-y-4 max-w-md">
+                        {/* Current Account Info */}
+                        <Card className="space-y-4">
+                            <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                <span className="mr-2">👤</span> 当前账户
+                            </h3>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-4">
+                                    <div className={`w-12 h-12 rounded-full ${darkMode ? 'bg-blue-900/50' : 'bg-blue-100'} flex items-center justify-center`}>
+                                        <span className="text-xl">{currentUser?.username?.charAt(0)?.toUpperCase() || '?'}</span>
+                                    </div>
+                                    <div>
+                                        {editingUsername ? (
+                                            <div className="flex items-center space-x-2">
+                                                <Input
+                                                    value={tempUsername}
+                                                    onChange={(e) => setTempUsername(e.target.value)}
+                                                    className="w-40"
+                                                    containerClassName="mb-0"
+                                                />
+                                                <Button size="sm" onClick={handleChangeUsername} disabled={saving}>
+                                                    保存
+                                                </Button>
+                                                <Button size="sm" variant="secondary" onClick={() => {
+                                                    setEditingUsername(false);
+                                                    setTempUsername(currentUser?.username || '');
+                                                }}>
+                                                    取消
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center space-x-2">
+                                                <span className={`font-medium ${textPrimary}`}>{currentUser?.username || '加载中...'}</span>
+                                                <button
+                                                    onClick={() => setEditingUsername(true)}
+                                                    className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
+                                                >
+                                                    修改用户名
+                                                </button>
+                                            </div>
+                                        )}
+                                        <span className={`text-xs ${textSecondary}`}>
+                                            角色: {currentUser?.role === 'admin' ? '管理员' : '普通用户'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </Card>
+
+                        {/* Change Password */}
+                        <Card className="space-y-4">
+                            <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                <span className="mr-2">🔐</span> 修改密码
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-2xl">
                                 <Input
                                     label="当前密码"
                                     type="password"
                                     value={passwordData.oldPassword}
                                     onChange={(e) => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
+                                    placeholder="请输入当前密码"
                                 />
                                 <Input
                                     label="新密码"
                                     type="password"
                                     value={passwordData.newPassword}
                                     onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                                    placeholder="≥8位，需含字母/数字/符号"
                                 />
                                 <Input
                                     label="确认新密码"
                                     type="password"
                                     value={passwordData.confirmPassword}
                                     onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                                    placeholder="请再次输入新密码"
                                 />
                             </div>
-                            <div className="pt-2">
-                                <Button onClick={handleSavePassword} disabled={saving}>
+                            <div>
+                                <Button onClick={handleSavePassword} disabled={saving} size="sm">
                                     {saving ? '保存中...' : '修改密码'}
                                 </Button>
                             </div>
                         </Card>
+
+                        {/* User Management - Admin Only */}
+                        {currentUser?.role === 'admin' && (
+                            <Card className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                        <span className="mr-2">👥</span> 用户管理
+                                    </h3>
+                                    <Button size="sm" onClick={() => setShowAddUserModal(true)}>
+                                        + 添加用户
+                                    </Button>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className={`border-b ${borderColor}`}>
+                                                <th className={`text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>用户名</th>
+                                                <th className={`text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>角色</th>
+                                                <th className={`hidden sm:table-cell text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>创建时间</th>
+                                                <th className={`text-right py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {users.map(user => (
+                                                <tr key={user.id} className={`border-b ${borderColor} ${darkMode ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50'}`}>
+                                                    <td className={`py-3 px-2 ${textPrimary} whitespace-nowrap md:whitespace-normal`}>
+                                                        <div className="flex items-center space-x-2">
+                                                            <div className={`w-8 h-8 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center text-xs shrink-0`}>
+                                                                {user.username.charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <span className="truncate max-w-[100px] sm:max-w-none">{user.username}</span>
+                                                            {user.id === me?.id && (
+                                                                <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 shrink-0">当前</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3 px-2">
+                                                        <div className="flex flex-col space-y-1">
+                                                            <span className={`px-2 py-0.5 rounded text-xs w-fit ${user.role === 'admin'
+                                                                ? 'bg-purple-500/20 text-purple-400'
+                                                                : 'bg-gray-500/20 text-gray-400'
+                                                                }`}>
+                                                                {user.role === 'admin' ? '管理员' : '普通用户'}
+                                                            </span>
+                                                            {user.enabled === 0 && (
+                                                                <span className="px-2 py-0.5 rounded text-[10px] w-fit bg-rose-500/20 text-rose-500">
+                                                                    已禁用
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className={`hidden sm:table-cell py-3 px-2 ${textSecondary} text-xs whitespace-nowrap`}>
+                                                        {(() => {
+                                                            if (!user.created_at) return '-';
+                                                            const date = new Date(user.created_at);
+                                                            return isNaN(date.getTime()) ? user.created_at : date.toLocaleString();
+                                                        })()}
+                                                    </td>
+                                                    <td className="py-3 px-2 text-right whitespace-nowrap">
+                                                        {user.id !== currentUser?.id && (
+                                                            <div className="flex items-center justify-end space-x-2">
+                                                                <button
+                                                                    onClick={() => handleOpenPermissions(user)}
+                                                                    className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-blue-900/30 hover:bg-blue-900/50' : 'bg-blue-100 hover:bg-blue-200'} text-blue-500`}
+                                                                    disabled={saving}
+                                                                >
+                                                                    权限
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleToggleRole(user.id, user.role)}
+                                                                    className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'} ${textSecondary}`}
+                                                                    disabled={saving}
+                                                                >
+                                                                    {user.role === 'admin' ? '降为用户' : '升为管理员'}
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleToggleUserStatus(user.id, user.enabled)}
+                                                                    className={`text-xs px-2 py-1 rounded ${user.enabled === 1 ? 'bg-orange-900/10 text-orange-500 hover:bg-orange-900/20' : 'bg-emerald-900/10 text-emerald-500 hover:bg-emerald-900/20'}`}
+                                                                    disabled={saving || user.id === me?.id}
+                                                                >
+                                                                    {user.enabled === 1 ? '禁用' : '启用'}
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setSelectedUser(user);
+                                                                        setShowResetPasswordModal(true);
+                                                                    }}
+                                                                    className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-yellow-900/30 hover:bg-yellow-900/50' : 'bg-yellow-100 hover:bg-yellow-200'} text-yellow-500`}
+                                                                    disabled={saving}
+                                                                >
+                                                                    重置密码
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleDeleteUser(user.id, user.username)}
+                                                                    className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-red-900/30 hover:bg-red-900/50' : 'bg-red-100 hover:bg-red-200'} text-red-500`}
+                                                                    disabled={saving}
+                                                                >
+                                                                    删除
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </Card>
+                        )}
+
+                        {/* Add User Modal */}
+                        {showAddUserModal && (
+                            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                                <div className={`${bgMain} rounded-lg p-6 w-full max-w-md mx-4 shadow-xl`}>
+                                    <h3 className={`text-lg font-bold ${textPrimary} mb-4`}>添加新用户</h3>
+                                    <div className="space-y-4">
+                                        <Input
+                                            label="用户名"
+                                            value={newUserData.username}
+                                            onChange={(e) => setNewUserData({ ...newUserData, username: e.target.value })}
+                                            placeholder="请输入用户名 (≥2位)"
+                                        />
+                                        <Input
+                                            label="密码"
+                                            type="password"
+                                            value={newUserData.password}
+                                            onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
+                                            placeholder="需包含字母、数字及符号 (≥8位)"
+                                        />
+                                        <Input
+                                            label="确认密码"
+                                            type="password"
+                                            value={newUserData.confirmPassword}
+                                            onChange={(e) => setNewUserData({ ...newUserData, confirmPassword: e.target.value })}
+                                            placeholder="请再次输入密码"
+                                        />
+                                        <div>
+                                            <label className={`block text-xs font-bold ${textSecondary} mb-2`}>角色</label>
+                                            <div className="flex space-x-4">
+                                                <label className="flex items-center space-x-2 cursor-pointer">
+                                                    <input
+                                                        type="radio"
+                                                        name="role"
+                                                        value="user"
+                                                        checked={newUserData.role === 'user'}
+                                                        onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value })}
+                                                        className="w-4 h-4"
+                                                    />
+                                                    <span className={textPrimary}>普通用户</span>
+                                                </label>
+                                                <label className="flex items-center space-x-2 cursor-pointer">
+                                                    <input
+                                                        type="radio"
+                                                        name="role"
+                                                        value="admin"
+                                                        checked={newUserData.role === 'admin'}
+                                                        onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value })}
+                                                        className="w-4 h-4"
+                                                    />
+                                                    <span className={textPrimary}>管理员</span>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end space-x-2 mt-6">
+                                        <Button variant="secondary" onClick={() => {
+                                            setShowAddUserModal(false);
+                                            setNewUserData({ username: '', password: '', confirmPassword: '', role: 'user' });
+                                        }}>
+                                            取消
+                                        </Button>
+                                        <Button onClick={handleAddUser} disabled={saving}>
+                                            {saving ? '创建中...' : '创建用户'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {showResetPasswordModal && selectedUser && (
+                            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                                <div className={`${bgMain} rounded-lg p-6 w-full max-md mx-4 shadow-xl`}>
+                                    <h3 className={`text-lg font-bold ${textPrimary} mb-4`}>
+                                        重置密码 - {selectedUser.username}
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <Input
+                                            label="新密码"
+                                            type="password"
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="需含字母/数字/符号 (≥8位)"
+                                        />
+                                    </div>
+                                    <div className="flex justify-end space-x-2 mt-6">
+                                        <Button variant="secondary" onClick={() => {
+                                            setShowResetPasswordModal(false);
+                                            setNewPassword('');
+                                            setSelectedUser(null);
+                                        }}>
+                                            取消
+                                        </Button>
+                                        <Button onClick={handleResetPassword} disabled={saving}>
+                                            {saving ? '重置中...' : '重置密码'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Permissions Management Modal */}
+                        {showPermissionsModal && selectedUser && (
+                            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                                <div className={`${bgMain} rounded-xl p-6 w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}>
+                                    <div className="mb-4 flex justify-between items-center">
+                                        <h3 className={`text-xl font-bold ${textPrimary}`}>
+                                            权限配置 - {selectedUser.username}
+                                        </h3>
+                                        <div className={`px-2 py-1 rounded text-xs ${selectedUser.role === 'admin' ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                                            {selectedUser.role === 'admin' ? '管理员 (拥有所有权限)' : '普通用户'}
+                                        </div>
+                                    </div>
+
+                                    {selectedUser.role === 'admin' ? (
+                                        <div className={`flex-1 flex items-center justify-center p-8 border ${borderColor} rounded-lg bg-purple-500/5 mb-6`}>
+                                            <p className={textSecondary}>管理员角色默认拥有系统所有功能的访问权限，无需额外配置。</p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-8 mb-6">
+                                            {/* Primary Menus */}
+                                            <div>
+                                                <h4 className={`text-sm font-bold ${textPrimary} mb-4 flex items-center`}>
+                                                    <span className="mr-2">📁</span> 主菜单访问权限
+                                                </h4>
+                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                    {[
+                                                        { id: 'dashboard', name: '仪表盘', icon: '📊' },
+                                                        { id: 'search', name: '资源搜索', icon: '🔍' },
+                                                        { id: 'series', name: '我的追剧', icon: '📺' },
+                                                        { id: 'tasks', name: '自动任务', icon: '⏰' },
+                                                        { id: 'sites', name: '站点管理', icon: '🌐' },
+                                                        { id: 'clients', name: '下载客户端', icon: '📥' },
+                                                        { id: 'settings', name: '系统设置', icon: '⚙️' },
+                                                        { id: 'help', name: '使用帮助', icon: '❓' },
+                                                    ].map(menu => (
+                                                        <label key={menu.id} className={`flex items-center p-3 rounded-lg border cursor-pointer transition-all ${selectedPermissions.menus.includes(menu.id) ? activeSelectionClass : `${bgMain} ${borderColor} hover:border-blue-400`}`}>
+                                                            <input
+                                                                type="checkbox"
+                                                                className="hidden"
+                                                                checked={selectedPermissions.menus.includes(menu.id)}
+                                                                onChange={(e) => {
+                                                                    const checked = e.target.checked;
+                                                                    setSelectedPermissions(prev => ({
+                                                                        ...prev,
+                                                                        menus: checked
+                                                                            ? [...prev.menus, menu.id]
+                                                                            : prev.menus.filter(id => id !== menu.id)
+                                                                    }));
+                                                                }}
+                                                            />
+                                                            <span className="mr-2">{menu.icon}</span>
+                                                            <span className="text-sm font-medium">{menu.name}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Settings Sub-menus (Only applicable if 'settings' is enabled) */}
+                                            <div className={`${selectedPermissions.menus.includes('settings') ? 'opacity-100' : 'opacity-40 grayscale pointer-events-none'} transition-all`}>
+                                                <h4 className={`text-sm font-bold ${textPrimary} mb-4 flex items-center`}>
+                                                    <span className="mr-2">🛠️</span> 系统设置子项权限
+                                                </h4>
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                                    {[
+                                                        { id: 'general', name: '通用', icon: '⚙️' },
+                                                        { id: 'category', name: '下载', icon: '⚡' },
+                                                        { id: 'notifications', name: '通知', icon: '🔔' },
+                                                        { id: 'backup', name: '备份', icon: '💾' },
+                                                        { id: 'maintenance', name: '维护', icon: '🛠️' },
+                                                        { id: 'network', name: '网络', icon: '🌐' },
+                                                        { id: 'logs', name: '日志', icon: '📜' },
+                                                        { id: 'security', name: '安全', icon: '🔒' },
+                                                        { id: 'about', name: '关于', icon: 'ℹ️' }
+                                                    ].map(setting => (
+                                                        <label key={setting.id} className={`flex items-center p-3 rounded-lg border cursor-pointer transition-all ${selectedPermissions.settings.includes(setting.id) ? activeSelectionClass : `${bgMain} ${borderColor} hover:border-blue-400`}`}>
+                                                            <input
+                                                                type="checkbox"
+                                                                className="hidden"
+                                                                checked={selectedPermissions.settings.includes(setting.id)}
+                                                                onChange={(e) => {
+                                                                    const checked = e.target.checked;
+                                                                    setSelectedPermissions(prev => ({
+                                                                        ...prev,
+                                                                        settings: checked
+                                                                            ? [...prev.settings, setting.id]
+                                                                            : prev.settings.filter(id => id !== setting.id)
+                                                                    }));
+                                                                }}
+                                                            />
+                                                            <span className="mr-2">{setting.icon}</span>
+                                                            <span className="text-sm font-medium">{setting.name}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                                <p className="text-[10px] text-yellow-500 mt-2">提示: 禁用主菜单的 "系统设置" 后，以上配置将失效。</p>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-end space-x-2 pt-4 border-t border-gray-100 dark:border-gray-800">
+                                        <Button variant="secondary" onClick={() => {
+                                            setShowPermissionsModal(false);
+                                            setSelectedUser(null);
+                                        }}>
+                                            取消
+                                        </Button>
+                                        <Button onClick={handleSavePermissions} disabled={saving}>
+                                            {saving ? '保存中...' : '保存权限'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
 
@@ -1505,7 +2140,16 @@ const SettingsPage = () => {
                 );
 
             case 'logs':
-                return <div key="logs"><LogsPage /></div>;
+                return (
+                    <div className="space-y-8">
+                        <div key="logs"><LogsPage /></div>
+                        {me?.role === 'admin' && (
+                            <div className="pt-8 border-t border-gray-700/30">
+                                <LoginLogsView authenticatedFetch={authenticatedFetch} darkMode={darkMode} />
+                            </div>
+                        )}
+                    </div>
+                );
 
             default:
                 return null;
@@ -1530,7 +2174,12 @@ const SettingsPage = () => {
                             { id: 'logs', name: '日志', icon: '📜' },
                             { id: 'security', name: '安全', icon: '🔒' },
                             { id: 'about', name: '关于', icon: 'ℹ️' }
-                        ].map(item => (
+                        ].filter(item => {
+                            if (me?.role === 'admin') return true;
+                            const permissions = me?.permissions ? (typeof me.permissions === 'string' ? JSON.parse(me.permissions) : me.permissions) : null;
+                            const allowedSettings = permissions?.settings || ['general', 'about'];
+                            return allowedSettings.includes(item.id);
+                        }).map(item => (
                             <button
                                 key={item.id}
                                 onClick={() => setSubTab(item.id)}
@@ -1555,5 +2204,90 @@ const SettingsPage = () => {
     );
 };
 
-export default SettingsPage;
+// New component for Login Logs (Outside to avoid re-mounting)
+const LoginLogsView = ({ authenticatedFetch, darkMode }) => {
+    const [loginLogs, setLoginLogs] = useState([]);
+    const [loading, setLoading] = useState(true);
 
+    const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
+    const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
+    const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
+    const bgSecondary = darkMode ? 'bg-gray-900' : 'bg-gray-50';
+    const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
+
+    const fetchLoginLogs = async () => {
+        setLoading(true);
+        try {
+            const res = await authenticatedFetch('/api/auth/login-logs');
+            if (res.ok) {
+                const data = await res.json();
+                setLoginLogs(Array.isArray(data) ? data : []);
+            }
+        } catch (err) {
+            console.error('Fetch login logs failed:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchLoginLogs();
+    }, []);
+
+    return (
+        <div className="space-y-4">
+            <div className="flex justify-between items-center">
+                <h3 className={`text-lg font-bold ${textPrimary}`}>登录日志</h3>
+                <Button size="sm" variant="ghost" onClick={fetchLoginLogs} disabled={loading}>
+                    <svg className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                        <path d="M16 16h5v5" />
+                    </svg>
+                    刷新
+                </Button>
+            </div>
+            <div className="overflow-x-auto border rounded-xl overflow-hidden shadow-sm">
+                <table className="w-full text-sm">
+                    <thead>
+                        <tr className={bgSecondary}>
+                            <th className={`text-left p-3 ${textSecondary} font-medium`}>时间</th>
+                            <th className={`text-left p-3 ${textSecondary} font-medium`}>用户</th>
+                            <th className={`text-left p-3 ${textSecondary} font-medium`}>状态</th>
+                            <th className={`text-left p-3 ${textSecondary} font-medium`}>IP</th>
+                            <th className={`text-left p-3 ${textSecondary} font-medium`}>设备/系统/浏览器</th>
+                        </tr>
+                    </thead>
+                    <tbody className={bgMain}>
+                        {loginLogs.map(log => (
+                            <tr key={log.id} className={`border-t ${borderColor} hover:bg-gray-50/50 dark:hover:bg-gray-700/30`}>
+                                <td className={`p-3 ${textSecondary} text-xs`}>{new Date(log.created_at).toLocaleString()}</td>
+                                <td className={`p-3 ${textPrimary} font-medium`}>{log.username || 'Unknown'}</td>
+                                <td className="p-3">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] ${log.status === 'success' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'}`}>
+                                        {log.status === 'success' ? '登录成功' : `失败: ${log.message || '未知'}`}
+                                    </span>
+                                </td>
+                                <td className={`p-3 ${textSecondary} font-mono text-xs`}>{log.ip}</td>
+                                <td className={`p-3 ${textSecondary} text-xs`}>
+                                    <div className="flex flex-col">
+                                        <span>{log.device_name || '未知设备'}</span>
+                                        <span className="opacity-60">{log.os || '未知系统'} / {log.browser || '未知浏览器'}</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                        {loginLogs.length === 0 && !loading && (
+                            <tr>
+                                <td colSpan="5" className="p-8 text-center text-gray-500 italic">暂无登录记录</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+export default SettingsPage;

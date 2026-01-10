@@ -57,7 +57,8 @@ class MetadataService {
                     name: bestMatch.name,
                     original_name: bestMatch.original_name, // Include original matching name (e.g. English)
                     poster_path: bestMatch.poster_path ? `${config.imageBaseUrl}${bestMatch.poster_path}` : null,
-                    overview: bestMatch.overview
+                    overview: bestMatch.overview,
+                    vote_average: bestMatch.vote_average
                 };
                 require('./loggerService').log(`[TMDB] 刮削成功: ${query} => ${bestMatch.name}`, 'success');
                 return result;

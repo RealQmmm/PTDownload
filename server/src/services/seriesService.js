@@ -17,7 +17,8 @@ class SeriesService {
     }
 
     async getAllSubscriptions() {
-        // Get subscriptions with episode count
+        // All users can see all series subscriptions (no user filtering)
+        // But download records (task_history) remain user-isolated
         const subs = this._getDB().prepare(`
             SELECT s.*, 
                    t.enabled as task_enabled, 
@@ -136,7 +137,7 @@ class SeriesService {
      * 2. Create RSS Task
      * 3. Save Subscription
      */
-    async createSubscription(data) {
+    async createSubscription(data, userId = null) {
         const { name, season, quality, rss_source_id, save_path, client_id, category = 'Series' } = data;
 
         // Auto-fetch metadata
@@ -207,13 +208,14 @@ class SeriesService {
             client_id,
             save_path: finalSavePath,
             category,
-            enabled: 1
+            enabled: 1,
+            user_id: userId
         });
 
         // 3. Save Subscription with Metadata
         const info = this._getDB().prepare(`
-            INSERT INTO series_subscriptions(name, alias, season, quality, smart_regex, rss_source_id, task_id, poster_path, tmdb_id, overview, total_episodes)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO series_subscriptions(name, alias, season, quality, smart_regex, rss_source_id, task_id, poster_path, tmdb_id, overview, vote_average, total_episodes, user_id)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             name,
             metadata ? metadata.original_name : null, // Save alias
@@ -221,7 +223,9 @@ class SeriesService {
             metadata ? metadata.poster_path : null,
             metadata ? metadata.tmdb_id : null,
             metadata ? metadata.overview : null,
-            totalEpisodes
+            metadata ? metadata.vote_average : 0,
+            totalEpisodes,
+            userId
         );
 
         return info.lastInsertRowid;
@@ -465,7 +469,7 @@ class SeriesService {
 
                 this._getDB().prepare(`
                     UPDATE series_subscriptions 
-                    SET poster_path = ?, tmdb_id = ?, overview = ?, total_episodes = ?, alias = ?
+                    SET poster_path = ?, tmdb_id = ?, overview = ?, total_episodes = ?, alias = ?, vote_average = ?
                     WHERE id = ?
                 `).run(
                     metadata.poster_path,
@@ -473,9 +477,10 @@ class SeriesService {
                     metadata.overview,
                     totalEpisodes,
                     metadata.original_name, // Update alias
+                    metadata.vote_average || 0,
                     id
                 );
-                return { ...sub, ...metadata, total_episodes: totalEpisodes, alias: metadata.original_name };
+                return { ...sub, ...metadata, total_episodes: totalEpisodes, alias: metadata.original_name, vote_average: metadata.vote_average };
             }
         } catch (e) {
             console.error('Metadata refresh failed:', e);

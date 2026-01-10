@@ -17,7 +17,7 @@ router.get('/', async (req, res) => {
 // Create subscription
 router.post('/', async (req, res) => {
     try {
-        const id = await seriesService.createSubscription(req.body);
+        const id = await seriesService.createSubscription(req.body, req.user.id);
         res.json({ success: true, id });
     } catch (err) {
         console.error(err);

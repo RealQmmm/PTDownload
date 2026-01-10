@@ -441,8 +441,8 @@ class RSSService {
                             // === STEP 1: PRE-RECORD to task_history BEFORE submitting to downloader ===
                             // This prevents race condition with statsService scanning and marking as "manual download"
                             const timeUtils = require('../utils/timeUtils');
-                            const preRecordResult = db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, item_hash, download_time) VALUES (?, ?, ?, ?, ?, ?)')
-                                .run(task.id, item.guid, item.title, item.size, torrentHash, timeUtils.getLocalISOString());
+                            const preRecordResult = db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, item_hash, download_time, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+                                .run(task.id, item.guid, item.title, item.size, torrentHash, timeUtils.getLocalISOString(), task.user_id);
                             const preRecordId = preRecordResult.lastInsertRowid;
 
                             if (enableLogs) console.log(`[RSS] Pre-recorded to task_history (ID: ${preRecordId}): ${item.title}`);

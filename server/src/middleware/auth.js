@@ -23,4 +23,20 @@ const authMiddleware = (req, res, next) => {
     next();
 };
 
-module.exports = authMiddleware;
+const requireAdmin = (req, res, next) => {
+    // Get fresh user data from database to ensure role is up-to-date
+    const user = authService.getUserById(req.user.id);
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+    if (user.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    req.user = user; // Update req.user with fresh data
+    next();
+};
+
+module.exports = {
+    authMiddleware,
+    requireAdmin
+};

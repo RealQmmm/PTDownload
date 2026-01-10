@@ -112,18 +112,23 @@ router.get('/history', async (req, res) => {
 
 router.get('/today-downloads', (req, res) => {
     try {
-        const db = require('../db').getDB();
-        const timeUtils = require('../utils/timeUtils');
-        const todayLocalStr = timeUtils.getLocalDateString();
+        const isAdmin = req.user.role === 'admin';
+        const userId = req.user.id;
 
         // Query all finished and filter in JavaScript to handle mixed time formats
-        const allFinished = db.prepare(`
+        let query = `
             SELECT th.*, IFNULL(t.name, '手动下载') as task_name 
             FROM task_history th
             LEFT JOIN tasks t ON th.task_id = t.id
             WHERE th.is_finished = 1 AND th.finish_time IS NOT NULL
-            ORDER BY th.finish_time DESC
-        `).all();
+        `;
+
+        if (!isAdmin) {
+            query += ` AND (th.user_id = ${userId} OR (th.task_id IN (SELECT id FROM tasks WHERE user_id = ${userId})))`;
+        }
+
+        query += ` ORDER BY th.finish_time DESC`;
+        const allFinished = db.prepare(query).all();
 
         const downloads = allFinished.filter(row => {
             if (!row.finish_time) return false;
@@ -194,62 +199,93 @@ router.get('/dashboard', async (req, res) => {
         const memStats = statsService.getStats();
         const history = statsService.getHistory(7);
 
-        // Detailed Today's Downloads
-        // Note: finish_time in DB may be stored as:
-        //   1. UTC with Z suffix: "2026-01-06T20:35:18.000Z"
-        //   2. Local time without timezone: "2026-01-06T20:35:18"
-        // We need to handle both cases by comparing dates in local timezone
-        const timeUtils = require('../utils/timeUtils');
-        const todayLocalStr = timeUtils.getLocalDateString(); // e.g., '2026-01-07'
+        const isAdmin = req.user.role === 'admin';
+        const userId = req.user.id;
 
-        // Query all finished downloads and filter by local date in JavaScript
-        const allFinished = db.prepare(`
+        // 7-day history is global as requested
+        let userHistory = history;
+
+        // Aggregation logic for main stats
+        let userStats = {
+            todayDownloaded: memStats.todayDownloaded,
+            todayUploaded: memStats.todayUploaded,
+            histDownloaded: memStats.histDownloaded,
+            histUploaded: memStats.histUploaded
+        };
+
+        // Get user-owned hashes for filtering active torrents
+        let userHashes = [];
+        if (!isAdmin) {
+            const owned = db.prepare(`
+                SELECT DISTINCT item_hash FROM task_history 
+                WHERE user_id = ? OR task_id IN (SELECT id FROM tasks WHERE user_id = ?)
+            `).all(userId, userId);
+            userHashes = owned.map(h => h.item_hash).filter(h => !!h);
+        }
+
+        // Detailed Today's Downloads filtering
+        const timeUtils = require('../utils/timeUtils');
+        const todayLocalStr = timeUtils.getLocalDateString();
+
+        let historyQuery = `
             SELECT th.*, IFNULL(t.name, '手动下载') as task_name 
             FROM task_history th
             LEFT JOIN tasks t ON th.task_id = t.id
             WHERE th.is_finished = 1 AND th.finish_time IS NOT NULL
-            ORDER BY th.finish_time DESC
-        `).all();
+        `;
 
-        // Filter to today's downloads by comparing local date
+        if (!isAdmin) {
+            historyQuery += ` AND (th.user_id = ${userId} OR (th.task_id IN (SELECT id FROM tasks WHERE user_id = ${userId})))`;
+        }
+
+        historyQuery += ` ORDER BY th.finish_time DESC`;
+        const allFinished = db.prepare(historyQuery).all();
+
         const downloads = allFinished.filter(row => {
             if (!row.finish_time) return false;
             try {
-                // Parse finish_time
-                let finishDate;
-                if (row.finish_time.endsWith('Z') || row.finish_time.includes('+')) {
-                    // UTC format: convert to local
-                    finishDate = new Date(row.finish_time);
-                } else {
-                    // Assumed local time: append +08:00 to interpret as Beijing time
-                    finishDate = new Date(row.finish_time + '+08:00');
-                }
-                // Get local date string
-                const finishLocalStr = timeUtils.getLocalDateString(finishDate);
-                return finishLocalStr === todayLocalStr;
-            } catch (e) {
-                console.error('Error parsing finish_time:', row.finish_time, e);
-                return false;
-            }
+                let ft = row.finish_time;
+                if (!ft.endsWith('Z') && !ft.includes('+')) ft += '+08:00';
+                return timeUtils.getLocalDateString(new Date(ft)) === todayLocalStr;
+            } catch (e) { return false; }
         });
 
-        // Debug logging
-        console.log(`[TodayDownloads] Today: ${todayLocalStr}, Found: ${downloads.length} (from ${allFinished.length} finished)`);
-        if (downloads.length > 0) {
-            downloads.slice(0, 3).forEach(d => console.log(`  - ${d.finish_time} | ${d.item_title?.substring(0, 40)}`));
+        // For non-admins, we filter the torrent status list but KEEP stats global as requested
+        let displayClientStats = validClientStats;
+        let displayAggregatedStats = { ...aggregatedStats };
+
+        if (!isAdmin) {
+            // Filter the torrent list for each client
+            displayClientStats = validClientStats.map(client => {
+                const filteredTorrents = client.torrents.filter(t => userHashes.includes(t.hash));
+                const activeCount = filteredTorrents.filter(t =>
+                    ['downloading', 'uploading', 'stalledDL', 'stalledUP', 'pausedDL'].includes(t.state)
+                ).length;
+
+                return {
+                    ...client,
+                    torrents: filteredTorrents,
+                    activeTorrents: activeCount,
+                    totalTorrents: filteredTorrents.length
+                };
+            });
+
+            // Update aggregated counts for UI display (Active Taks count)
+            displayAggregatedStats.activeTorrents = displayClientStats.reduce((acc, c) => acc + c.activeTorrents, 0);
+            displayAggregatedStats.totalTorrents = displayClientStats.reduce((acc, c) => acc + c.totalTorrents, 0);
         }
 
         res.json({
             success: true,
             stats: {
-                ...aggregatedStats,
-                totalDownloaded: memStats.todayDownloaded,
-                totalUploaded: memStats.todayUploaded,
-                histDownloaded: memStats.histDownloaded,
-                histUploaded: memStats.histUploaded
+                ...displayAggregatedStats, // Speed is still global as it represents line capacity, or you can filter it too
+                totalDownloaded: userStats.todayDownloaded,
+                totalUploaded: userStats.todayUploaded,
+                histDownloaded: userStats.histDownloaded,
+                histUploaded: userStats.histUploaded
             },
-            clients: validClientStats,
-            history,
+            clients: displayClientStats,
+            history: userHistory,
             todayDownloads: downloads
         });
     } catch (err) {

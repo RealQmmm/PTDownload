@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDB } = require('../db');
+const { requireAdmin } = require('../middleware/auth');
 const notificationService = require('../services/notificationService');
 
 // Get public settings (no auth required)
@@ -68,8 +69,8 @@ router.post('/', (req, res) => {
 });
 
 
-// Export all data
-router.get('/export', (req, res) => {
+// Export all data (Admin only)
+router.get('/export', requireAdmin, (req, res) => {
     try {
         const db = getDB();
         // Tables to export (task_logs excluded as it's regenerated and can be large)
@@ -129,8 +130,8 @@ router.get('/export', (req, res) => {
     }
 });
 
-// Export complete database file
-router.get('/export-database', (req, res) => {
+// Export complete database file (Admin only)
+router.get('/export-database', requireAdmin, (req, res) => {
     try {
         const { getDBPath } = require('../db');
         const fs = require('fs');
@@ -175,8 +176,8 @@ router.get('/export-database', (req, res) => {
     }
 });
 
-// Import data
-router.post('/import', async (req, res) => {
+// Import data (Admin only)
+router.post('/import', requireAdmin, async (req, res) => {
     const data = req.body;
     if (!data || typeof data !== 'object') {
         return res.status(400).json({ error: 'Invalid backup data' });
@@ -237,6 +238,14 @@ router.post('/import', async (req, res) => {
                                     }
                                 }
 
+                                // Special handling for users: Auto-promote to admin if coming from legacy backup
+                                // This ensures users don't lose admin access after migrating from single-user versions
+                                if (table === 'users') {
+                                    if (!row.role || row.role === 'user') {
+                                        row.role = 'admin';
+                                    }
+                                }
+
                                 const values = validColumns.map(col => row[col]);
                                 insertStmt.run(...values);
                             });
@@ -293,8 +302,8 @@ router.post('/test-notify', async (req, res) => {
     }
 });
 
-// Maintenance: Sync historical data with downloader
-router.post('/maintenance/sync-history', async (req, res) => {
+// Maintenance: Sync historical data with downloader (Admin only)
+router.post('/maintenance/sync-history', requireAdmin, async (req, res) => {
     try {
         const statsService = require('../services/statsService');
         const result = await statsService.syncHistoryWithDownloader();
@@ -309,8 +318,8 @@ router.post('/maintenance/sync-history', async (req, res) => {
     }
 });
 
-// Maintenance: Clear task history and logs
-router.post('/maintenance/clear-tasks', (req, res) => {
+// Maintenance: Clear task history and logs (Admin only)
+router.post('/maintenance/clear-tasks', requireAdmin, (req, res) => {
     try {
         const db = getDB();
         const delLogs = db.prepare('DELETE FROM task_logs').run();
@@ -325,8 +334,8 @@ router.post('/maintenance/clear-tasks', (req, res) => {
     }
 });
 
-// Maintenance: Clear all heatmap data
-router.post('/maintenance/clear-heatmap', (req, res) => {
+// Maintenance: Clear all heatmap data (Admin only)
+router.post('/maintenance/clear-heatmap', requireAdmin, (req, res) => {
     try {
         const db = getDB();
         const delHeatmap = db.prepare('DELETE FROM site_daily_stats').run();

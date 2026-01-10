@@ -61,8 +61,10 @@ const SeriesPage = () => {
         season: '',
         quality: '',
         rss_source_id: '',
+        client_id: '',
         saved_path: '/downloads/series'
     });
+    const [clients, setClients] = useState([]);
     const [editId, setEditId] = useState(null);
     const [submitting, setSubmitting] = useState(false);
 
@@ -152,9 +154,25 @@ const SeriesPage = () => {
         }
     };
 
+    const fetchClients = async () => {
+        try {
+            const res = await authenticatedFetch('/api/clients');
+            const data = await res.json();
+            setClients(data || []);
+            if (data.length > 0 && !formData.client_id) {
+                // Find default client if exists
+                const def = data.find(c => c.is_default) || data[0];
+                setFormData(prev => ({ ...prev, client_id: def.id }));
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     useEffect(() => {
         fetchSubscriptions();
         fetchRssSources();
+        fetchClients();
     }, []);
 
     const handleDelete = async (id) => {
@@ -186,7 +204,8 @@ const SeriesPage = () => {
             const data = await res.json();
             if (res.ok) {
                 setShowModal(false);
-                setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', saved_path: '/downloads/series' });
+                const defClient = clients.find(c => c.is_default) || clients[0];
+                setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', client_id: defClient?.id || '', saved_path: '/downloads/series' });
                 setEditId(null);
                 fetchSubscriptions();
             } else {
@@ -213,7 +232,8 @@ const SeriesPage = () => {
     };
 
     const openCreateModal = () => {
-        setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', saved_path: '/downloads/series' });
+        const defClient = clients.find(c => c.is_default) || clients[0];
+        setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', client_id: defClient?.id || '', saved_path: '/downloads/series' });
         setEditId(null);
         setShowModal(true);
     };
@@ -263,7 +283,12 @@ const SeriesPage = () => {
                                     <div className="min-w-0 flex-1 mr-2">
                                         <div className="flex items-center gap-2 overflow-hidden">
                                             <h3 className={`text-lg font-bold ${textPrimary} truncate`} title={sub.name}>{sub.name}</h3>
-                                            <div className="flex gap-1 flex-shrink-0">
+                                            <div className="flex gap-1 flex-shrink-0 items-center">
+                                                {sub.vote_average > 0 && (
+                                                    <span className="bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center">
+                                                        <span className="mr-0.5">⭐</span>{sub.vote_average.toFixed(1)}
+                                                    </span>
+                                                )}
                                                 {sub.season && <span className="bg-purple-500/10 text-purple-500 px-1.5 py-0.5 rounded text-[10px] font-bold">S{sub.season}</span>}
                                                 {sub.quality && <span className="bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded text-[10px] font-bold">{sub.quality}</span>}
                                             </div>
@@ -387,20 +412,37 @@ const SeriesPage = () => {
                             <option value="720p">720p</option>
                         </Select>
                     </div>
-                    <Select
-                        label="RSS 订阅源"
-                        required
-                        value={formData.rss_source_id}
-                        onChange={e => setFormData({ ...formData, rss_source_id: e.target.value })}
-                        className="text-base sm:text-sm"
-                    >
-                        <option value="">请选择 RSS 源</option>
-                        {rssSources.map(src => (
-                            <option key={src.id} value={src.id}>
-                                {src.site_name ? `${src.site_name} - ${src.name}` : src.name}
-                            </option>
-                        ))}
-                    </Select>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Select
+                            label="RSS 订阅源"
+                            required
+                            value={formData.rss_source_id}
+                            onChange={e => setFormData({ ...formData, rss_source_id: e.target.value })}
+                            className="text-base sm:text-sm"
+                        >
+                            <option value="">请选择 RSS 源</option>
+                            {rssSources.map(src => (
+                                <option key={src.id} value={src.id}>
+                                    {src.site_name ? `${src.site_name} - ${src.name}` : src.name}
+                                </option>
+                            ))}
+                        </Select>
+
+                        <Select
+                            label="下载器"
+                            required
+                            value={formData.client_id}
+                            onChange={e => setFormData({ ...formData, client_id: e.target.value })}
+                            className="text-base sm:text-sm"
+                        >
+                            <option value="">请选择下载器</option>
+                            {clients.map(c => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name || c.type}
+                                </option>
+                            ))}
+                        </Select>
+                    </div>
                 </form>
             </Modal>
 

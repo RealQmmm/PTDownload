@@ -7,16 +7,16 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      # 内置数据目录（必需）
+      # 【必需】内置数据和配置目录
       - ./data:/data
-      # 外部数据库挂载（可选）
-      # 如果配置了这个映射，系统会自动使用外部数据库
-      # 如果不配置，系统会自动使用内置数据库 /data/ptdownload.db
-      #
-      # 使用方法：取消下面的注释并修改为你的实际路径
-      # - /share/Container/PTdownload:/external_db
-      # - /home/user/ptdb:/external_db
-      # - /mnt/nas/ptdownload:/external_db
+      # 【可选】外部数据库挂载（推荐）
+      # 为了平滑迁移或备份，建议将数据库映射到外部。
+      # 注意：容器内路径必须固定为 /external_db，系统会自动识别。
+      # 格式: [你的宿主机目录]:/external_db
+      # - /your/host/path/pt_db:/external_db
+
+      # 示例 (群晖/NAS 用户常用):
+      # - /volume1/docker/ptdownload/db:/external_db
 
     environment:
       - PORT=3000
