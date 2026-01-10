@@ -593,6 +593,302 @@ class RSSService {
 
         return true;
     }
-}
+    async executeSmartTask(task) {
+        const db = getDB();
+        const enableLogs = appConfig.isLogsEnabled();
 
-module.exports = new RSSService();
+        if (enableLogs) console.log(`[RSS-Smart] Executing smart task: ${task.name}`);
+
+        try {
+            // 1. Get ALL enabled RSS sources from enabled sites
+            let sources = db.prepare(`
+                SELECT r.url, r.site_id, r.name, s.name as site_name, s.cookie 
+                FROM rss_sources r
+                JOIN sites s ON r.site_id = s.id
+                WHERE s.enabled = 1
+            `).all();
+
+            if (sources.length === 0) {
+                if (enableLogs) console.log('[RSS-Smart] No enabled RSS sources found. Skipping.');
+                return;
+            }
+
+            // 1.1 Smart Scan Optimization: Filter out irrelevant sources
+            // Fetch rules from settings
+            const rulesRow = db.prepare("SELECT value FROM settings WHERE key = 'rss_filter_rules'").get();
+            let rules = {
+                exclude: ['movie', 'film', '电影', 'music', '音乐', 'game', '游戏', 'docu', '纪录', 'sport', '体育', 'book', '书籍', 'software', '软件'],
+                include: ['series', 'tv', '剧集', 'soap', 'show', 'all', '综合', '聚合']
+            };
+
+            if (rulesRow && rulesRow.value) {
+                try {
+                    const parsed = JSON.parse(rulesRow.value);
+                    if (Array.isArray(parsed.exclude)) rules.exclude = parsed.exclude;
+                    if (Array.isArray(parsed.include)) rules.include = parsed.include;
+                } catch (e) {
+                    console.error('[RSS-Smart] Failed to parse rss_filter_rules, using defaults');
+                }
+            }
+
+            const originalCount = sources.length;
+            sources = sources.filter(source => {
+                const name = (source.name || '').toLowerCase();
+                // If name explicitly contains exclusion keywords, skip it
+                // Unless it ALSO contains "include" keywords (e.g. "Movies & TV")
+                const isExcluded = rules.exclude.some(k => name.includes(k.toLowerCase()));
+                const isIncluded = rules.include.some(k => name.includes(k.toLowerCase()));
+
+                if (isExcluded && !isIncluded) {
+                    return false;
+                }
+                return true;
+            });
+
+            if (enableLogs && sources.length < originalCount) {
+                console.log(`[RSS-Smart] Optimized scanning: Filtered ${originalCount - sources.length} irrelevant sources (Movies/Music/etc). Remaining: ${sources.length}.`);
+            }
+
+            // 2. Parallel Fetch
+            const feedPromises = sources.map(async (source) => {
+                try {
+                    const site = siteService.getSiteById(source.site_id);
+                    const rssData = await this.getRSSFeed(source.url, siteService.getAuthHeaders(site));
+                    return { source, data: rssData, success: true };
+                } catch (e) {
+                    if (enableLogs) console.warn(`[RSS-Smart] Failed to fetch ${source.site_name}: ${e.message}`);
+                    return { source, success: false };
+                }
+            });
+
+            const results = await Promise.all(feedPromises);
+            const allItems = [];
+
+            // 3. Parse and Aggregate
+            for (const result of results) {
+                if (!result.success || !result.data) continue;
+                try {
+                    const $ = cheerio.load(result.data, { xmlMode: true });
+                    $('item').each((i, el) => {
+                        const title = $(el).find('title').text();
+                        const link = $(el).find('enclosure').attr('url') || $(el).find('link').text();
+                        const guid = $(el).find('guid').text() || link;
+                        const description = $(el).find('description').text();
+
+                        // Parse Size
+                        let size = parseInt($(el).find('size').text()) || 0;
+                        if (!size) {
+                            const sizeMatch = description.match(/Size:\s*([\d\.]+)\s*([KMGT]B?)/i);
+                            if (sizeMatch) {
+                                const FormatUtils = require('../utils/formatUtils');
+                                size = FormatUtils.parseSizeToBytes(`${sizeMatch[1]} ${sizeMatch[2]}`);
+                            }
+                        }
+
+                        // Parse Smart Details (Seeds, Free Status)
+                        const details = this._parseSmartDetails(title, description);
+
+                        allItems.push({
+                            title,
+                            link,
+                            guid,
+                            size,
+                            description,
+                            siteId: result.source.site_id,
+                            siteName: result.source.site_name,
+                            ...details
+                        });
+                    });
+                } catch (parseErr) {
+                    console.warn(`[RSS-Smart] Parse error for ${result.source.site_name}:`, parseErr);
+                }
+            }
+
+            if (enableLogs) console.log(`[RSS-Smart] Aggregated ${allItems.length} total items from ${results.filter(r => r.success).length} sites.`);
+
+            // 4. Filter & Group
+            const filterConfig = JSON.parse(task.filter_config || '{}');
+            const groupedCandidates = {}; // Key: "S01E01", Value: [items]
+
+            let matchCount = 0;
+            const episodeParser = require('../utils/episodeParser');
+
+            // Pre-load download history for this series
+            const subscription = db.prepare('SELECT id, season FROM series_subscriptions WHERE task_id = ?').get(task.id);
+            const downloadedEpisodes = new Set();
+            if (subscription) {
+                // From series_episodes table
+                const dbEps = db.prepare('SELECT season, episode FROM series_episodes WHERE subscription_id = ?').all(subscription.id);
+                dbEps.forEach(ep => downloadedEpisodes.add(`S${ep.season}E${ep.episode}`));
+            }
+
+            for (const item of allItems) {
+                if (this._itemMatches(item, filterConfig)) {
+                    matchCount++;
+
+                    // Parse Episode Info
+                    const epInfo = episodeParser.parse(item.title);
+                    if (epInfo && epInfo.season !== null && epInfo.episodes.length > 0) {
+                        // Check if any episode in this item is already downloaded
+                        const isDownloaded = epInfo.episodes.some(epNum =>
+                            downloadedEpisodes.has(`S${epInfo.season}E${epNum}`)
+                        );
+
+                        if (!isDownloaded) {
+                            // Use first episode as key for grouping (simplification for single-episode files)
+                            // For packs, we might treat them as "S01Exx".
+                            // To be robust, we treat the item as a candidate for EACH episode it contains, 
+                            // but usually it's one file.
+                            // Let's use a composite key for the "Group".
+                            const key = `S${epInfo.season}E${epInfo.episodes[0]}`;
+
+                            if (!groupedCandidates[key]) groupedCandidates[key] = [];
+                            groupedCandidates[key].push({ ...item, epInfo });
+                        }
+                    }
+                }
+            }
+
+            // 5. Score and Select
+            let queuedCount = 0;
+            for (const [key, candidates] of Object.entries(groupedCandidates)) {
+                // Score Candidates
+                candidates.forEach(c => {
+                    c.score = this._calculateScore(c);
+                });
+
+                // Sort by Score DESC
+                candidates.sort((a, b) => b.score - a.score);
+                const best = candidates[0];
+
+                if (enableLogs) {
+                    console.log(`[RSS-Smart] Best candidate for ${key}: [${best.siteName}] ${best.title} (Score: ${best.score}, Free: ${best.isFree}, Seeds: ${best.seeders})`);
+                }
+
+                // Execute Download for the Best Candidate
+                try {
+                    await this._downloadItem(task, best, db, enableLogs);
+                    queuedCount++;
+
+                    // Mark episode as downloaded in our local set to prevent other items for same episode
+                    // (Though loop ensures one winner per key)
+                    best.epInfo.episodes.forEach(ep => downloadedEpisodes.add(`S${best.epInfo.season}E${ep}`));
+
+                } catch (err) {
+                    console.error(`[RSS-Smart] Failed to download best candidate for ${key}:`, err);
+                }
+            }
+
+            loggerService.log(`智能聚合完成：发现 ${matchCount} 个匹配，下载了 ${queuedCount} 个最优资源`, 'success', task.id, allItems.length, matchCount);
+
+        } catch (err) {
+            if (enableLogs) console.error(`[RSS-Smart] Task ${task.name} failed:`, err.message);
+            loggerService.log(`智能任务执行失败: ${err.message}`, 'error', task.id);
+        }
+    }
+
+    _calculateScore(item) {
+        let score = 0;
+
+        // Promotion Score
+        if (item.isFree || item.is2xFree) score += 100;
+        else if (item.is50Percent) score += 50;
+        else if (item.is30Percent) score += 30;
+
+        // Seeder Score (0.1 per seed, capped at 20 points => 200 seeds)
+        const seedScore = Math.min((item.seeders || 0) * 0.1, 20);
+        score += seedScore;
+
+        return score;
+    }
+
+    _parseSmartDetails(title, description) {
+        const titleLower = title.toLowerCase();
+        const descLower = (description || '').toLowerCase();
+
+        let details = {
+            seeders: 0,
+            isFree: false,
+            is2xFree: false,
+            is50Percent: false,
+            is30Percent: false
+        };
+
+        // Extract Seeders
+        // Common formats: "Seeders: 123", "做种: 123", "seeder:123"
+        const seedMatch = descLower.match(/(seeders?|做种|seeder)[\s:]*(\d+)/);
+        if (seedMatch) {
+            details.seeders = parseInt(seedMatch[2]);
+        }
+
+        // Extract Promotion Status form Title/Desc
+        // Markers: [Free], [2xFree], [50%], [30%]
+        // NexusPHP often puts <img alt="Free"> in description or text in title
+
+        if (titleLower.includes('[free]') || titleLower.includes('【free】') || titleLower.includes('keys="free"') || descLower.includes('class="pro_free"')) {
+            details.isFree = true;
+        }
+        if (titleLower.includes('[2xfree]') || titleLower.includes('【2xfree】') || descLower.includes('class="pro_2xfree"')) {
+            details.is2xFree = true;
+        }
+        if (titleLower.includes('[50%]') || titleLower.includes('【50%】') || descLower.includes('class="pro_50"')) {
+            details.is50Percent = true;
+        }
+        if (titleLower.includes('[30%]') || titleLower.includes('【30%】') || descLower.includes('class="pro_30"')) {
+            details.is30Percent = true;
+        }
+
+        return details;
+    }
+
+    // Extracted download logic to reuse in executeSmartTask
+    async _downloadItem(task, item, db, enableLogs) {
+        const clientService = require('./clientService');
+        const notificationService = require('./notificationService');
+        const downloaderService = require('./downloaderService');
+        const timeUtils = require('../utils/timeUtils');
+
+        // Determine Client
+        let targetClient = task.client_id ? clientService.getClientById(task.client_id) : clientService.getDefaultClient();
+        if (!targetClient) throw new Error('No available download client');
+
+        // Pre-record History
+        const preRecordResult = db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, item_hash, download_time, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+            .run(task.id, item.guid, item.title, item.size, null, timeUtils.getLocalISOString(), task.user_id);
+        const preRecordId = preRecordResult.lastInsertRowid;
+
+        // Notify
+        const FormatUtils = require('../utils/formatUtils');
+        notificationService.notifyNewTorrent(task.name, item.title, FormatUtils.formatBytes(item.size));
+
+        // Attempt Download
+        let result = await downloaderService.addTorrent(targetClient, item.link, {
+            savePath: task.save_path,
+            category: task.category
+        });
+
+        // Smart Logic: Update series_episodes if successful
+        if (result.success) {
+            if (enableLogs) console.log(`[RSS-Smart] Successfully added: ${item.title}`);
+
+            // Record parsed episodes to DB
+            if (item.epInfo) {
+                const subscription = db.prepare('SELECT id, season FROM series_subscriptions WHERE task_id = ?').get(task.id);
+                if (subscription) {
+                    const insertEpStmt = db.prepare(`
+                        INSERT OR IGNORE INTO series_episodes 
+                        (subscription_id, season, episode, torrent_hash, torrent_title, download_time)
+                        VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
+                    `);
+                    item.epInfo.episodes.forEach(ep => {
+                        insertEpStmt.run(subscription.id, item.epInfo.season, ep, null, item.title);
+                    });
+                }
+            }
+        } else {
+            // Rollback
+            db.prepare('DELETE FROM task_history WHERE id = ?').run(preRecordId);
+            throw new Error(result.message);
+        }
+    }
+}

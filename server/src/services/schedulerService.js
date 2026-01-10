@@ -242,6 +242,9 @@ class SchedulerService {
         if (task.type === 'rss') {
             const rssService = require('./rssService');
             await rssService.executeTask(task);
+        } else if (task.type === 'smart_rss') {
+            const rssService = require('./rssService');
+            await rssService.executeSmartTask(task);
         } else {
             console.log(`Task type ${task.type} not yet implemented`);
         }

@@ -241,6 +241,7 @@ function createTables() {
        season TEXT,
        quality TEXT,
        smart_regex TEXT,
+       smart_switch INTEGER DEFAULT 0, -- Enable multi-site aggregation
        rss_source_id INTEGER,
        task_id INTEGER,
        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -347,6 +348,12 @@ function createTables() {
     { key: 'default_download_path', value: '' }, // Default download path for simple mode
     { key: 'enable_multi_path', value: 'false' }, // Multi-path management switch
     { key: 'create_series_subfolder', value: 'false' }, // Create subfolder for series downloads
+    {
+      key: 'rss_filter_rules', value: JSON.stringify({
+        exclude: ['movie', 'film', '电影', 'music', '音乐', 'game', '游戏', 'docu', '纪录', 'sport', '体育', 'book', '书籍', 'software', '软件'],
+        include: ['series', 'tv', '剧集', 'soap', 'show', 'all', '综合', '聚合']
+      })
+    },
   ];
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
@@ -502,6 +509,12 @@ function createTables() {
   try {
     db.prepare("ALTER TABLE series_subscriptions ADD COLUMN vote_average REAL DEFAULT 0").run();
     console.log('[Migration] Added vote_average column to series_subscriptions table');
+  } catch (e) { /* Column might already exist */ }
+
+  // Migration for Smart Switch (2026-01-10)
+  try {
+    db.prepare("ALTER TABLE series_subscriptions ADD COLUMN smart_switch INTEGER DEFAULT 0").run();
+    console.log('[Migration] Added smart_switch column to series_subscriptions table');
   } catch (e) { /* Column might already exist */ }
 
   // Final settings to ensure foreign keys

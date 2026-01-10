@@ -62,7 +62,8 @@ const SeriesPage = () => {
         quality: '',
         rss_source_id: '',
         client_id: '',
-        saved_path: '/downloads/series'
+        saved_path: '/downloads/series',
+        smart_switch: false
     });
     const [clients, setClients] = useState([]);
     const [editId, setEditId] = useState(null);
@@ -205,7 +206,7 @@ const SeriesPage = () => {
             if (res.ok) {
                 setShowModal(false);
                 const defClient = clients.find(c => c.is_default) || clients[0];
-                setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', client_id: defClient?.id || '', saved_path: '/downloads/series' });
+                setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', client_id: defClient?.id || '', saved_path: '/downloads/series', smart_switch: false });
                 setEditId(null);
                 fetchSubscriptions();
             } else {
@@ -225,7 +226,9 @@ const SeriesPage = () => {
             season: sub.season || '',
             quality: sub.quality || '',
             rss_source_id: sub.rss_source_id || '',
-            saved_path: '/downloads/series' // Keep default or fetch if needed
+            client_id: sub.client_id || '',
+            saved_path: '/downloads/series', // Keep default or fetch if needed
+            smart_switch: sub.smart_switch === 1
         });
         setEditId(sub.id);
         setShowModal(true);
@@ -233,7 +236,7 @@ const SeriesPage = () => {
 
     const openCreateModal = () => {
         const defClient = clients.find(c => c.is_default) || clients[0];
-        setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', client_id: defClient?.id || '', saved_path: '/downloads/series' });
+        setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', client_id: defClient?.id || '', saved_path: '/downloads/series', smart_switch: false });
         setEditId(null);
         setShowModal(true);
     };
@@ -373,23 +376,25 @@ const SeriesPage = () => {
                 }
             >
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <Input
-                        label="剧集名称 (支持中文)"
-                        required
-                        value={formData.name}
-                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="例如: 西部世界"
-                        className="text-base sm:text-sm"
-                    />
-                    <div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Input
-                            label="别名 / 英文名 (用于匹配种子)"
-                            value={formData.alias || ''}
-                            onChange={e => setFormData({ ...formData, alias: e.target.value })}
-                            placeholder="例如: Westworld"
+                            label="剧集名称 (支持中文)"
+                            required
+                            value={formData.name}
+                            onChange={e => setFormData({ ...formData, name: e.target.value })}
+                            placeholder="例如: 西部世界"
                             className="text-base sm:text-sm"
                         />
-                        <p className={`text-[10px] ${textSecondary} mt-1`}>如果种子名称是英文，请填写英文原名。</p>
+                        <div>
+                            <Input
+                                label="别名 / 英文名 (可选，用于匹配种子)"
+                                value={formData.alias || ''}
+                                onChange={e => setFormData({ ...formData, alias: e.target.value })}
+                                placeholder="例如: Westworld"
+                                className="text-base sm:text-sm"
+                            />
+                            <p className={`text-[10px] ${textSecondary} mt-1`}>如果种子名称是英文，请填写英文原名。</p>
+                        </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <Input
@@ -413,20 +418,52 @@ const SeriesPage = () => {
                         </Select>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Select
-                            label="RSS 订阅源"
-                            required
-                            value={formData.rss_source_id}
-                            onChange={e => setFormData({ ...formData, rss_source_id: e.target.value })}
-                            className="text-base sm:text-sm"
-                        >
-                            <option value="">请选择 RSS 源</option>
-                            {rssSources.map(src => (
-                                <option key={src.id} value={src.id}>
-                                    {src.site_name ? `${src.site_name} - ${src.name}` : src.name}
-                                </option>
-                            ))}
-                        </Select>
+                        {(() => {
+                            // Calculate unique sites count
+                            const uniqueSites = new Set(rssSources.map(s => s.site_id)).size;
+                            if (uniqueSites > 1) {
+                                return (
+                                    <div className="md:col-span-2">
+                                        <label className="flex items-center space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.smart_switch}
+                                                onChange={e => setFormData({ ...formData, smart_switch: e.target.checked })}
+                                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                                            />
+                                            <div className="flex-1">
+                                                <span className={`block text-sm font-bold ${textPrimary}`}>跨站智能聚合 (Smart Aggregation)</span>
+                                                <span className={`block text-xs ${textSecondary}`}>
+                                                    启用后，将聚合所有站点的 RSS，优先下载<span className="text-green-500 font-bold">免费</span>资源，并根据做种数智能评分。
+                                                </span>
+                                            </div>
+                                        </label>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
+
+                        {!formData.smart_switch ? (
+                            <Select
+                                label="RSS 订阅源"
+                                required
+                                value={formData.rss_source_id}
+                                onChange={e => setFormData({ ...formData, rss_source_id: e.target.value })}
+                                className="text-base sm:text-sm"
+                            >
+                                <option value="">请选择 RSS 源</option>
+                                {rssSources.map(src => (
+                                    <option key={src.id} value={src.id}>
+                                        {src.site_name ? `${src.site_name} - ${src.name}` : src.name}
+                                    </option>
+                                ))}
+                            </Select>
+                        ) : (
+                            <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 p-3 rounded-lg flex items-center justify-center text-sm text-blue-600 dark:text-blue-400">
+                                <span className="mr-2">🚀</span> 系统将自动扫描所有站点
+                            </div>
+                        )}
 
                         <Select
                             label="下载器"

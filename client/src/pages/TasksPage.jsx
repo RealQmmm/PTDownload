@@ -5,6 +5,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
+import RSSFilterRules from '../components/RSSFilterRules';
 
 const TasksPage = () => {
     const { darkMode, authenticatedFetch } = useTheme();
@@ -23,6 +24,7 @@ const TasksPage = () => {
     const [downloadPaths, setDownloadPaths] = useState([]);
     const [defaultDownloadPath, setDefaultDownloadPath] = useState('');
     const [enableMultiPath, setEnableMultiPath] = useState(false);
+    const [showRulesModal, setShowRulesModal] = useState(false);
 
 
     // Helpers for Human-readable CRON
@@ -362,6 +364,8 @@ const TasksPage = () => {
                         const client = clients.find(c => c.id === task.client_id);
                         const matchingSource = rssSources.find(s => s.url === task.rss_url);
 
+                        const isSmartTask = task.type === 'smart_rss' || task.rss_url === 'SMART_AGGREGATION';
+
                         return (
                             <Card key={task.id} hover className="group">
                                 <div className="flex flex-col space-y-3">
@@ -376,7 +380,7 @@ const TasksPage = () => {
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                         <div className="flex flex-wrap items-center gap-y-2 text-xs text-gray-500 space-x-3 min-w-0 flex-1">
                                             <div className="flex items-center">
-                                                <span className="mr-1">🌐</span> {site?.name || '未知站点'}
+                                                <span className="mr-1">🌐</span> {isSmartTask ? '⚡ 跨站点聚合' : (site?.name || '未知站点')}
                                             </div>
                                             <div className="flex items-center">
                                                 <span className="mr-1">📥</span> {client?.name || client?.type || '默认客户端'}
@@ -489,24 +493,75 @@ const TasksPage = () => {
                                 placeholder="例如：M-Team 热门种追剧"
                             />
                         </div>
-                        <div>
-                            <Select
-                                label="关联站点"
-                                value={formData.site_id}
-                                onChange={(e) => setFormData({ ...formData, site_id: parseInt(e.target.value) })}
-                            >
-                                <option value="">选择站点</option>
-                                {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </Select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">执行周期</label>
-                            <div className="flex space-x-2">
-                                <div className="flex-1 min-w-0">
-                                    <Input
-                                        required
+
+                        {/* Merged RSS URL and Execution Cycle Row */}
+                        <div className="md:col-span-2 flex flex-col md:flex-row gap-4 items-start">
+                            {/* Left: RSS URL (Flex Grow) */}
+                            <div className="flex-1 w-full min-w-0">
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">RSS 订阅链接</label>
+                                    {rssSources.length > 0 && formData.type !== 'smart_rss' && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setShowModal(false); setShowRSSModal(true); }}
+                                            className="text-blue-500 text-xs hover:underline"
+                                        >
+                                            从订阅源库选择
+                                        </button>
+                                    )}
+                                </div>
+
+                                {(() => {
+                                    // Smart Task Read-only View
+                                    if (formData.type === 'smart_rss') {
+                                        return (
+                                            <div className="p-3 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 h-[72px]">
+                                                <div className="flex items-center text-indigo-600 dark:text-indigo-400 font-bold text-sm mb-1">
+                                                    <span className="mr-2">⚡</span> 智能跨站聚合
+                                                </div>
+                                                <p className="text-xs text-indigo-500/80 truncate">RSS 链接由「剧集订阅」自动管理。</p>
+                                            </div>
+                                        );
+                                    }
+
+                                    const matched = rssSources.find(s => s.url === formData.rss_url);
+                                    return matched ? (
+                                        <div className={`mb-2 p-3 rounded-xl border border-blue-500/20 bg-blue-500/5 flex items-center justify-between h-[42px]`}>
+                                            <div className="flex items-center overflow-hidden">
+                                                <span className="mr-2 text-lg">📑</span>
+                                                <div className="overflow-hidden">
+                                                    <p className="text-xs font-bold text-blue-500 truncate">{matched.name}</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, rss_url: '' })}
+                                                className="ml-2 text-gray-400 hover:text-red-500 text-xs"
+                                            >
+                                                清除
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <Input
+                                            required
+                                            type="url"
+                                            value={formData.rss_url}
+                                            onChange={(e) => setFormData({ ...formData, rss_url: e.target.value })}
+                                            placeholder="https://example.com/rss.php?..."
+                                            className="h-[42px]"
+                                        />
+                                    );
+                                })()}
+                            </div>
+
+                            {/* Right: Execution Cycle (Compact) */}
+                            <div className="w-full md:w-auto flex-shrink-0">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">执行周期</label>
+                                <div className="flex bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden h-[42px]">
+                                    <input
                                         type="number"
                                         min="1"
+                                        required
                                         value={parseCron(formData.cron).value}
                                         onChange={(e) => {
                                             const current = parseCron(formData.cron);
@@ -517,75 +572,34 @@ const TasksPage = () => {
                                             else if (current.unit === 'd') newCron = `0 0 */${val} * *`;
                                             setFormData({ ...formData, cron: newCron });
                                         }}
-                                        className="text-center"
+                                        className="w-16 px-2 text-center text-sm bg-transparent focus:outline-none text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-gray-700"
                                     />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <Select
-                                        value={parseCron(formData.cron).unit}
-                                        onChange={(e) => {
-                                            const current = parseCron(formData.cron);
-                                            const unit = e.target.value;
-                                            let newCron = '';
-                                            if (unit === 'm') newCron = `*/${current.value} * * * *`;
-                                            else if (unit === 'h') newCron = `0 */${current.value} * * *`;
-                                            else if (unit === 'd') newCron = `0 0 */${current.value} * *`;
-                                            setFormData({ ...formData, cron: newCron });
-                                        }}
-                                    >
-                                        <option value="m">分钟</option>
-                                        <option value="h">小时</option>
-                                        <option value="d">天</option>
-                                    </Select>
-                                </div>
-                            </div>
-                            {parseCron(formData.cron).isComplex && (
-                                <p className="text-[10px] text-amber-500 mt-1">检测到复杂 Cron 表达式，已重置为简单模式</p>
-                            )}
-                        </div>
-                        <div className="md:col-span-2">
-                            <div className="flex justify-between items-center mb-1">
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">RSS 订阅链接</label>
-                                {rssSources.length > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => { setShowModal(false); setShowRSSModal(true); }}
-                                        className="text-blue-500 text-xs hover:underline"
-                                    >
-                                        从订阅源库选择
-                                    </button>
-                                )}
-                            </div>
-
-                            {(() => {
-                                const matched = rssSources.find(s => s.url === formData.rss_url);
-                                return matched ? (
-                                    <div className={`mb-2 p-3 rounded-xl border border-blue-500/20 bg-blue-500/5 flex items-center justify-between`}>
-                                        <div className="flex items-center overflow-hidden">
-                                            <span className="mr-2 text-lg">📑</span>
-                                            <div className="overflow-hidden">
-                                                <p className="text-xs font-bold text-blue-500 truncate">{matched.name}</p>
-                                                <p className="text-[10px] text-gray-500 truncate font-mono">{formData.rss_url}</p>
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setFormData({ ...formData, rss_url: '' })}
-                                            className="ml-2 text-gray-400 hover:text-red-500 text-xs"
+                                    <div className="relative w-20">
+                                        <select
+                                            value={parseCron(formData.cron).unit}
+                                            onChange={(e) => {
+                                                const current = parseCron(formData.cron);
+                                                const unit = e.target.value;
+                                                let newCron = '';
+                                                if (unit === 'm') newCron = `*/${current.value} * * * *`;
+                                                else if (unit === 'h') newCron = `0 */${current.value} * * *`;
+                                                else if (unit === 'd') newCron = `0 0 */${current.value} * *`;
+                                                setFormData({ ...formData, cron: newCron });
+                                            }}
+                                            className="w-full h-full pl-3 pr-8 text-sm bg-transparent focus:outline-none cursor-pointer text-gray-700 dark:text-gray-200 appearance-none"
                                         >
-                                            清除
-                                        </button>
+                                            <option value="m">分钟</option>
+                                            <option value="h">小时</option>
+                                            <option value="d">天</option>
+                                        </select>
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </div>
                                     </div>
-                                ) : (
-                                    <Input
-                                        required
-                                        type="url"
-                                        value={formData.rss_url}
-                                        onChange={(e) => setFormData({ ...formData, rss_url: e.target.value })}
-                                        placeholder="https://example.com/rss.php?..."
-                                    />
-                                );
-                            })()}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -620,20 +634,20 @@ const TasksPage = () => {
                                 />
                                 <p className="text-[10px] text-gray-400 mt-1">优先使用正则匹配，关键词作为二次过滤。</p>
                             </div>
-                            <div className="md:col-span-2">
+                            <div>
                                 <Input
                                     label="包含关键词 (逗号分隔)"
                                     value={formData.filter_config.keywords}
                                     onChange={(e) => setFormData({ ...formData, filter_config: { ...formData.filter_config, keywords: e.target.value } })}
-                                    placeholder="例如: 2160p, H265, HEVC"
+                                    placeholder="例如: 2160p, H265"
                                 />
                             </div>
-                            <div className="md:col-span-2">
+                            <div>
                                 <Input
                                     label="排除关键词 (逗号分隔)"
                                     value={formData.filter_config.exclude}
                                     onChange={(e) => setFormData({ ...formData, filter_config: { ...formData.filter_config, exclude: e.target.value } })}
-                                    placeholder="例如: 720p, Dubbed"
+                                    placeholder="例如: 720p, CAM"
                                 />
                             </div>
                             <div>
@@ -790,8 +804,30 @@ const TasksPage = () => {
                                 </Select>
                             </div>
                             <div>
+                                <div className="flex justify-between items-center mb-1">
+                                    <div className="flex items-center">
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mr-1">用途描述</label>
+                                        <div className="relative group cursor-help">
+                                            <span className="text-gray-400">❓</span>
+                                            <div className="absolute left-0 top-full mt-2 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 pointer-events-none">
+                                                <p className="font-bold mb-1">用于跨站智能聚合筛选</p>
+                                                <p className="text-gray-300">系统根据名称自动决定是否扫描该源：</p>
+                                                <ul className="list-disc pl-3 mt-1 space-y-1">
+                                                    <li>包含 <b>剧集, TV, 综合</b> 等：必扫</li>
+                                                    <li>包含 <b>电影, Game</b> 等：跳过</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowRulesModal(true)}
+                                        className="text-[10px] text-blue-500 hover:underline"
+                                    >
+                                        ⚙️ 配置筛选规则
+                                    </button>
+                                </div>
                                 <Input
-                                    label="用途描述"
                                     required
                                     value={rssFormData.name}
                                     onChange={(e) => setRSSFormData({ ...rssFormData, name: e.target.value })}
@@ -864,6 +900,16 @@ const TasksPage = () => {
                         )}
                     </div>
                 </div>
+            </Modal>
+
+            {/* Rules Config Modal */}
+            <Modal
+                isOpen={showRulesModal}
+                onClose={() => setShowRulesModal(false)}
+                title="智能筛选规则配置"
+                size="lg"
+            >
+                <RSSFilterRules onClose={() => setShowRulesModal(false)} />
             </Modal>
 
             {/* Task Logs Modal */}

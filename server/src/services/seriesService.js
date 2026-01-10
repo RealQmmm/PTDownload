@@ -22,6 +22,7 @@ class SeriesService {
         const subs = this._getDB().prepare(`
             SELECT s.*, 
                    t.enabled as task_enabled, 
+                   t.client_id,
                    r.name as rss_source_name,
                    site.name as site_name
             FROM series_subscriptions s
@@ -78,9 +79,11 @@ class SeriesService {
         }
 
         // 1. Generate new regex
-        const smartRegex = this._generateSmartRegex(name, season, quality);
+        // Use provided alias or fallback to existing alias
+        const targetAlias = alias !== undefined ? alias : existing.alias;
+        const smartRegex = this._generateSmartRegex(name, season, quality, targetAlias);
 
-        // 2. Lookup new RSS Source if changed
+        // 2. Lookup new RSS Source if changed (or if we need it for switching back)
         let rssUrl = null;
         if (rss_source_id && rss_source_id !== existing.rss_source_id) {
             const rssSource = db.prepare('SELECT * FROM rss_sources WHERE id = ?').get(rss_source_id);
@@ -88,15 +91,16 @@ class SeriesService {
         }
 
         // 3. Update subscription record
+        // Handle smart_switch if provided
+        const smartSwitchVal = (data.smart_switch === true || data.smart_switch === 'true' || data.smart_switch === 1) ? 1 : 0;
+
         db.prepare(`
             UPDATE series_subscriptions 
-            SET name = ?, alias = ?, season = ?, quality = ?, smart_regex = ?, rss_source_id = ?, total_episodes = ?
+            SET name = ?, alias = ?, season = ?, quality = ?, smart_regex = ?, rss_source_id = ?, total_episodes = ?, smart_switch = ?
             WHERE id = ?
-        `).run(name, alias || null, season, quality, smartRegex, rss_source_id, totalEpisodes, id);
+        `).run(name, alias || null, season, quality, smartRegex, rss_source_id, totalEpisodes, smartSwitchVal, id);
 
         // 4. Update associated task configuration
-        // We construct the filter config JSON. 
-        // Note: For RSS tasks, 'filter_config' is the JSON string.
         const filterConfig = {
             keywords: '',
             smart_regex: smartRegex,
@@ -108,19 +112,30 @@ class SeriesService {
         const updates = {
             filter_config: JSON.stringify(filterConfig)
         };
-        // If RSS Source changed, update rss_url in task
-        if (rssUrl) {
-            updates.rss_url = rssUrl;
-        }
 
-        // We use a direct DB update for simplicity as taskService.updateTask might be heavy/unknown
-        // But for safety, let's update basic fields.
         let sql = 'UPDATE tasks SET filter_config = ?';
         let params = [JSON.stringify(filterConfig)];
 
-        if (rssUrl) {
-            sql += ', rss_url = ?';
-            params.push(rssUrl);
+        // If Smart Switch is ON, change task type and URL
+        if (smartSwitchVal === 1) {
+            sql += ", type = 'smart_rss', rss_url = 'SMART_AGGREGATION'";
+        } else {
+            // If switching back to normal RSS, update URL and ensure type is 'rss'
+            // We must lookup the RSS source details regardless of whether it changed,
+            // because the task might currently be in 'smart_rss' mode.
+            if (rss_source_id) {
+                const rssSource = db.prepare('SELECT * FROM rss_sources WHERE id = ?').get(rss_source_id);
+                if (rssSource) {
+                    sql += ", rss_url = ?, site_id = ?, type = 'rss'";
+                    params.push(rssSource.url);
+                    params.push(rssSource.site_id);
+                }
+            }
+        }
+
+        if (data.client_id) {
+            sql += ", client_id = ?";
+            params.push(data.client_id);
         }
 
         sql += ' WHERE id = ?';
@@ -128,7 +143,7 @@ class SeriesService {
 
         db.prepare(sql).run(...params);
 
-        return { id, ...data, smart_regex: smartRegex };
+        return { id, ...data, smart_regex: smartRegex, smart_switch: smartSwitchVal };
     }
 
     /**
@@ -158,11 +173,26 @@ class SeriesService {
         }
 
         // 1. Generate Smart Regex
-        const smartRegex = this._generateSmartRegex(name, season, quality);
+        // improved: include original_name/alias in regex
+        const generatedAlias = metadata ? metadata.original_name : null;
+        const smartRegex = this._generateSmartRegex(name, season, quality, generatedAlias);
 
-        // 2. Create Task
-        const rssSource = this._getDB().prepare('SELECT * FROM rss_sources WHERE id = ?').get(rss_source_id);
-        if (!rssSource) throw new Error('Invalid RSS Source');
+        // Handle Smart Switch
+        const smartSwitchVal = (data.smart_switch === true || data.smart_switch === 'true' || data.smart_switch === 1) ? 1 : 0;
+        let finalRssUrl = '';
+        let finalSiteId = null;
+
+        if (smartSwitchVal === 1) {
+            finalRssUrl = 'SMART_AGGREGATION'; // Special flag
+            // For site_id, we can leave it null or set to a placeholder. 
+            // rssService will ignore site_id for smart_rss tasks.
+        } else {
+            // Normal RSS Mode
+            const rssSource = this._getDB().prepare('SELECT * FROM rss_sources WHERE id = ?').get(rss_source_id);
+            if (!rssSource) throw new Error('Invalid RSS Source');
+            finalRssUrl = rssSource.url;
+            finalSiteId = rssSource.site_id;
+        }
 
         const filterConfig = {
             keywords: '', // Clear keywords, use regex instead
@@ -200,10 +230,10 @@ class SeriesService {
 
         const taskId = taskService.createTask({
             name: `[追剧] ${name} ${season ? 'S' + season : ''} `,
-            type: 'rss',
+            type: smartSwitchVal === 1 ? 'smart_rss' : 'rss',
             cron: '*/30 * * * *',
-            site_id: rssSource.site_id,
-            rss_url: rssSource.url,
+            site_id: finalSiteId,
+            rss_url: finalRssUrl,
             filter_config: JSON.stringify(filterConfig),
             client_id,
             save_path: finalSavePath,
@@ -214,8 +244,8 @@ class SeriesService {
 
         // 3. Save Subscription with Metadata
         const info = this._getDB().prepare(`
-            INSERT INTO series_subscriptions(name, alias, season, quality, smart_regex, rss_source_id, task_id, poster_path, tmdb_id, overview, vote_average, total_episodes, user_id)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO series_subscriptions(name, alias, season, quality, smart_regex, rss_source_id, task_id, poster_path, tmdb_id, overview, vote_average, total_episodes, user_id, smart_switch)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             name,
             metadata ? metadata.original_name : null, // Save alias
@@ -225,7 +255,8 @@ class SeriesService {
             metadata ? metadata.overview : null,
             metadata ? metadata.vote_average : 0,
             totalEpisodes,
-            userId
+            userId,
+            smartSwitchVal
         );
 
         return info.lastInsertRowid;
@@ -252,9 +283,16 @@ class SeriesService {
      * e.g. Name="From", Season="2", Quality="4K"
      * Result: "From.*S0?2.*(2160p|4k)"
      */
-    _generateSmartRegex(name, season, quality) {
-        let regex = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special chars
-        regex += '.*'; // Separator
+    _generateSmartRegex(name, season, quality, alias = null) {
+        let namePart = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special chars
+
+        // If alias exists and is different, create (Name|Alias) group
+        if (alias && alias.trim() && alias.trim().toLowerCase() !== name.trim().toLowerCase()) {
+            const aliasPart = alias.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            namePart = `(${namePart}|${aliasPart})`;
+        }
+
+        let regex = namePart + '.*'; // Separator
 
         if (season) {
             // Match S02, s2, S 2, Season 2
