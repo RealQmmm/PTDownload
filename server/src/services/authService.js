@@ -199,6 +199,12 @@ class AuthService {
         `).all(limit);
     }
 
+    // 清空登录日志
+    clearLoginLogs() {
+        const db = getDB();
+        return db.prepare('DELETE FROM login_logs').run();
+    }
+
     // 删除用户
     async deleteUser(userId, currentUserId) {
         const db = getDB();

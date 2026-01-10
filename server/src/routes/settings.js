@@ -324,9 +324,10 @@ router.post('/maintenance/clear-tasks', requireAdmin, (req, res) => {
         const db = getDB();
         const delLogs = db.prepare('DELETE FROM task_logs').run();
         const delHistory = db.prepare('DELETE FROM task_history').run();
+        const delLoginLogs = db.prepare('DELETE FROM login_logs').run();
         res.json({
             success: true,
-            message: `清理完成：删除了 ${delHistory.changes} 条任务历史和 ${delLogs.changes} 条运行日志。`
+            message: `清理完成：删除了 ${delHistory.changes} 条任务历史、${delLogs.changes} 条运行日志和 ${delLoginLogs.changes} 条登录记录。`
         });
     } catch (err) {
         console.error('Clear tasks failed:', err);

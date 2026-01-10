@@ -428,7 +428,7 @@ const SettingsPage = () => {
     };
 
     const handleClearTasks = async () => {
-        if (!confirm('警告：此操作将永久删除所有 RSS 运行日志和已下载资源的记录！确定要开始初始化吗？')) return;
+        if (!confirm('警告：此操作将永久删除所有 RSS 运行日志、已下载资源记录及登录日志！确定要开始初始化吗？')) return;
         setSaving(true);
         try {
             const res = await authenticatedFetch('/api/settings/maintenance/clear-tasks', { method: 'POST' });
@@ -1473,23 +1473,6 @@ const SettingsPage = () => {
                     </div>
                 );
 
-            case 'network':
-                return (
-                    <div key="network">
-                        <Card>
-                            <h3 className={`text-lg font-medium ${textPrimary} mb-4`}>代理设置</h3>
-                            <div className="space-y-4">
-                                <Input
-                                    label="HTTP 代理"
-                                    placeholder="http://127.0.0.1:7890"
-                                    disabled
-                                />
-                                <p className="text-xs text-yellow-500">代理功能开发中...</p>
-                            </div>
-                        </Card>
-                    </div>
-                );
-
             case 'security':
                 return (
                     <div key="security" className="space-y-4">
@@ -1861,7 +1844,7 @@ const SettingsPage = () => {
                                                         { id: 'notifications', name: '通知', icon: '🔔' },
                                                         { id: 'backup', name: '备份', icon: '💾' },
                                                         { id: 'maintenance', name: '维护', icon: '🛠️' },
-                                                        { id: 'network', name: '网络', icon: '🌐' },
+
                                                         { id: 'logs', name: '日志', icon: '📜' },
                                                         { id: 'security', name: '安全', icon: '🔒' },
                                                         { id: 'about', name: '关于', icon: 'ℹ️' }
@@ -2141,14 +2124,7 @@ const SettingsPage = () => {
 
             case 'logs':
                 return (
-                    <div className="space-y-8">
-                        <div key="logs"><LogsPage /></div>
-                        {me?.role === 'admin' && (
-                            <div className="pt-8 border-t border-gray-700/30">
-                                <LoginLogsView authenticatedFetch={authenticatedFetch} darkMode={darkMode} />
-                            </div>
-                        )}
-                    </div>
+                    <div key="logs"><LogsPage /></div>
                 );
 
             default:
@@ -2170,7 +2146,7 @@ const SettingsPage = () => {
                             { id: 'notifications', name: '通知', icon: '🔔' },
                             { id: 'backup', name: '备份', icon: '💾' },
                             { id: 'maintenance', name: '维护', icon: '🛠️' },
-                            { id: 'network', name: '网络', icon: '🌐' },
+
                             { id: 'logs', name: '日志', icon: '📜' },
                             { id: 'security', name: '安全', icon: '🔒' },
                             { id: 'about', name: '关于', icon: 'ℹ️' }
@@ -2199,92 +2175,6 @@ const SettingsPage = () => {
                 <div className="flex-1 p-4 md:p-8 overflow-y-auto">
                     {renderContent()}
                 </div>
-            </div>
-        </div>
-    );
-};
-
-// New component for Login Logs (Outside to avoid re-mounting)
-const LoginLogsView = ({ authenticatedFetch, darkMode }) => {
-    const [loginLogs, setLoginLogs] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
-    const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
-    const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
-    const bgSecondary = darkMode ? 'bg-gray-900' : 'bg-gray-50';
-    const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
-
-    const fetchLoginLogs = async () => {
-        setLoading(true);
-        try {
-            const res = await authenticatedFetch('/api/auth/login-logs');
-            if (res.ok) {
-                const data = await res.json();
-                setLoginLogs(Array.isArray(data) ? data : []);
-            }
-        } catch (err) {
-            console.error('Fetch login logs failed:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        fetchLoginLogs();
-    }, []);
-
-    return (
-        <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <h3 className={`text-lg font-bold ${textPrimary}`}>登录日志</h3>
-                <Button size="sm" variant="ghost" onClick={fetchLoginLogs} disabled={loading}>
-                    <svg className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                        <path d="M3 3v5h5" />
-                        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-                        <path d="M16 16h5v5" />
-                    </svg>
-                    刷新
-                </Button>
-            </div>
-            <div className="overflow-x-auto border rounded-xl overflow-hidden shadow-sm">
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className={bgSecondary}>
-                            <th className={`text-left p-3 ${textSecondary} font-medium`}>时间</th>
-                            <th className={`text-left p-3 ${textSecondary} font-medium`}>用户</th>
-                            <th className={`text-left p-3 ${textSecondary} font-medium`}>状态</th>
-                            <th className={`text-left p-3 ${textSecondary} font-medium`}>IP</th>
-                            <th className={`text-left p-3 ${textSecondary} font-medium`}>设备/系统/浏览器</th>
-                        </tr>
-                    </thead>
-                    <tbody className={bgMain}>
-                        {loginLogs.map(log => (
-                            <tr key={log.id} className={`border-t ${borderColor} hover:bg-gray-50/50 dark:hover:bg-gray-700/30`}>
-                                <td className={`p-3 ${textSecondary} text-xs`}>{new Date(log.created_at).toLocaleString()}</td>
-                                <td className={`p-3 ${textPrimary} font-medium`}>{log.username || 'Unknown'}</td>
-                                <td className="p-3">
-                                    <span className={`px-2 py-0.5 rounded text-[10px] ${log.status === 'success' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'}`}>
-                                        {log.status === 'success' ? '登录成功' : `失败: ${log.message || '未知'}`}
-                                    </span>
-                                </td>
-                                <td className={`p-3 ${textSecondary} font-mono text-xs`}>{log.ip}</td>
-                                <td className={`p-3 ${textSecondary} text-xs`}>
-                                    <div className="flex flex-col">
-                                        <span>{log.device_name || '未知设备'}</span>
-                                        <span className="opacity-60">{log.os || '未知系统'} / {log.browser || '未知浏览器'}</span>
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                        {loginLogs.length === 0 && !loading && (
-                            <tr>
-                                <td colSpan="5" className="p-8 text-center text-gray-500 italic">暂无登录记录</td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
             </div>
         </div>
     );

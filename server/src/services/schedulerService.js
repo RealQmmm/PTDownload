@@ -69,9 +69,17 @@ class SchedulerService {
 
         const siteService = require('./siteService');
         const loggerService = require('./loggerService');
-        // Define the job using RecurrenceRule or cron string
-        // Cron: */interval * * * *
-        this.cookieJob = schedule.scheduleJob(`*/${interval} * * * *`, async () => {
+
+        let cronStr = `*/${interval} * * * *`;
+        if (interval >= 60) {
+            const hours = Math.floor(interval / 60);
+            const remainingMinutes = interval % 60;
+            if (remainingMinutes === 0) {
+                cronStr = `0 */${hours} * * *`;
+            }
+        }
+
+        this.cookieJob = schedule.scheduleJob(cronStr, async () => {
             if (this._isLogEnabled()) console.log(`[${timeUtils.getLocalDateTimeString()}] Periodic cookie check triggered...`);
             const results = await siteService.checkAllCookies();
             const valid = results.filter(r => r === true).length;
@@ -137,7 +145,8 @@ class SchedulerService {
             const dateStr = timeUtils.getLocalDateString(dateThreshold);
 
             const delDate = db.prepare('DELETE FROM task_logs WHERE run_time < ?').run(dateStr);
-            console.log(`[Cleanup] Deleted ${delDate.changes} logs older than ${dateStr}`);
+            const delLoginDate = db.prepare('DELETE FROM login_logs WHERE created_at < ?').run(dateStr);
+            console.log(`[Cleanup] Deleted ${delDate.changes} task logs and ${delLoginDate.changes} login logs older than ${dateStr}`);
 
             // 2. Keep only latest X logs per task
             const tasks = taskService.getAllTasks();
@@ -150,7 +159,18 @@ class SchedulerService {
                     totalKeepDeleted += delCount.changes;
                 }
             }
-            console.log(`[Cleanup] Deleted ${totalKeepDeleted} extra logs to maintain max count per task`);
+
+            // 2b. Global cap for login logs (keep latest 1000)
+            const loginMaxCount = 1000;
+            const allLoginLogs = db.prepare('SELECT id FROM login_logs ORDER BY created_at DESC').all();
+            let loginKeepDeleted = 0;
+            if (allLoginLogs.length > loginMaxCount) {
+                const toDelete = allLoginLogs.slice(loginMaxCount).map(l => l.id);
+                // Chunk deletion if too many
+                const delCount = db.prepare(`DELETE FROM login_logs WHERE id IN (${toDelete.join(',')})`).run();
+                loginKeepDeleted = delCount.changes;
+            }
+            console.log(`[Cleanup] Deleted ${totalKeepDeleted} extra task logs and ${loginKeepDeleted} extra login logs`);
 
             // 3. Delete site heatmap data older than 180 days
             const heatmapThreshold = new Date();

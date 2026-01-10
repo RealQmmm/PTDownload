@@ -381,8 +381,7 @@ const SitesPage = () => {
                                                 </button>
                                             )}
                                         </div>
-                                        <div className="flex items-center mt-0.5 space-x-2">
-                                            <span className="text-[10px] text-blue-400 uppercase tracking-widest font-bold">{site.type}</span>
+                                        <div className="flex items-center mt-0.5">
                                             {site.username && (
                                                 <div className="flex items-center">
                                                     <span className="w-1 h-1 rounded-full bg-gray-500/50 mx-1"></span>
@@ -539,17 +538,7 @@ const SitesPage = () => {
                         />
                         <p className="text-xs text-gray-500 mt-1">留空则自动尝试构造 /torrentrss.php</p>
                     </div>
-                    <Select
-                        label="站点类型"
-                        value={formData.type}
-                        onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                    >
-                        <option value="NexusPHP">NexusPHP</option>
-                        <option value="Gazelle">Gazelle</option>
-                        <option value="Unit3D">Unit3D</option>
-                        <option value="Mock">Mock (Testing)</option>
-                        <option value="Other">Other</option>
-                    </Select>
+
                     <div className="space-y-4">
                         <div>
                             <Input

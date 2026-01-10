@@ -281,7 +281,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
 
 
 
-    const handleConfirmDownload = (clientId) => {
+    const handleConfirmDownload = async (clientId) => {
         if (pendingDownload) {
             let finalPath;
 
@@ -293,7 +293,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 finalPath = defaultDownloadPath || null;
             }
 
-            executeDownload(pendingDownload, clientId, finalPath);
+            await executeDownload(pendingDownload, clientId, finalPath);
         }
         setShowClientModal(false);
         setPendingDownload(null);
@@ -429,7 +429,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                             ))}
                         </Select>
                     </div>
-                    <Button type="submit" disabled={loading} className="px-3 sm:px-4 shrink-0 text-xs sm:text-sm whitespace-nowrap">
+                    <Button type="submit" loading={loading} className="px-3 sm:px-4 shrink-0 text-xs sm:text-sm whitespace-nowrap">
                         搜索
                     </Button>
                 </form>
@@ -542,9 +542,10 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                                             size="xs"
                                                             variant="primary"
                                                             onClick={() => handleDownloadClick(item)}
-                                                            disabled={downloading === item.link || !item.torrentUrl}
+                                                            loading={downloading === item.link}
+                                                            disabled={!item.torrentUrl}
                                                         >
-                                                            {downloading === item.link ? '添加中...' : '下载'}
+                                                            下载
                                                         </Button>
                                                     </div>
                                                 </td>
@@ -611,9 +612,10 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                                 size="xs"
                                                 className="py-1 px-2 text-[10px]"
                                                 onClick={() => handleDownloadClick(item)}
-                                                disabled={downloading === item.link || !item.torrentUrl}
+                                                loading={downloading === item.link}
+                                                disabled={!item.torrentUrl}
                                             >
-                                                {downloading === item.link ? '...' : '下载'}
+                                                下载
                                             </Button>
                                         </div>
                                     </div>
@@ -748,16 +750,24 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                 <button
                                     key={client.id}
                                     onClick={() => handleConfirmDownload(client.id)}
-                                    className={`w-full flex items-center p-4 ${darkMode ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} rounded-xl transition-all text-left border border-transparent hover:border-blue-500/30 group`}
+                                    disabled={downloading === pendingDownload?.link}
+                                    className={`w-full flex items-center p-4 ${darkMode ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-100 hover:bg-gray-200'} rounded-xl transition-all text-left border border-transparent hover:border-blue-500/30 group ${downloading === pendingDownload?.link ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-xl mr-4 group-hover:scale-110 transition-transform">
-                                        💾
+                                        {downloading === pendingDownload?.link ? (
+                                            <svg className="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                        ) : '💾'}
                                     </div>
                                     <div className="flex-1">
                                         <div className={`${textPrimary} font-bold text-sm`}>{client.name || client.type}</div>
                                         <div className={`${textSecondary} text-[10px] font-mono`}>{client.host}:{client.port}</div>
                                     </div>
-                                    <div className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity font-bold text-xs">确认下载 →</div>
+                                    <div className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity font-bold text-xs">
+                                        {downloading === pendingDownload?.link ? '添加中...' : '确认下载 →'}
+                                    </div>
                                 </button>
                             ))}
                         </div>

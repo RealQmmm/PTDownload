@@ -129,6 +129,16 @@ router.get('/login-logs', requireAdmin, (req, res) => {
     }
 });
 
+// Clear login logs (admin only)
+router.delete('/login-logs', requireAdmin, (req, res) => {
+    try {
+        const result = authService.clearLoginLogs();
+        res.json({ success: true, message: `已清空 ${result.changes} 条登录记录` });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Reset user password (admin only)
 router.post('/users/:id/reset-password', requireAdmin, async (req, res) => {
     const userId = parseInt(req.params.id);
