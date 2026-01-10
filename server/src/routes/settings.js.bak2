@@ -67,6 +67,47 @@ router.post('/', (req, res) => {
     }
 });
 
+// Get database configuration info
+router.get('/database-info', (req, res) => {
+    try {
+        const { getDBPath } = require('../db');
+        const fs = require('fs');
+        const path = require('path');
+
+        const dbPath = getDBPath();
+        const useExternalDB = process.env.USE_EXTERNAL_DB === 'true';
+        const externalDBPath = process.env.EXTERNAL_DB_PATH || '/external_db/ptdownload.db';
+
+        // Get database file size
+        let dbSize = 0;
+        let dbSizeFormatted = '0 B';
+        if (fs.existsSync(dbPath)) {
+            const stats = fs.statSync(dbPath);
+            dbSize = stats.size;
+            // Format size
+            if (dbSize < 1024) {
+                dbSizeFormatted = `${dbSize} B`;
+            } else if (dbSize < 1024 * 1024) {
+                dbSizeFormatted = `${(dbSize / 1024).toFixed(2)} KB`;
+            } else {
+                dbSizeFormatted = `${(dbSize / 1024 / 1024).toFixed(2)} MB`;
+            }
+        }
+
+        res.json({
+            currentMode: useExternalDB ? 'external' : 'internal',
+            currentPath: dbPath,
+            externalPath: externalDBPath,
+            dbSize: dbSize,
+            dbSizeFormatted: dbSizeFormatted,
+            canSwitch: true,
+            requiresRestart: true
+        });
+    } catch (err) {
+        console.error('Failed to get database info:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // Export all data
 router.get('/export', (req, res) => {

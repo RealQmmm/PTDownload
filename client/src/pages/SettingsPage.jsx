@@ -306,6 +306,34 @@ const SettingsPage = () => {
         }
     };
 
+    const handleExportDatabase = async () => {
+        try {
+            setSaving(true);
+            setMessage({ type: 'info', text: '正在导出数据库文件，请稍候...' });
+
+            const res = await authenticatedFetch('/api/settings/export-database');
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ptdownload_${new Date().toISOString().split('T')[0]}.db`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                setMessage({ type: 'success', text: '数据库文件导出成功' });
+            } else {
+                setMessage({ type: 'error', text: '导出失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '导出出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
     const handleImport = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -788,6 +816,7 @@ const SettingsPage = () => {
                             </div>
                         </Card>
 
+
                         {/* Theme Section */}
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700">
                             <div>
@@ -1001,36 +1030,48 @@ const SettingsPage = () => {
                         <Card className="space-y-8">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="space-y-4">
-                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider`}>导出数据</h3>
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider`}>导出配置数据 (JSON)</h3>
                                     <p className={`text-xs ${textSecondary}`}>
-                                        点击下方按钮将下载一个包含所有配置、站点、任务、客户端及历史统计数据的 JSON 文件。
+                                        导出包含所有配置、站点、任务、客户端及历史统计数据的 JSON 文件，适合跨版本迁移。
                                     </p>
                                     <Button onClick={handleExport} className="w-full">
-                                        立即导出备份
+                                        导出配置备份 (JSON)
                                     </Button>
                                 </div>
 
                                 <div className="space-y-4">
-                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider`}>导入数据</h3>
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider`}>导出数据库文件 (SQLite)</h3>
                                     <p className={`text-xs ${textSecondary}`}>
-                                        警告：导入操作将清除并替换掉当前系统中所有的现有数据。请谨慎操作。
+                                        导出完整的 SQLite 数据库文件，包含所有原始数据，适合迁移到外部存储或备份。
                                     </p>
-                                    <div className="relative">
-                                        <input
-                                            type="file"
-                                            accept=".json"
-                                            onChange={handleImport}
-                                            disabled={saving}
-                                            className="hidden"
-                                            id="import-backup"
-                                        />
-                                        <label
-                                            htmlFor="import-backup"
-                                            className={`flex items-center justify-center w-full py-2.5 border-2 border-dashed ${borderColor} rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-all font-bold text-sm ${textPrimary}`}
-                                        >
-                                            {saving ? '正在导入...' : '选择备份文件并导入'}
-                                        </label>
-                                    </div>
+                                    <Button onClick={handleExportDatabase} className="w-full" disabled={saving}>
+                                        {saving ? '导出中...' : '导出数据库文件 (DB)'}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <hr className={borderColor} />
+
+                            <div className="space-y-4">
+                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider`}>导入数据</h3>
+                                <p className={`text-xs ${textSecondary}`}>
+                                    警告：导入操作将清除并替换掉当前系统中所有的现有数据。请谨慎操作。
+                                </p>
+                                <div className="relative">
+                                    <input
+                                        type="file"
+                                        accept=".json"
+                                        onChange={handleImport}
+                                        disabled={saving}
+                                        className="hidden"
+                                        id="import-backup"
+                                    />
+                                    <label
+                                        htmlFor="import-backup"
+                                        className={`flex items-center justify-center w-full py-2.5 border-2 border-dashed ${borderColor} rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-all font-bold text-sm ${textPrimary}`}
+                                    >
+                                        {saving ? '正在导入...' : '选择备份文件并导入'}
+                                    </label>
                                 </div>
                             </div>
 
@@ -1039,8 +1080,10 @@ const SettingsPage = () => {
                                 <div className="text-xs text-amber-500">
                                     <p className="font-bold mb-1">提示事项：</p>
                                     <ul className="list-disc list-inside space-y-1">
-                                        <li>导入成功后应用会自动刷新页面。</li>
-                                        <li>如果导入的是在不同环境下生成的备份，请确保站点 Cookies 与客户端地址仍然有效。</li>
+                                        <li>JSON 备份：适合跨版本迁移，包含配置和数据</li>
+                                        <li>数据库文件：完整的原始数据，可用于外部存储或直接替换</li>
+                                        <li>导入成功后应用会自动刷新页面</li>
+                                        <li>如果导入的是在不同环境下生成的备份，请确保站点 Cookies 与客户端地址仍然有效</li>
                                     </ul>
                                 </div>
                             </div>

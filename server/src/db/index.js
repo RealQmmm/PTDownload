@@ -2,11 +2,43 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, '../../data/ptdownload.db');
+// 数据库路径智能检测逻辑：
+// 1. 优先检查外部挂载路径 /external_db 是否存在
+// 2. 如果存在，使用外部数据库 /external_db/ptdownload.db
+// 3. 否则使用内置数据库 /data/ptdownload.db
+// 
+// 用户只需在 docker-compose.yml 中配置 volume 映射即可：
+// volumes:
+//   - /your/path:/external_db  # 配置这个就自动使用外部数据库
+//
+// 无需设置 USE_EXTERNAL_DB 环境变量！
+
+let dbPath;
+let useExternalDB = false;
+
+// 检查外部数据库目录是否存在
+const externalDBDir = '/external_db';
+const externalDBPath = path.join(externalDBDir, 'ptdownload.db');
+const internalDBPath = process.env.DB_PATH || path.join(__dirname, '../../data/ptdownload.db');
+
+if (fs.existsSync(externalDBDir)) {
+  // 外部目录存在，使用外部数据库
+  dbPath = externalDBPath;
+  useExternalDB = true;
+  console.log(`[Database] External directory detected at: ${externalDBDir}`);
+  console.log(`[Database] Using EXTERNAL database at: ${dbPath}`);
+} else {
+  // 外部目录不存在，使用内置数据库
+  dbPath = internalDBPath;
+  useExternalDB = false;
+  console.log(`[Database] External directory not found, using INTERNAL database`);
+  console.log(`[Database] Using INTERNAL database at: ${dbPath}`);
+}
 
 // Ensure directory exists
 const deployDir = path.dirname(dbPath);
 if (!fs.existsSync(deployDir)) {
+  console.log(`[Database] Creating directory: ${deployDir}`);
   fs.mkdirSync(deployDir, { recursive: true });
 }
 
@@ -381,4 +413,8 @@ function getDB() {
   return db;
 }
 
-module.exports = { initDB, getDB };
+function getDBPath() {
+  return dbPath;
+}
+
+module.exports = { initDB, getDB, getDBPath };

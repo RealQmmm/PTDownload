@@ -40,3 +40,9 @@ Thumbs.db
 # Temporary files
 *.tmp
 .cache/
+
+# Test files
+test-*.js
+test-*.sh
+*.bak
+

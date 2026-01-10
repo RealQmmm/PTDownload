@@ -584,7 +584,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                                     {getCategoryIcon(item.category)} {item.category}
                                                 </span>
                                             )}
-                                            {item.isFree && <span className="px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[9px] font-medium whitespace-nowrap">🎁</span>}
+                                            {item.isFree && <span className="px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[9px] font-medium whitespace-nowrap">🎁{item.freeType || '免费'}</span>}
                                         </div>
                                     </div>
                                     <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} font-bold text-xs line-clamp-2 mb-1 leading-tight block`}>

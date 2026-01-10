@@ -189,9 +189,29 @@ class SearchService {
                     const promotion = item.promotion || {};
 
                     let freeType = '';
-                    if (promotion.free) freeType = 'Free';
-                    if (promotion.twoUp) freeType = promotion.free ? '2xFree' : '2x';
-                    if (promotion.halfDown) freeType = '50%';
+                    // Some versions of the API use 'discount' string, others use boolean flags
+                    const discount = String(promotion.discount || status.discount || '').toUpperCase();
+
+                    // Prioritize composite promotions (2x + Discount)
+                    if (promotion.twoUpFree || discount.includes('TWO_UP_FREE') || (discount.includes('2X') && discount.includes('FREE'))) {
+                        freeType = '2xFree';
+                    } else if (promotion.twoUpHalfDown || discount.includes('TWO_UP_HALF_DOWN') || (discount.includes('2X') && (discount.includes('50') || discount.includes('HALF')))) {
+                        freeType = '2x50%';
+                    } else if (promotion.free || discount.includes('FREE') || promotion.allFree || discount === 'FREE' || discount === 'ALL_FREE') {
+                        freeType = (promotion.twoUp || discount.includes('TWO_UP') || discount.includes('2X')) ? '2xFree' : 'Free';
+                    } else if (promotion.halfDown || discount.includes('HALF_DOWN') || discount.includes('50') || discount.includes('PERCENT_50')) {
+                        freeType = '50%';
+                    } else if (promotion.thirtyDown || discount.includes('THIRTY_DOWN') || discount.includes('30') || discount.includes('PERCENT_70')) {
+                        freeType = '30%';
+                    } else if (promotion.twoUp || discount.includes('TWO_UP') || discount.includes('2X')) {
+                        freeType = '2x';
+                    }
+
+                    const isFree = freeType !== '';
+
+                    if (enableLogs && isFree) {
+                        console.log(`[M-Team V2 Search] Item ${item.id} detected as ${freeType}. Promo: ${JSON.stringify(promotion)}, Status: ${JSON.stringify(status.discount || status)}`);
+                    }
 
                     return {
                         id: String(item.id),
@@ -203,7 +223,7 @@ class SearchService {
                         seeders: parseInt(status.seeders) || 0,
                         leechers: parseInt(status.leechers) || 0,
                         date: item.times || item.createdDate || '',
-                        isFree: !!(promotion.free || promotion.twoUp || promotion.halfDown),
+                        isFree: isFree,
                         freeType: freeType,
                         category: this._getMTeamCategory(item.category),
                         categoryId: item.category
@@ -252,7 +272,13 @@ class SearchService {
         const promises = sites.map(async (site) => {
             try {
                 if (siteService._isMTeamV2(site)) {
-                    return await this._searchMTeamV2(site, '', 1);
+                    const mteamResults = await this._searchMTeamV2(site, '', 1);
+                    return mteamResults.map(r => ({
+                        ...r,
+                        siteName: site.name,
+                        siteUrl: site.url,
+                        siteIcon: site.site_icon
+                    }));
                 }
 
                 if (site.type === 'Mock') {

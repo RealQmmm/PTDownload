@@ -7,9 +7,18 @@ services:
     ports:
       - "3000:3000"
     volumes:
+      # 内置数据目录（必需）
       - ./data:/data
+      # 外部数据库挂载（可选）
+      # 如果配置了这个映射，系统会自动使用外部数据库
+      # 如果不配置，系统会自动使用内置数据库 /data/ptdownload.db
+      #
+      # 使用方法：取消下面的注释并修改为你的实际路径
+      # - /share/Container/PTdownload:/external_db
+      # - /home/user/ptdb:/external_db
+      # - /mnt/nas/ptdownload:/external_db
+
     environment:
       - PORT=3000
-      - DB_PATH=/data/ptdownload.db
       - TZ=Asia/Shanghai
     restart: unless-stopped

@@ -3,7 +3,20 @@ const fs = require('fs');
 const path = require('path');
 
 const ALGORITHM = 'aes-256-cbc';
-const SECRET_FILE = path.join(__dirname, '../../../data/.secret');
+
+// 密钥文件路径逻辑：跟随数据库位置
+// 如果使用外部数据库，密钥也存储在外部目录
+// 如果使用内置数据库，密钥存储在内置目录
+function getSecretFilePath() {
+    const externalDBDir = '/external_db';
+    if (fs.existsSync(externalDBDir)) {
+        // 使用外部数据库，密钥也存储在外部
+        return path.join(externalDBDir, '.secret');
+    } else {
+        // 使用内置数据库，密钥存储在内置目录
+        return path.join(__dirname, '../../../data/.secret');
+    }
+}
 
 let secretKey = null;
 
@@ -11,14 +24,18 @@ let secretKey = null;
 function getSecretKey() {
     if (secretKey) return secretKey;
 
+    const SECRET_FILE = getSecretFilePath();
+
     if (process.env.APP_SECRET) {
         // Use provided env var (hashed to ensure 32 bytes)
         secretKey = crypto.createHash('sha256').update(process.env.APP_SECRET).digest();
+        console.log('[Crypto] Using APP_SECRET from environment variable');
     } else {
         // Check for persisted key file
         if (fs.existsSync(SECRET_FILE)) {
             const fileContent = fs.readFileSync(SECRET_FILE, 'utf8');
             secretKey = Buffer.from(fileContent, 'hex');
+            console.log(`[Crypto] Loaded secret key from: ${SECRET_FILE}`);
         } else {
             // Generate new random key and save it
             secretKey = crypto.randomBytes(32);
@@ -28,7 +45,7 @@ function getSecretKey() {
                 fs.mkdirSync(dir, { recursive: true });
             }
             fs.writeFileSync(SECRET_FILE, secretKey.toString('hex'));
-            console.log('Generated and saved new application secret key.');
+            console.log(`[Crypto] Generated and saved new secret key to: ${SECRET_FILE}`);
         }
     }
     return secretKey;
