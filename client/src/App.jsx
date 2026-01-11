@@ -11,6 +11,8 @@ import LoginPage from './pages/LoginPage'
 import SeriesPage from './pages/SeriesPage'
 import PWAInstallPrompt from './components/PWAInstallPrompt'
 import useAdaptiveStatusBar from './hooks/useAdaptiveStatusBar'
+import useSwipeGesture from './hooks/useSwipeGesture'
+
 
 
 
@@ -100,6 +102,13 @@ function App() {
 
     // Update iOS status bar and theme color dynamically
     useAdaptiveStatusBar(computedDarkMode);
+
+    // Swipe gesture for sidebar (mobile only)
+    useSwipeGesture(
+        () => setSidebarOpen(true),  // Swipe right - open sidebar
+        () => setSidebarOpen(false), // Swipe left - close sidebar
+        isAuthenticated && window.innerWidth < 1024 // Only on mobile when authenticated
+    );
 
     const authenticatedFetch = async (url, options = {}) => {
         const token = localStorage.getItem('token');
