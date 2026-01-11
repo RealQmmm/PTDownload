@@ -316,7 +316,7 @@ const SeriesPage = () => {
                                 </div>
 
                                 <div className="mt-auto flex justify-between items-center text-xs">
-                                    <span className={textSecondary}>追剧来源: {sub.site_name || '未知'}</span>
+                                    <span className={textSecondary}>追剧来源: {sub.smart_switch === 1 ? '跨站智能聚合' : (sub.site_name || '未知')}</span>
                                     <div className="space-x-2 whitespace-nowrap">
                                         <button
                                             onClick={async () => {
