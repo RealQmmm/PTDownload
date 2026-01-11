@@ -402,5 +402,6 @@ module.exports = {
         const parser = parsers[type];
         return parser ? parser(html, baseUrl) : [];
     },
-    parseUserStats
+    parseUserStats,
+    normalizeCategory
 };

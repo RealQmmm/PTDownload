@@ -49,6 +49,8 @@ const SettingsPage = () => {
     const [cookieCheckInterval, setCookieCheckInterval] = useState('60');
     const [checkinTime, setCheckinTime] = useState('09:00');
     const [rssCacheTTL, setRssCacheTTL] = useState('300');
+    const [searchRetryCount, setSearchRetryCount] = useState('0');
+    const [mteamApiHost, setMteamApiHost] = useState('auto');
     // Dashboard polling intervals
     const [dashboardActiveInterval, setDashboardActiveInterval] = useState('10');
     const [dashboardIdleInterval, setDashboardIdleInterval] = useState('30');
@@ -161,6 +163,8 @@ const SettingsPage = () => {
             setCookieCheckInterval(data.cookie_check_interval || '60');
             setCheckinTime(data.checkin_time || '09:00');
             setRssCacheTTL(data.rss_cache_ttl || '300');
+            setSearchRetryCount(data.search_retry_count || '0');
+            setMteamApiHost(data.mteam_api_host || 'auto');
             // Dashboard polling intervals
             setDashboardActiveInterval(data.dashboard_active_interval || '10');
             setDashboardIdleInterval(data.dashboard_idle_interval || '30');
@@ -198,6 +202,8 @@ const SettingsPage = () => {
                     cookie_check_interval: cookieCheckInterval,
                     checkin_time: checkinTime,
                     rss_cache_ttl: rssCacheTTL,
+                    search_retry_count: searchRetryCount,
+                    mteam_api_host: mteamApiHost,
                     dashboard_active_interval: dashboardActiveInterval,
                     dashboard_idle_interval: dashboardIdleInterval,
                     ...logSettings,
@@ -930,7 +936,7 @@ const SettingsPage = () => {
                             <hr className={borderColor} />
 
                             <div>
-                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>日志与同步设置</h3>
+                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>日志与站点设置</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <Input
                                         label="日志保留天数"
@@ -968,6 +974,33 @@ const SettingsPage = () => {
                                         value={rssCacheTTL}
                                         onChange={(e) => setRssCacheTTL(e.target.value)}
                                     />
+                                    <div>
+                                        <Input
+                                            label="搜索超时重试次数"
+                                            type="number"
+                                            min="0"
+                                            max="3"
+                                            value={searchRetryCount}
+                                            onChange={(e) => setSearchRetryCount(e.target.value)}
+                                        />
+                                        <p className={`text-[10px] ${textSecondary} mt-1`}>
+                                            0=不重试（默认），1-3=重试次数
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label className={`block text-xs font-bold ${textSecondary} uppercase mb-2`}>M-Team API 域名</label>
+                                        <Select
+                                            value={mteamApiHost}
+                                            onChange={(e) => setMteamApiHost(e.target.value)}
+                                        >
+                                            <option value="auto">自动选择 (推荐)</option>
+                                            <option value="api.m-team.cc">api.m-team.cc</option>
+                                            <option value="api.m-team.io">api.m-team.io</option>
+                                        </Select>
+                                        <p className={`text-[10px] ${textSecondary} mt-1`}>
+                                            如果某个域名连接较慢，可手动切换。自动模式下将依次尝试。
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
 

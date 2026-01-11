@@ -116,7 +116,7 @@ class SchedulerService {
             }
 
             this.cookieJob = schedule.scheduleJob(cronStr, async () => {
-                if (this._isLogEnabled()) console.log(`[${timeUtils.getLocalDateTimeString()}] Periodic cookie check triggered...`);
+                if (this._isLogEnabled()) console.log('Periodic cookie check triggered...');
                 const results = await siteService.checkAllCookies();
                 const valid = results.filter(r => r === true).length;
                 if (this._isLogEnabled() || results.some(r => r === false)) {
@@ -146,7 +146,7 @@ class SchedulerService {
             const siteService = require('./siteService');
             const loggerService = require('./loggerService');
             this.checkinJob = schedule.scheduleJob(`${minute} ${hour} * * *`, async () => {
-                if (this._isLogEnabled()) console.log(`[${timeUtils.getLocalDateTimeString()}] Daily site check-in triggered...`);
+                if (this._isLogEnabled()) console.log('Daily site check-in triggered...');
                 const successCount = await siteService.checkinAllSites();
                 loggerService.log(`每日自动签到完成，成功 ${successCount} 个站点`, 'success');
             });
@@ -306,7 +306,7 @@ class SchedulerService {
     }
 
     async executeTask(task) {
-        if (this._isLogEnabled()) console.log(`[${timeUtils.getLocalDateTimeString()}] Executing task: ${task.name} (Type: ${task.type})`);
+        if (this._isLogEnabled()) console.log(`Executing task: ${task.name} (Type: ${task.type})`);
 
         if (task.type === 'rss') {
             const rssService = require('./rssService');

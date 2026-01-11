@@ -1,4 +1,7 @@
 require('dotenv').config();
+const { setupGlobalLogger } = require('./utils/logger');
+setupGlobalLogger();
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');

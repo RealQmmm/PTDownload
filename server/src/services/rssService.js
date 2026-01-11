@@ -8,6 +8,7 @@ const clientService = require('./clientService');
 const notificationService = require('./notificationService');
 const loggerService = require('./loggerService');
 const appConfig = require('../utils/appConfig');
+const torrentFetcher = require('../utils/torrentFetcher');
 
 class RSSService {
     constructor() {
@@ -273,18 +274,19 @@ class RSSService {
                             } else {
                                 // Download torrent file to memory to extract hash
                                 try {
-                                    const torrentRes = await axios.get(item.link, {
-                                        headers: siteService.getAuthHeaders(site),
-                                        responseType: 'arraybuffer',
-                                        timeout: 15000
-                                    });
-                                    const buffer = Buffer.from(torrentRes.data);
+                                    const buffer = await torrentFetcher.fetchTorrentData(site, item.link);
                                     const parsed = parseTorrent(buffer);
                                     torrentHash = parsed.infoHash;
                                     torrentData = buffer.toString('base64'); // Store as base64 for passing to downloader
                                 } catch (e) {
-                                    if (enableLogs) console.warn(`[RSS] Failed to download/parse torrent for hash check: ${e.message}`);
-                                    torrentData = item.link; // Fallback to URL if parsing fails (will skip hash check)
+                                    if (enableLogs) console.warn(`[RSS] Failed to download/parse torrent: ${e.message}`);
+                                    // If it's M-Team V2, don't fallback to URL as qBittorrent can't handle it
+                                    const isMTeamV2 = site && site.api_key && (site.url.includes('m-team.cc') || site.url.includes('m-team.io'));
+                                    if (isMTeamV2) {
+                                        if (enableLogs) console.error(`[RSS] M-Team V2 download failed completely. Skipping match.`);
+                                        continue;
+                                    }
+                                    torrentData = item.link; // Fallback to URL for other sites if parsing fails
                                 }
                             }
 
@@ -486,7 +488,10 @@ class RSSService {
 
                             // === STEP 4: NOW submit to downloader ===
                             let result;
-                            if (torrentData && !item.link.startsWith('magnet:')) {
+                            // Check if torrentData is base64 content or just the URL
+                            const isData = torrentData && torrentData !== item.link;
+
+                            if (isData && !item.link.startsWith('magnet:')) {
                                 // If we have the file data, pass it along with save path, category, and file selection
                                 result = await downloaderService.addTorrentFromData(targetClient, torrentData, {
                                     savePath: finalSavePath,
@@ -494,7 +499,7 @@ class RSSService {
                                     fileIndices: fileIndices
                                 });
                             } else {
-                                // Magnet or fallback (file selection not supported for magnets)
+                                // Magnet or fallback to URL (file selection not supported for magnets or URL adds)
                                 result = await downloaderService.addTorrent(targetClient, item.link, {
                                     savePath: finalSavePath,
                                     category: task.category
@@ -861,14 +866,49 @@ class RSSService {
         const FormatUtils = require('../utils/formatUtils');
         notificationService.notifyNewTorrent(task.name, item.title, FormatUtils.formatBytes(item.size));
 
-        // Attempt Download
-        let result = await downloaderService.addTorrent(targetClient, item.link, {
-            savePath: task.save_path,
-            category: task.category
-        });
+        // Match found, now handle download
+        let torrentHash = null;
+        let result;
 
-        // Smart Logic: Update series_episodes if successful
+        try {
+            // Get site info for this item
+            const site = siteService.getSiteById(item.siteId);
+            if (site) {
+                // Fetch actual torrent file (handles M-Team V2 tokens etc)
+                const buffer = await torrentFetcher.fetchTorrentData(site, item.link);
+                const torrentBase64 = buffer.toString('base64');
+
+                // Parse hash for history
+                try {
+                    const parsed = parseTorrent(buffer);
+                    torrentHash = parsed.infoHash;
+                } catch (e) {
+                    if (enableLogs) console.warn(`[RSS-Smart] Failed to parse hash: ${e.message}`);
+                }
+
+                // Add to downloader from data
+                result = await downloaderService.addTorrentFromData(targetClient, torrentBase64, {
+                    savePath: task.save_path,
+                    category: task.category
+                });
+            } else {
+                // Fallback for sites not in DB (shouldn't happen in smart task)
+                result = await downloaderService.addTorrent(targetClient, item.link, {
+                    savePath: task.save_path,
+                    category: task.category
+                });
+            }
+        } catch (downloadErr) {
+            if (enableLogs) console.error(`[RSS-Smart] Failed to fetch/add torrent: ${downloadErr.message}`);
+            result = { success: false, message: downloadErr.message };
+        }
+
+        // Smart Logic: Update series_episodes and task_history if successful
         if (result.success) {
+            // Update hash in pre-recorded history
+            if (torrentHash) {
+                db.prepare('UPDATE task_history SET item_hash = ? WHERE id = ?').run(torrentHash, preRecordId);
+            }
             if (enableLogs) console.log(`[RSS-Smart] Successfully added: ${item.title}`);
 
             // Record parsed episodes to DB
@@ -881,7 +921,7 @@ class RSSService {
                         VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
                     `);
                     item.epInfo.episodes.forEach(ep => {
-                        insertEpStmt.run(subscription.id, item.epInfo.season, ep, null, item.title);
+                        insertEpStmt.run(subscription.id, item.epInfo.season, ep, torrentHash, item.title);
                     });
                 }
             }

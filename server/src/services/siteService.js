@@ -5,6 +5,7 @@ const loggerService = require('./loggerService');
 const notificationService = require('./notificationService');
 const cryptoUtils = require('../utils/cryptoUtils');
 const appConfig = require('../utils/appConfig');
+const mteamApi = require('../utils/mteamApi');
 
 class SiteService {
     constructor() {
@@ -163,22 +164,12 @@ class SiteService {
         const enableLogs = appConfig.isLogsEnabled();
 
         try {
-            // M-Team V2 API 必须在 api.m-team.cc 域名下调用
-            const apiUrl = 'https://api.m-team.cc/api/member/profile';
-
-            if (enableLogs) console.log(`[M-Team V2] Calling API: ${apiUrl}`);
-
-            const https = require('https');
-            const response = await axios.post(apiUrl, {}, {
+            const response = await mteamApi.request('/api/member/profile', {
                 headers: {
                     ...this.getAuthHeaders(site),
                     'Content-Type': 'application/json'
                 },
-                timeout: 15000,
-                httpsAgent: new https.Agent({
-                    rejectUnauthorized: false,
-                    servername: 'api.m-team.cc'
-                })
+                timeout: 15000
             });
 
             if (enableLogs) {
@@ -538,18 +529,12 @@ class SiteService {
         if (this._isMTeamV2(site)) {
             try {
                 // M-Team V2 签到 API
-                const apiUrl = 'https://api.m-team.cc/api/member/checkin';
-                const https = require('https');
-                const response = await axios.post(apiUrl, {}, {
+                const response = await mteamApi.request('/api/member/checkin', {
                     headers: {
                         ...this.getAuthHeaders(site),
                         'Content-Type': 'application/json'
                     },
-                    timeout: 10000,
-                    httpsAgent: new https.Agent({
-                        rejectUnauthorized: false,
-                        servername: 'api.m-team.cc'
-                    })
+                    timeout: 10000
                 });
 
                 if (enableLogs) console.log(`[M-Team V2] Checkin Response:`, JSON.stringify(response.data));

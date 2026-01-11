@@ -36,7 +36,7 @@ async function downloadMTeamTorrent(downloadUrl) {
                 // Check if redirect is to M-Team domains (api.m-team.cc or CDN halomt.com)
                 try {
                     const redirectParsed = new URL(redirectUrl);
-                    const allowedDomains = ['api.m-team.cc', 'halomt.com'];
+                    const allowedDomains = ['api.m-team.cc', 'api.m-team.io', 'halomt.com'];
                     const isAllowed = allowedDomains.some(domain =>
                         redirectParsed.hostname === domain || redirectParsed.hostname.endsWith('.' + domain)
                     );
