@@ -169,12 +169,28 @@ class SchedulerService {
 
     startAutoCleanupJob() {
         try {
+            if (this.autoCleanupJob) {
+                this.autoCleanupJob.cancel();
+                this.autoCleanupJob = null;
+            }
+
+            const { getDB } = require('../db');
+            const db = getDB();
+            const setting = db.prepare("SELECT value FROM settings WHERE key = 'cleanup_enabled'").get();
+            const enabled = setting?.value === 'true';
+
+            if (!enabled) {
+                if (this._isLogEnabled()) console.log('Auto-cleanup is disabled, skipping job registration.');
+                return;
+            }
+
             if (this._isLogEnabled()) console.log('Starting auto-cleanup job (Hourly)...');
             // Run every hour
-            schedule.scheduleJob('0 * * * *', async () => {
+            this.autoCleanupJob = schedule.scheduleJob('0 * * * *', async () => {
                 const cleanupService = require('./cleanupService');
                 await cleanupService.runCleanup();
             });
+            console.log('[Scheduler] Auto-cleanup job scheduled (Hourly)');
         } catch (err) {
             console.error('[Scheduler] Failed to start auto-cleanup job:', err.message);
         }

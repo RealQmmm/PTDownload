@@ -48,11 +48,12 @@ router.post('/', (req, res) => {
 
         transaction(settings);
 
-        // If cookie_check_interval was updated, restart the job
-        if (settings.cookie_check_interval || settings.checkin_time) {
+        // If scheduling settings were updated, restart the jobs
+        if (settings.cookie_check_interval || settings.checkin_time || settings.cleanup_enabled !== undefined) {
             const schedulerService = require('../services/schedulerService');
             if (settings.cookie_check_interval) schedulerService.startCookieCheckJob();
             if (settings.checkin_time) schedulerService.startCheckinJob();
+            if (settings.cleanup_enabled !== undefined) schedulerService.startAutoCleanupJob();
         }
 
         // If enable_system_logs was updated, sync to appConfig
