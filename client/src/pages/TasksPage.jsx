@@ -572,9 +572,9 @@ const TasksPage = () => {
                                             else if (current.unit === 'd') newCron = `0 0 */${val} * *`;
                                             setFormData({ ...formData, cron: newCron });
                                         }}
-                                        className="w-16 px-2 text-center text-sm bg-transparent focus:outline-none text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-gray-700"
+                                        className="flex-1 md:w-15 px-2 text-center text-base bg-transparent focus:outline-none text-gray-900 dark:text-gray-100 border-r border-gray-200 dark:border-gray-700"
                                     />
-                                    <div className="relative w-20">
+                                    <div className="relative w-16 md:w-20">
                                         <select
                                             value={parseCron(formData.cron).unit}
                                             onChange={(e) => {
@@ -586,7 +586,7 @@ const TasksPage = () => {
                                                 else if (unit === 'd') newCron = `0 0 */${current.value} * *`;
                                                 setFormData({ ...formData, cron: newCron });
                                             }}
-                                            className="w-full h-full pl-3 pr-8 text-sm bg-transparent focus:outline-none cursor-pointer text-gray-700 dark:text-gray-200 appearance-none"
+                                            className="w-full h-full pl-2 pr-6 md:pl-3 md:pr-8 text-sm bg-transparent focus:outline-none cursor-pointer text-gray-700 dark:text-gray-200 appearance-none"
                                         >
                                             <option value="m">分钟</option>
                                             <option value="h">小时</option>
@@ -630,7 +630,7 @@ const TasksPage = () => {
                                     value={formData.filter_config.smart_regex || ''}
                                     onChange={(e) => setFormData({ ...formData, filter_config: { ...formData.filter_config, smart_regex: e.target.value } })}
                                     placeholder="例如: Game\.of\.Thrones.*S0?1.*(2160p|4k)"
-                                    className="font-mono text-sm"
+                                    className="font-mono text-base"
                                 />
                                 <p className="text-[10px] text-gray-400 mt-1">优先使用正则匹配，关键词作为二次过滤。</p>
                             </div>
@@ -848,7 +848,7 @@ const TasksPage = () => {
                                     <Button
                                         type="submit"
                                         variant={editingRSSSource ? 'secondary' : 'primary'}
-                                        className={editingRSSSource ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
+                                        className={`${editingRSSSource ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''} whitespace-nowrap shrink-0`}
                                     >
                                         {editingRSSSource ? '更新' : '添加'}
                                     </Button>

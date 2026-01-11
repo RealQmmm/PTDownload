@@ -13,118 +13,171 @@ class SchedulerService {
     }
 
     init() {
+        console.log('[Scheduler] Initializing scheduler service...');
         if (this._isLogEnabled()) console.log('Initializing scheduler...');
 
-        // Init tasks
-        this.reloadTasks();
+        try {
+            // Init tasks
+            this.reloadTasks();
 
-        // Start system jobs
-        this.startCleanupJob();
-        this.startCookieCheckJob();
-        this.startCheckinJob();
-        this.startAutoCleanupJob();
+            // Start system jobs
+            this.startCleanupJob();
+            this.startCookieCheckJob();
+            this.startCheckinJob();
+            this.startAutoCleanupJob();
+
+            console.log('[Scheduler] Scheduler initialization completed');
+        } catch (err) {
+            console.error('[Scheduler] Failed to initialize scheduler:', err.message);
+            console.error('[Scheduler] Stack trace:', err.stack);
+        }
     }
 
     reload() {
         if (this._isLogEnabled()) console.log('Reloading scheduler...');
 
-        // Reload tasks
-        this.reloadTasks();
+        try {
+            // Reload tasks
+            this.reloadTasks();
 
-        // Restart system jobs (settings might have changed)
-        this.startCleanupJob();
-        this.startCookieCheckJob();
-        this.startCheckinJob();
-        this.startAutoCleanupJob();
+            // Restart system jobs (settings might have changed)
+            this.startCleanupJob();
+            this.startCookieCheckJob();
+            this.startCheckinJob();
+            this.startAutoCleanupJob();
+        } catch (err) {
+            console.error('[Scheduler] Failed to reload scheduler:', err.message);
+            console.error('[Scheduler] Stack trace:', err.stack);
+        }
     }
 
     reloadTasks() {
-        // Cancel all existing task jobs
-        for (const [id, job] of this.jobs) {
-            job.cancel();
-        }
-        this.jobs.clear();
-
-        // Load tasks from DB
-        const tasks = taskService.getAllTasks();
-        tasks.forEach(task => {
-            if (task.enabled) {
-                this.scheduleTask(task);
+        try {
+            // Cancel all existing task jobs
+            for (const [id, job] of this.jobs) {
+                job.cancel();
             }
-        });
-        if (this._isLogEnabled()) console.log(`Loaded and scheduled ${this.jobs.size} tasks.`);
+            this.jobs.clear();
+
+            // Load tasks from DB
+            const tasks = taskService.getAllTasks();
+            console.log(`[Scheduler] Found ${tasks.length} total tasks in database`);
+
+            tasks.forEach(task => {
+                if (task.enabled) {
+                    this.scheduleTask(task);
+                }
+            });
+
+            console.log(`[Scheduler] Loaded and scheduled ${this.jobs.size} enabled tasks`);
+            if (this._isLogEnabled()) console.log(`Loaded and scheduled ${this.jobs.size} tasks.`);
+        } catch (err) {
+            console.error('[Scheduler] Failed to reload tasks:', err.message);
+            console.error('[Scheduler] Stack trace:', err.stack);
+        }
     }
 
     startCookieCheckJob() {
-        if (this.cookieJob) {
-            this.cookieJob.cancel();
-        }
-
-        const { getDB } = require('../db');
-        const db = getDB();
-        const setting = db.prepare("SELECT value FROM settings WHERE key = 'cookie_check_interval'").get();
-        const interval = parseInt(setting?.value || '60');
-
-        if (this._isLogEnabled()) console.log(`Starting cookie check job with interval: ${interval} minutes`);
-
-        const siteService = require('./siteService');
-        const loggerService = require('./loggerService');
-
-        let cronStr = `*/${interval} * * * *`;
-        if (interval >= 60) {
-            const hours = Math.floor(interval / 60);
-            const remainingMinutes = interval % 60;
-            if (remainingMinutes === 0) {
-                cronStr = `0 */${hours} * * *`;
+        try {
+            if (this.cookieJob) {
+                this.cookieJob.cancel();
             }
-        }
 
-        this.cookieJob = schedule.scheduleJob(cronStr, async () => {
-            if (this._isLogEnabled()) console.log(`[${timeUtils.getLocalDateTimeString()}] Periodic cookie check triggered...`);
-            const results = await siteService.checkAllCookies();
-            const valid = results.filter(r => r === true).length;
-            if (this._isLogEnabled() || results.some(r => r === false)) {
-                loggerService.log(`周期性 Cookie 检查完成：${valid}/${results.length} 站点有效`, results.every(r => r) ? 'success' : 'error');
+            const { getDB } = require('../db');
+            const db = getDB();
+            const setting = db.prepare("SELECT value FROM settings WHERE key = 'cookie_check_interval'").get();
+            const interval = parseInt(setting?.value || '60');
+
+            if (this._isLogEnabled()) console.log(`Starting cookie check job with interval: ${interval} minutes`);
+
+            const siteService = require('./siteService');
+            const loggerService = require('./loggerService');
+
+            let cronStr;
+            if (interval >= 60) {
+                const hours = Math.floor(interval / 60);
+                const remainingMinutes = interval % 60;
+
+                if (remainingMinutes === 0) {
+                    // For exact hour intervals, generate explicit hour list
+                    // e.g., every 3 hours: 0,3,6,9,12,15,18,21
+                    const hourList = [];
+                    for (let h = 0; h < 24; h += hours) {
+                        hourList.push(h);
+                    }
+                    cronStr = `0 ${hourList.join(',')} * * *`;
+                } else {
+                    // Mixed hours and minutes, fall back to minute-based cron
+                    cronStr = `*/${interval} * * * *`;
+                }
+            } else {
+                // Less than 60 minutes, use minute-based cron
+                cronStr = `*/${interval} * * * *`;
             }
-        });
+
+            this.cookieJob = schedule.scheduleJob(cronStr, async () => {
+                if (this._isLogEnabled()) console.log(`[${timeUtils.getLocalDateTimeString()}] Periodic cookie check triggered...`);
+                const results = await siteService.checkAllCookies();
+                const valid = results.filter(r => r === true).length;
+                if (this._isLogEnabled() || results.some(r => r === false)) {
+                    loggerService.log(`周期性 Cookie 检查完成：${valid}/${results.length} 站点有效`, results.every(r => r) ? 'success' : 'error');
+                }
+            });
+            console.log(`[Scheduler] Cookie check job scheduled with interval: ${interval} minutes (cron: ${cronStr})`);
+        } catch (err) {
+            console.error('[Scheduler] Failed to start cookie check job:', err.message);
+        }
     }
 
     startCheckinJob() {
-        if (this.checkinJob) {
-            this.checkinJob.cancel();
+        try {
+            if (this.checkinJob) {
+                this.checkinJob.cancel();
+            }
+
+            const { getDB } = require('../db');
+            const db = getDB();
+            const setting = db.prepare("SELECT value FROM settings WHERE key = 'checkin_time'").get();
+            const time = setting?.value || '09:00'; // HH:mm
+            const [hour, minute] = time.split(':');
+
+            if (this._isLogEnabled()) console.log(`Starting daily check-in job at: ${time}`);
+
+            const siteService = require('./siteService');
+            const loggerService = require('./loggerService');
+            this.checkinJob = schedule.scheduleJob(`${minute} ${hour} * * *`, async () => {
+                if (this._isLogEnabled()) console.log(`[${timeUtils.getLocalDateTimeString()}] Daily site check-in triggered...`);
+                const successCount = await siteService.checkinAllSites();
+                loggerService.log(`每日自动签到完成，成功 ${successCount} 个站点`, 'success');
+            });
+            console.log(`[Scheduler] Daily check-in job scheduled at: ${time}`);
+        } catch (err) {
+            console.error('[Scheduler] Failed to start check-in job:', err.message);
         }
-
-        const { getDB } = require('../db');
-        const db = getDB();
-        const setting = db.prepare("SELECT value FROM settings WHERE key = 'checkin_time'").get();
-        const time = setting?.value || '09:00'; // HH:mm
-        const [hour, minute] = time.split(':');
-
-        if (this._isLogEnabled()) console.log(`Starting daily check-in job at: ${time}`);
-
-        const siteService = require('./siteService');
-        const loggerService = require('./loggerService');
-        this.checkinJob = schedule.scheduleJob(`${minute} ${hour} * * *`, async () => {
-            if (this._isLogEnabled()) console.log(`[${timeUtils.getLocalDateTimeString()}] Daily site check-in triggered...`);
-            const successCount = await siteService.checkinAllSites();
-            loggerService.log(`每日自动签到完成，成功 ${successCount} 个站点`, 'success');
-        });
     }
 
     async startCleanupJob() {
-        if (this._isLogEnabled()) console.log('Starting daily log cleanup job (3 AM)...');
-        schedule.scheduleJob('0 3 * * *', async () => {
-            await this.cleanOldLogs();
-        });
+        try {
+            if (this._isLogEnabled()) console.log('Starting daily log cleanup job (3 AM)...');
+            schedule.scheduleJob('0 3 * * *', async () => {
+                await this.cleanOldLogs();
+            });
+        } catch (err) {
+            console.error('[Scheduler] Failed to start cleanup job:', err.message);
+        }
     }
 
     startAutoCleanupJob() {
-        if (this._isLogEnabled()) console.log('Starting auto-cleanup job (Hourly)...');
-        // Run every hour
-        schedule.scheduleJob('0 * * * *', async () => {
-            const cleanupService = require('./cleanupService');
-            await cleanupService.runCleanup();
-        });
+        try {
+            if (this._isLogEnabled()) console.log('Starting auto-cleanup job (Hourly)...');
+            // Run every hour
+            schedule.scheduleJob('0 * * * *', async () => {
+                const cleanupService = require('./cleanupService');
+                await cleanupService.runCleanup();
+            });
+        } catch (err) {
+            console.error('[Scheduler] Failed to start auto-cleanup job:', err.message);
+        }
     }
 
     async cleanOldLogs() {
