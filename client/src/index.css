@@ -6,6 +6,9 @@
     html {
         -webkit-tap-highlight-color: transparent;
         scroll-behavior: smooth;
+        /* Prevent elastic scrolling for PWA feel */
+        height: 100%;
+        overflow: hidden;
     }
 
     /* Safe Area Support for PWA */
@@ -23,6 +26,8 @@
         padding-right: env(safe-area-inset-right);
         padding-bottom: env(safe-area-inset-bottom);
         padding-left: env(safe-area-inset-left);
+        height: 100%;
+        overflow: hidden;
     }
 
     /* Custom Scrollbar for Webkit */
@@ -37,6 +42,28 @@
 
     ::-webkit-scrollbar-thumb {
         @apply bg-gray-300 dark:bg-gray-700 rounded-full hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors;
+    }
+
+    /* iOS PWA Interaction Fixes */
+    @supports (-webkit-touch-callout: none) {
+
+        input,
+        select,
+        textarea {
+            font-size: 16px !important;
+            /* Prevent auto-zoom on focus */
+            -webkit-user-select: auto !important;
+            user-select: auto !important;
+        }
+
+        /* Force native picker to trigger reliably */
+        select,
+        input[type="time"],
+        input[type="date"] {
+            cursor: pointer;
+            min-height: 44px;
+            /* Apple's recommended minimum tap target */
+        }
     }
 }
 

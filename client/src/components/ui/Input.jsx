@@ -24,7 +24,7 @@ const Input = forwardRef(({
                         bg-white dark:bg-surface-800 
                         border border-gray-200 dark:border-gray-700 
                         rounded-xl 
-                        text-gray-900 dark:text-gray-100 
+                        text-base text-gray-900 dark:text-gray-100 
                         placeholder-gray-400 dark:placeholder-gray-500
                         focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 
                         transition-all duration-200

@@ -1879,7 +1879,7 @@ const SettingsPage = () => {
                                                         { id: 'maintenance', name: '维护', icon: '🛠️' },
 
                                                         { id: 'logs', name: '日志', icon: '📜' },
-                                                        { id: 'security', name: '安全', icon: '🔒' },
+                                                        { id: 'security', name: '用户管理', icon: '👥' },
                                                         { id: 'about', name: '关于', icon: 'ℹ️' }
                                                     ].map(setting => (
                                                         <label key={setting.id} className={`flex items-center p-3 rounded-lg border cursor-pointer transition-all ${selectedPermissions.settings.includes(setting.id) ? activeSelectionClass : `${bgMain} ${borderColor} hover:border-blue-400`}`}>
@@ -2181,7 +2181,7 @@ const SettingsPage = () => {
                             { id: 'maintenance', name: '维护', icon: '🛠️' },
 
                             { id: 'logs', name: '日志', icon: '📜' },
-                            { id: 'security', name: '安全', icon: '🔒' },
+                            { id: 'security', name: '用户管理', icon: '👥' },
                             { id: 'about', name: '关于', icon: 'ℹ️' }
                         ].filter(item => {
                             if (me?.role === 'admin') return true;
