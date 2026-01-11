@@ -9,12 +9,16 @@ const ALGORITHM = 'aes-256-cbc';
 // 如果使用内置数据库，密钥存储在内置目录
 function getSecretFilePath() {
     const externalDBDir = '/external_db';
-    if (fs.existsSync(externalDBDir)) {
-        // 使用外部数据库，密钥也存储在外部
-        return path.join(externalDBDir, '.secret');
+    const externalDBPath = path.join(externalDBDir, 'ptdownload.db');
+    const internalSecretPath = '/data/.secret';
+    const externalSecretPath = path.join(externalDBDir, '.secret');
+
+    // 逻辑与 db/index.js 保持一致：只有当外部数据库文件存在时才使用外部密钥
+    if (fs.existsSync(externalDBPath)) {
+        return externalSecretPath;
     } else {
-        // 使用内置数据库，密钥存储在内置目录
-        return path.join(__dirname, '../../../data/.secret');
+        // 使用内置数据库，密钥存储在挂载的 /data 目录
+        return internalSecretPath;
     }
 }
 
