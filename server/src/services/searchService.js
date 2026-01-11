@@ -364,6 +364,9 @@ class SearchService {
                         size: sizeStr,
                         seeders, leechers,
                         date: pubDate ? timeUtils.getLocalDateTimeString(new Date(pubDate)) : timeUtils.getLocalDateTimeString(),
+                        siteName: site.name,
+                        siteUrl: site.url,
+                        siteIcon: site.site_icon,
                         category: siteParsers.normalizeCategory($(el).find('category').text()),
                         isFree: title.toLowerCase().includes('free') || desc.toLowerCase().includes('free'),
                         freeType: ''
