@@ -156,7 +156,7 @@ const SettingsPage = () => {
                 cleanup_enabled: data.cleanup_enabled === 'true',
                 cleanup_min_ratio: data.cleanup_min_ratio || '2.0',
                 cleanup_max_seeding_time: data.cleanup_max_seeding_time || '336',
-                cleanup_delete_files: data.cleanup_delete_files === undefined || data.cleanup_delete_files === 'true'
+                cleanup_delete_files: data.cleanup_delete_files !== 'false'
             });
             setCookieCheckInterval(data.cookie_check_interval || '60');
             setCheckinTime(data.checkin_time || '09:00');
