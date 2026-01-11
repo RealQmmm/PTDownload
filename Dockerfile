@@ -44,7 +44,7 @@ COPY --from=frontend-builder /app/dist /client/dist
 
 # Declare volumes for database and external storage
 # This helps Docker GUIs (Synology, Unraid, Portainer) suggest volume mappings
-VOLUME ["/data", "/external_db"]
+VOLUME ["/external_db"]
 
 EXPOSE 3000
 

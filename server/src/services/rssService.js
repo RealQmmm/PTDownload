@@ -602,7 +602,7 @@ class RSSService {
         try {
             // 1. Get ALL enabled RSS sources from enabled sites
             let sources = db.prepare(`
-                SELECT r.url, r.site_id, r.name, s.name as site_name, s.cookie 
+                SELECT r.url, r.site_id, r.name, s.name as site_name, s.cookies 
                 FROM rss_sources r
                 JOIN sites s ON r.site_id = s.id
                 WHERE s.enabled = 1
