@@ -62,7 +62,7 @@ const Sidebar = ({ activeTab, setActiveTab, user, collapsed, onToggle }) => {
                 <span className={`text-[10px] transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}>◀</span>
             </button>
 
-            <div className={`p-6 shrink-0 flex items-center ${collapsed ? 'justify-center transition-all' : 'justify-between'}`}>
+            <div className={`p-6 pt-safe shrink-0 flex items-center ${collapsed ? 'justify-center transition-all' : 'justify-between'}`} style={{ paddingTop: 'max(1.5rem, env(safe-area-inset-top))' }}>
                 {!collapsed && (
                     <div className="flex items-center justify-between w-full overflow-hidden">
                         <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary-400 to-primary-600 truncate mr-2">
