@@ -892,3 +892,5 @@ class RSSService {
         }
     }
 }
+
+module.exports = new RSSService();

@@ -19,16 +19,22 @@ let useExternalDB = false;
 // 检查外部数据库目录是否存在
 const externalDBDir = '/external_db';
 const externalDBPath = path.join(externalDBDir, 'ptdownload.db');
-const internalDBPath = process.env.DB_PATH || path.join(__dirname, '../../data/ptdownload.db');
+const internalDBPath = process.env.DB_PATH || '/data/ptdownload.db';
 
-if (fs.existsSync(externalDBDir)) {
-  // 外部目录存在，使用外部数据库
+if (fs.existsSync(externalDBPath)) {
+  // External database file exists, use it
   dbPath = externalDBPath;
   useExternalDB = true;
-  console.log(`[Database] External directory detected at: ${externalDBDir}`);
+  console.log(`[Database] External database file found at: ${externalDBPath}`);
   console.log(`[Database] Using EXTERNAL database at: ${dbPath}`);
+} else if (fs.existsSync(externalDBDir)) {
+  // External directory exists but no database file, log warning and use internal
+  console.log(`[Database] External directory exists at ${externalDBDir} but no database file found`);
+  console.log(`[Database] Using INTERNAL database at: ${internalDBPath}`);
+  dbPath = internalDBPath;
+  useExternalDB = false;
 } else {
-  // 外部目录不存在，使用内置数据库
+  // External directory doesn't exist, use internal database
   dbPath = internalDBPath;
   useExternalDB = false;
   console.log(`[Database] External directory not found, using INTERNAL database`);
