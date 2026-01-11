@@ -5,7 +5,8 @@ services:
       dockerfile: Dockerfile
     container_name: pt-app
     ports:
-      - "3000:3000"
+      - "32781:3000"
+
     volumes:
       # 【必需】内置数据和配置目录
       - ./data:/data
@@ -14,7 +15,7 @@ services:
       # 注意：容器内路径必须固定为 /external_db，系统会自动识别。
       # 格式: [你的宿主机目录]:/external_db
       # - /your/host/path/pt_db:/external_db
-
+      #- VOLUME_MAPPING="-v /Container/PTDownload:/external_db"
       # 示例 (群晖/NAS 用户常用):
       # - /volume1/docker/ptdownload/db:/external_db
 

@@ -8,3 +8,5 @@ client/dist
 data
 *.log
 .DS_Store
+.agent
+.scripts

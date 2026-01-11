@@ -186,7 +186,7 @@ const isCheckedInToday = site.last_checkin_at &&
 
 // 显示效果
 {isCheckedInToday ? (
-    <span className="text-green-500">✅ 已签到</span>
+    <span className="text-green-500">✅ 今日已签到</span>
 ) : (
     <button onClick={handleCheckin}>签到</button>
 )}

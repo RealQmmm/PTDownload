@@ -430,7 +430,7 @@ const SitesPage = () => {
                                 </a>
                                 {isToday(site.last_checkin_at) && site.supports_checkin === 1 && (
                                     <span className="text-[10px] text-green-500 font-bold flex items-center ml-2 shrink-0">
-                                        <span className="mr-1">✅</span> 已签
+                                        <span className="mr-1">✅</span> 今日已签到
                                     </span>
                                 )}
                             </div>
