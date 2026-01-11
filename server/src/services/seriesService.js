@@ -495,6 +495,7 @@ class SeriesService {
         try {
             const metadataService = require('./metadataService');
             const metadata = await metadataService.searchSeries(sub.name);
+
             if (metadata) {
                 let totalEpisodes = sub.total_episodes || 0;
                 if (metadata.tmdb_id) {

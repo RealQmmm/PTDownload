@@ -1,0 +1,14 @@
+version: 'latest'
+services:
+  pt-manager:
+    image: ptdownload_app:latest
+    container_name: ptdownload_app
+    ports:
+      - "32781:3000"
+    volumes:
+      - ./data:/data
+      - /share/Container/PTdownload:/external_db
+    environment:
+      - PORT=3000
+      - TZ=Asia/Shanghai
+    restart: unless-stopped

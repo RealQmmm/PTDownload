@@ -288,8 +288,8 @@ const SeriesPage = () => {
                                             <h3 className={`text-lg font-bold ${textPrimary} truncate`} title={sub.name}>{sub.name}</h3>
                                             <div className="flex gap-1 flex-shrink-0 items-center">
                                                 {sub.vote_average > 0 && (
-                                                    <span className="bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center">
-                                                        <span className="mr-0.5">⭐</span>{sub.vote_average.toFixed(1)}
+                                                    <span className="bg-[#F5C518] text-black px-2 py-0.5 rounded text-[11px] font-bold flex items-center">
+                                                        TMDB {sub.vote_average.toFixed(1)}
                                                     </span>
                                                 )}
                                                 {sub.season && <span className="bg-purple-500/10 text-purple-500 px-1.5 py-0.5 rounded text-[10px] font-bold">S{sub.season}</span>}

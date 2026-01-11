@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: pt-app
     ports:
-      - "32781:3000"
+      - "3000:3000"
 
     volumes:
       # 【必需】内置数据和配置目录

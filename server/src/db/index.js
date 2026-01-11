@@ -523,6 +523,12 @@ function createTables() {
     console.log('[Migration] Added smart_switch column to series_subscriptions table');
   } catch (e) { /* Column might already exist */ }
 
+  // Migration for Douban Rating (2026-01-11)
+  try {
+    db.prepare("ALTER TABLE series_subscriptions ADD COLUMN douban_rating REAL DEFAULT 0").run();
+    console.log('[Migration] Added douban_rating column to series_subscriptions table');
+  } catch (e) { /* Column might already exist */ }
+
   // Final settings to ensure foreign keys
   db.prepare('PRAGMA foreign_keys = ON').run();
   console.log('Database tables initialized');
