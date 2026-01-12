@@ -293,7 +293,9 @@ const SeriesPage = () => {
                                                     </span>
                                                 )}
                                                 {sub.season && <span className="bg-purple-500/10 text-purple-500 px-1.5 py-0.5 rounded text-[10px] font-bold">S{sub.season}</span>}
-                                                {sub.quality && <span className="bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded text-[10px] font-bold">{sub.quality}</span>}
+                                                {sub.quality && (sub.quality.split(',').map(q => (
+                                                    <span key={q} className="bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded text-[10px] font-bold">{q === '4K' ? '2160p(4K)' : q}</span>
+                                                )))}
                                             </div>
                                         </div>
                                     </div>
@@ -396,7 +398,7 @@ const SeriesPage = () => {
                             <p className={`text-[10px] ${textSecondary} mt-1`}>如果种子名称是英文，请填写英文原名。</p>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Input
                             label="季数 (数字)"
                             type="number"
@@ -404,18 +406,51 @@ const SeriesPage = () => {
                             onChange={e => setFormData({ ...formData, season: e.target.value })}
                             placeholder="例如: 1"
                             className="text-base sm:text-sm"
+                            containerClassName="md:col-span-1"
                         />
-                        <Select
-                            label="画质偏好"
-                            value={formData.quality}
-                            onChange={e => setFormData({ ...formData, quality: e.target.value })}
-                            className="text-base sm:text-sm"
-                        >
-                            <option value="">不限 / Any</option>
-                            <option value="4K">4K / 2160p</option>
-                            <option value="1080p">1080p</option>
-                            <option value="720p">720p</option>
-                        </Select>
+                        <div className="md:col-span-2">
+                            <label className={`block text-xs font-bold ${textSecondary} uppercase tracking-wider mb-2`}>画质匹配偏好 (多选)</label>
+                            <div className="p-1 sm:p-1.5 border border-gray-100 dark:border-gray-800 rounded-2xl bg-gray-50/50 dark:bg-gray-900/40 relative overflow-hidden">
+                                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                    {[
+                                        { label: '2160p(4K)', value: '4K' },
+                                        { label: '1080p', value: '1080p' },
+                                        { label: '720p', value: '720p' }
+                                    ].map(opt => {
+                                        const isSelected = (formData.quality || '').split(',').includes(opt.value);
+                                        return (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                onClick={() => {
+                                                    const current = (formData.quality || '').split(',').filter(Boolean);
+                                                    const next = isSelected
+                                                        ? current.filter(c => c !== opt.value)
+                                                        : [...current, opt.value];
+                                                    setFormData({ ...formData, quality: next.join(',') });
+                                                }}
+                                                className={`flex-1 min-w-[80px] sm:min-w-0 px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${isSelected
+                                                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20 scale-[1.02]'
+                                                        : `bg-white dark:bg-gray-800 ${textSecondary} border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700`
+                                                    }`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <div className="mt-2 px-1.5 pb-1 flex items-center justify-between">
+                                    <p className="text-[10px] text-gray-400 font-medium">不选则智能匹配最优画质</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData({ ...formData, quality: '' })}
+                                        className="text-[10px] text-blue-500 hover:text-blue-600 font-bold px-2 py-1 rounded-lg hover:bg-blue-500/5 transition-colors"
+                                    >
+                                        清空重置
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {(() => {

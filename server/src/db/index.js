@@ -416,7 +416,8 @@ function createTables() {
     'ALTER TABLE site_daily_stats ADD COLUMN downloaded_bytes INTEGER DEFAULT 0',
     'ALTER TABLE sites ADD COLUMN site_icon TEXT',
     'ALTER TABLE users ADD COLUMN role TEXT DEFAULT \'user\'',
-    'ALTER TABLE sites ADD COLUMN supports_checkin INTEGER DEFAULT 1'
+    'ALTER TABLE sites ADD COLUMN supports_checkin INTEGER DEFAULT 1',
+    'ALTER TABLE sites ADD COLUMN custom_config TEXT'
   ];
 
   migrations.forEach(sql => {

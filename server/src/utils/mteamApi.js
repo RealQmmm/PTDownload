@@ -39,39 +39,58 @@ const mteamApi = {
      */
     async request(path, options = {}, isPost = true) {
         const enableLogs = appConfig.isLogsEnabled();
+
+        let targetDomains = [...this.domains];
+
+        // Extract custom hosts from site config if provided
+        if (options.site && options.site.custom_config) {
+            try {
+                const config = typeof options.site.custom_config === 'string'
+                    ? JSON.parse(options.site.custom_config)
+                    : options.site.custom_config;
+
+                if (config.mteam_api_hosts && Array.isArray(config.mteam_api_hosts) && config.mteam_api_hosts.length > 0) {
+                    targetDomains = config.mteam_api_hosts;
+                    if (enableLogs) console.log(`[M-Team API] Using custom hosts:`, targetDomains);
+                }
+            } catch (e) {
+                if (enableLogs) console.error(`[M-Team API] Failed to parse custom_config:`, e.message);
+            }
+        }
+
         const selectedHost = this.getApiHost();
 
-        // If user explicitly chose a host, just use it
-        if (selectedHost !== 'auto' && this.domains.includes(selectedHost)) {
+        // If user explicitly chose a host (global setting), and it's in our target list, use it
+        if (selectedHost !== 'auto' && targetDomains.includes(selectedHost)) {
             return this._doRequest(selectedHost, path, options, isPost);
         }
 
-        // AUTO mode: Try both and use the first one that responds successfully
-        // We use a fallback approach instead of a full race to avoid double-hitting rate limits
-        // but with a relatively short timeout for the first attempt.
+        // AUTO mode or selectedHost not in custom list: Try domains in order
+        const primaryHost = targetDomains[0];
+        const backupHosts = targetDomains.slice(1);
 
-        const primaryHost = this.domains[0];
-        const secondaryHost = this.domains[1];
-
-        if (enableLogs) console.log(`[M-Team API] Auto mode: Trying primary host ${primaryHost}...`);
+        if (enableLogs) console.log(`[M-Team API] Trying host: ${primaryHost}...`);
 
         try {
-            // First attempt with a slightly shorter timeout if it's auto mode
+            // First attempt
             const firstOptions = { ...options, timeout: Math.min(options.timeout || 15000, 10000) };
             const result = await this._doRequest(primaryHost, path, firstOptions, isPost);
-            this._bestDomain = primaryHost; // Update last successful
             return result;
         } catch (err) {
-            if (enableLogs) console.warn(`[M-Team API] Primary host ${primaryHost} failed or timed out. Trying secondary ${secondaryHost}...`);
+            if (enableLogs) console.warn(`[M-Team API] Host ${primaryHost} failed. Trying backups...`);
 
-            try {
-                const result = await this._doRequest(secondaryHost, path, options, isPost);
-                this._bestDomain = secondaryHost; // Update last successful
-                return result;
-            } catch (err2) {
-                if (enableLogs) console.error(`[M-Team API] Both hosts failed.`);
-                throw err2;
+            for (const backupHost of backupHosts) {
+                try {
+                    if (enableLogs) console.log(`[M-Team API] Trying backup host: ${backupHost}...`);
+                    const result = await this._doRequest(backupHost, path, options, isPost);
+                    return result;
+                } catch (err2) {
+                    if (enableLogs) console.error(`[M-Team API] Backup host ${backupHost} failed.`);
+                }
             }
+
+            // If all failed
+            throw err;
         }
     },
 

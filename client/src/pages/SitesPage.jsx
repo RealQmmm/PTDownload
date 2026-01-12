@@ -163,6 +163,7 @@ const SitesPage = () => {
     const [editingSite, setEditingSite] = useState(null);
     const [refreshingId, setRefreshingId] = useState(null);
     const [checkingId, setCheckingId] = useState(null);
+    const [showMTeamHosts, setShowMTeamHosts] = useState(false);
 
     // Theme-aware classes
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
@@ -179,8 +180,12 @@ const SitesPage = () => {
         type: 'NexusPHP',
         enabled: 1,
         auto_checkin: 0,
-        supports_checkin: 1
+        supports_checkin: 1,
+        custom_config: {}
     });
+
+    const [customHosts, setCustomHosts] = useState(['api.m-team.cc', 'api.m-team.io']);
+    const [newHost, setNewHost] = useState('');
 
     const fetchSites = async () => {
         try {
@@ -208,21 +213,38 @@ const SitesPage = () => {
         }
     };
 
+    const isMTeam = (site) => {
+        if (!site) return false;
+        const name = (site.name || '').toLowerCase();
+        const url = (site.url || '').toLowerCase();
+        return name.includes('m-team') || url.includes('m-team.cc') || url.includes('m-team.io');
+    };
+
     const handleSubmit = async (e) => {
         if (e) e.preventDefault();
         const method = editingSite ? 'PUT' : 'POST';
         const url = editingSite ? `/api/sites/${editingSite.id}` : '/api/sites';
 
+        let finalData = { ...formData };
+        if (isMTeam(formData)) {
+            finalData.custom_config = {
+                ...formData.custom_config,
+                mteam_api_hosts: customHosts
+            };
+        }
+
         try {
             await authenticatedFetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(finalData)
             });
             setShowModal(false);
             setEditingSite(null);
 
-            setFormData({ name: '', url: '', cookies: '', api_key: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0, supports_checkin: 1 });
+            setFormData({ name: '', url: '', cookies: '', api_key: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0, supports_checkin: 1, custom_config: {} });
+            setCustomHosts(['api.m-team.cc', 'api.m-team.io']);
+            setShowMTeamHosts(false);
             fetchSites();
         } catch (err) {
             alert('保存失败: ' + err.message);
@@ -241,13 +263,20 @@ const SitesPage = () => {
 
     const handleAdd = () => {
         setEditingSite(null);
-        setFormData({ name: '', url: '', cookies: '', api_key: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0, supports_checkin: 1 });
+        setFormData({ name: '', url: '', cookies: '', api_key: '', default_rss_url: '', type: 'NexusPHP', enabled: 1, auto_checkin: 0, supports_checkin: 1, custom_config: {} });
+        setCustomHosts(['api.m-team.cc', 'api.m-team.io']);
+        setShowMTeamHosts(false);
         setShowModal(true);
     };
 
     const openEdit = (site) => {
         if (site) {
             setEditingSite(site);
+            let config = {};
+            try {
+                config = typeof site.custom_config === 'string' ? JSON.parse(site.custom_config) : (site.custom_config || {});
+            } catch (e) { }
+
             setFormData({
                 name: site.name,
                 url: site.url,
@@ -257,8 +286,17 @@ const SitesPage = () => {
                 type: site.type || 'NexusPHP',
                 enabled: site.enabled,
                 auto_checkin: site.auto_checkin || 0,
-                supports_checkin: site.supports_checkin !== undefined ? site.supports_checkin : 1
+                supports_checkin: site.supports_checkin !== undefined ? site.supports_checkin : 1,
+                custom_config: config
             });
+
+            if (config.mteam_api_hosts && Array.isArray(config.mteam_api_hosts)) {
+                setCustomHosts(config.mteam_api_hosts);
+            } else {
+                setCustomHosts(['api.m-team.cc', 'api.m-team.io']);
+            }
+
+            setShowMTeamHosts(false);
             setShowModal(true);
         }
     };
@@ -323,7 +361,25 @@ const SitesPage = () => {
         }
     };
 
+    const handleAddHost = () => {
+        if (!newHost || customHosts.includes(newHost)) return;
+        setCustomHosts([...customHosts, newHost]);
+        setNewHost('');
+    };
 
+    const handleRemoveHost = (host) => {
+        setCustomHosts(customHosts.filter(h => h !== host));
+    };
+
+    const moveHost = (index, direction) => {
+        const newHosts = [...customHosts];
+        if (direction === 'up' && index > 0) {
+            [newHosts[index], newHosts[index - 1]] = [newHosts[index - 1], newHosts[index]];
+        } else if (direction === 'down' && index < newHosts.length - 1) {
+            [newHosts[index], newHosts[index + 1]] = [newHosts[index + 1], newHosts[index]];
+        }
+        setCustomHosts(newHosts);
+    };
 
     return (
         <div className="p-4 md:p-8 space-y-6">
@@ -513,21 +569,24 @@ const SitesPage = () => {
                 }
             >
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <Input
-                        label="站点名称"
-                        required
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="例如: M-Team"
-                    />
-                    <Input
-                        label="站点地址 (URL)"
-                        type="url"
-                        required
-                        value={formData.url}
-                        onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                        placeholder="https://kp.m-team.cc"
-                    />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input
+                            label="站点名称"
+                            required
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            placeholder="例如: M-Team"
+                        />
+                        <Input
+                            label="站点地址 (URL)"
+                            type="url"
+                            required
+                            value={formData.url}
+                            onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                            placeholder="https://kp.m-team.cc"
+                        />
+                    </div>
+
                     <div>
                         <Input
                             label="默认 RSS 地址 (用于 RSS 搜索)"
@@ -539,62 +598,145 @@ const SitesPage = () => {
                         <p className="text-xs text-gray-500 mt-1">留空则自动尝试构造 /torrentrss.php</p>
                     </div>
 
-                    <div className="space-y-4">
-                        <div>
-                            <Input
-                                label="API Key (推荐)"
-                                value={formData.api_key}
-                                onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
-                                placeholder="例如 M-Team 的 API Access Token"
-                                description="M-Team 等站点推荐使用 API Key 替代 Cookie，更安全且不易失效"
-                            />
-                            {formData.name.toLowerCase().includes('m-team') && (
-                                <p className="text-[10px] text-amber-500 mt-1 font-medium">
-                                    ⚠️ 注意：M-Team 开启 API KEY 后，请务必清空下方的 Cookies，避免多重验证导致封号。
-                                </p>
-                            )}
-                        </div>
-                        <div>
-                            <label className={`block text-xs font-bold uppercase ${textSecondary} mb-1`}>Cookies (可选)</label>
-                            <textarea
-                                value={formData.cookies}
-                                onChange={(e) => setFormData({ ...formData, cookies: e.target.value })}
-                                placeholder="粘贴浏览器的 Cookie 以便进行自动任务"
-                                rows="3"
-                                className={`w-full ${darkMode ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900'} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500`}
-                            ></textarea>
-                            <p className="text-[10px] text-gray-500 mt-1">如果没有 API Key，请填入传统的 Cookie</p>
+                    <div className="p-4 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/30">
+                        <h4 className={`text-xs font-bold uppercase ${textSecondary} mb-4 flex items-center`}>
+                            <span className="mr-2">🔑</span> 身份验证
+                        </h4>
+                        <div className="space-y-4">
+                            <div>
+                                <Input
+                                    label="API Key (推荐)"
+                                    value={formData.api_key}
+                                    onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
+                                    placeholder="例如 M-Team 的 API Access Token"
+                                    description="M-Team 等站点推荐使用 API Key 替代 Cookie，更安全且不易失效"
+                                />
+                                {isMTeam(formData) && (
+                                    <p className="text-[10px] text-amber-500 mt-1 font-medium">
+                                        ⚠️ 注意：M-Team 开启 API KEY 后，建议清空下方的 Cookies。
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <label className={`block text-xs font-bold uppercase ${textSecondary} mb-1`}>Cookies (备选)</label>
+                                <textarea
+                                    value={formData.cookies}
+                                    onChange={(e) => setFormData({ ...formData, cookies: e.target.value })}
+                                    placeholder="粘贴浏览器的 Cookie 以便进行自动任务"
+                                    rows="3"
+                                    className={`w-full ${darkMode ? 'bg-gray-900 border-gray-700 text-white' : 'bg-white border-gray-300 text-gray-900'} border rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 text-sm`}
+                                ></textarea>
+                            </div>
                         </div>
                     </div>
-                    <div className="flex flex-col space-y-4 py-2 border-t border-gray-100 dark:border-gray-800 pt-4">
-                        <div className="flex items-center space-x-2">
-                            <input
-                                type="checkbox"
-                                id="supports_checkin"
-                                checked={formData.supports_checkin === 1}
-                                onChange={(e) => {
-                                    const supported = e.target.checked ? 1 : 0;
-                                    setFormData({
-                                        ...formData,
-                                        supports_checkin: supported,
-                                        auto_checkin: supported === 0 ? 0 : formData.auto_checkin
-                                    });
-                                }}
-                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <label htmlFor="supports_checkin" className={`text-sm font-medium ${textPrimary}`}>具备签到功能</label>
+
+                    {isMTeam(formData) && (
+                        <div className="p-4 rounded-xl border border-blue-500/20 bg-blue-500/5 dark:bg-blue-500/10">
+                            <div
+                                className="flex items-center justify-between cursor-pointer"
+                                onClick={() => setShowMTeamHosts(!showMTeamHosts)}
+                            >
+                                <h4 className={`text-xs font-bold uppercase text-blue-500 flex items-center`}>
+                                    <span className="mr-2">🌐</span> M-Team API 接口路由 (配置容灾备选)
+                                </h4>
+                                <span className="text-blue-500 text-xs font-bold">
+                                    {showMTeamHosts ? '收起 ↑' : '展开设置 ↓'}
+                                </span>
+                            </div>
+
+                            {showMTeamHosts && (
+                                <div className="space-y-3 mt-4 pt-4 border-t border-blue-500/10">
+                                    <div className="space-y-2">
+                                        {customHosts.map((host, index) => (
+                                            <div key={index} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium ${darkMode ? 'bg-blue-900/40 text-blue-300' : 'bg-blue-50 text-blue-700'} border ${darkMode ? 'border-blue-500/10' : 'border-blue-100'}`}>
+                                                <div className="flex items-center min-w-0">
+                                                    <span className={`w-5 h-5 flex items-center justify-center rounded-full mr-2 ${index === 0 ? 'bg-blue-500 text-white' : (darkMode ? 'bg-gray-700 text-gray-400' : 'bg-gray-200 text-gray-500')} shrink-0`}>
+                                                        {index + 1}
+                                                    </span>
+                                                    <span className="truncate">{host}</span>
+                                                    {index === 0 && <span className="ml-2 text-[10px] bg-blue-500/20 px-1 rounded">首选</span>}
+                                                </div>
+                                                <div className="flex items-center space-x-1 shrink-0">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => moveHost(index, 'up')}
+                                                        disabled={index === 0}
+                                                        className={`p-1 hover:bg-blue-500/20 rounded transition-colors ${index === 0 ? 'opacity-20' : ''}`}
+                                                        title="上移"
+                                                    >
+                                                        ↑
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => moveHost(index, 'down')}
+                                                        disabled={index === customHosts.length - 1}
+                                                        className={`p-1 hover:bg-blue-500/20 rounded transition-colors ${index === customHosts.length - 1 ? 'opacity-20' : ''}`}
+                                                        title="下移"
+                                                    >
+                                                        ↓
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRemoveHost(host)}
+                                                        className="p-1 hover:bg-red-500/20 text-red-500 rounded transition-colors ml-1"
+                                                        title="删除"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="flex space-x-2">
+                                        <Input
+                                            placeholder="输入新域名，如 api.m-team.io"
+                                            value={newHost}
+                                            onChange={(e) => setNewHost(e.target.value)}
+                                            containerClassName="mb-0 flex-1"
+                                            className="py-1.5 text-xs"
+                                        />
+                                        <Button type="button" size="sm" onClick={handleAddHost} variant="secondary">添加</Button>
+                                    </div>
+                                    <p className="text-[10px] text-gray-500">优先级：列表中的第一个域名为首选，失败后将依次尝试后续地址。</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <div className="space-y-1">
+                            <div className="flex items-center space-x-2">
+                                <input
+                                    type="checkbox"
+                                    id="supports_checkin"
+                                    checked={formData.supports_checkin === 1}
+                                    onChange={(e) => {
+                                        const supported = e.target.checked ? 1 : 0;
+                                        setFormData({
+                                            ...formData,
+                                            supports_checkin: supported,
+                                            auto_checkin: supported === 0 ? 0 : formData.auto_checkin
+                                        });
+                                    }}
+                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <label htmlFor="supports_checkin" className={`text-sm font-bold ${textPrimary}`}>具备签到功能</label>
+                            </div>
+                            <p className="text-[10px] text-gray-500 ml-6">仅在该站点支持每日签到/点击获取奖励时开启</p>
                         </div>
 
-                        <div className={`flex items-center space-x-2 transition-opacity ${formData.supports_checkin === 1 ? 'opacity-100' : 'opacity-40 cursor-not-allowed'}`}>
-                            <input
-                                type="checkbox"
-                                id="auto_checkin"
-                                disabled={formData.supports_checkin === 0}
-                                checked={formData.auto_checkin === 1}
-                                onChange={(e) => setFormData({ ...formData, auto_checkin: e.target.checked ? 1 : 0 })}
-                                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <label htmlFor="auto_checkin" className={`text-sm font-medium ${textPrimary}`}>启用每日自动签到</label>
+                        <div className={`space-y-1 transition-opacity ${formData.supports_checkin === 1 ? 'opacity-100' : 'opacity-40 cursor-not-allowed'}`}>
+                            <div className="flex items-center space-x-2">
+                                <input
+                                    type="checkbox"
+                                    id="auto_checkin"
+                                    disabled={formData.supports_checkin === 0}
+                                    checked={formData.auto_checkin === 1}
+                                    onChange={(e) => setFormData({ ...formData, auto_checkin: e.target.checked ? 1 : 0 })}
+                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <label htmlFor="auto_checkin" className={`text-sm font-bold ${textPrimary}`}>启用每日自动签到</label>
+                            </div>
                         </div>
                     </div>
                 </form>

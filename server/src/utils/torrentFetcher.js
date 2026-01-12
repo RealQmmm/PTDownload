@@ -35,7 +35,8 @@ async function fetchTorrentData(site, torrentUrl) {
                     'Accept': 'application/json'
                 },
                 data: `id=${torrentId}`,
-                timeout: 20000
+                timeout: 20000,
+                site: site // Pass site config for custom hosts
             });
 
             const code = tokenResponse.data?.code;
@@ -50,7 +51,13 @@ async function fetchTorrentData(site, torrentUrl) {
             }
 
             console.log(`[TorrentFetcher] Downloading actual torrent from M-Team CDN...`);
-            return await downloadMTeamTorrent(downloadUrl);
+            let config = null;
+            if (site.custom_config) {
+                try {
+                    config = typeof site.custom_config === 'string' ? JSON.parse(site.custom_config) : site.custom_config;
+                } catch (e) { }
+            }
+            return await downloadMTeamTorrent(downloadUrl, config);
         } catch (err) {
             console.error(`[TorrentFetcher] M-Team V2 fetch failed:`, err.message);
             throw err;

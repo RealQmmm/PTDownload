@@ -917,20 +917,14 @@ const SettingsPage = () => {
                         )}
 
                         <Card className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <Input
-                                        label="站点名称"
-                                        value={tempSiteName}
-                                        onChange={(e) => setTempSiteName(e.target.value)}
-                                        placeholder="PT Manager"
-                                    />
-                                    <p className={`text-[10px] ${textSecondary} mt-1`}>侧边栏顶部显示的名称</p>
-                                </div>
-                                <Select label="界面语言">
-                                    <option>简体中文</option>
-                                    <option>English</option>
-                                </Select>
+                            <div className="max-w-md">
+                                <Input
+                                    label="站点名称"
+                                    value={tempSiteName}
+                                    onChange={(e) => setTempSiteName(e.target.value)}
+                                    placeholder="PT Manager"
+                                />
+                                <p className={`text-[10px] ${textSecondary} mt-1`}>侧边栏顶部显示的名称</p>
                             </div>
 
                             <hr className={borderColor} />
@@ -985,20 +979,6 @@ const SettingsPage = () => {
                                         />
                                         <p className={`text-[10px] ${textSecondary} mt-1`}>
                                             0=不重试（默认），1-3=重试次数
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <label className={`block text-xs font-bold ${textSecondary} uppercase mb-2`}>M-Team API 域名</label>
-                                        <Select
-                                            value={mteamApiHost}
-                                            onChange={(e) => setMteamApiHost(e.target.value)}
-                                        >
-                                            <option value="auto">自动选择 (推荐)</option>
-                                            <option value="api.m-team.cc">api.m-team.cc</option>
-                                            <option value="api.m-team.io">api.m-team.io</option>
-                                        </Select>
-                                        <p className={`text-[10px] ${textSecondary} mt-1`}>
-                                            如果某个域名连接较慢，可手动切换。自动模式下将依次尝试。
                                         </p>
                                     </div>
                                 </div>
@@ -1932,7 +1912,7 @@ const SettingsPage = () => {
                         <p className={textSecondary}>Version 0.1.0 (Alpha)</p>
                         <div className={`mt-8 p-4 ${bgMain} rounded-lg border ${borderColor} text-left text-sm ${textSecondary} inline-block max-w-sm`}>
                             <p>Powered by React, Express, and Docker.</p>
-                            <p className="mt-2">Made with ❤️ for PT users.</p>
+                            <p className="mt-2">Made by 敲冰块 for PT users.</p>
                         </div>
                     </div>
                 );

@@ -228,7 +228,8 @@ class SearchService {
                         'Content-Type': 'application/json'
                     },
                     data: payload,
-                    timeout: 20000
+                    timeout: 20000,
+                    site: site // Pass site config for custom hosts
                 });
             }, this.getSearchRetryCount());
 

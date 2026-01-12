@@ -282,7 +282,7 @@ function App() {
             user,
             authenticatedFetch
         }}>
-            <div className={`flex h-screen overflow-hidden font-sans ${themeClasses} max-w-[100vw]`}>
+            <div className={`fixed inset-0 flex overflow-hidden font-sans ${themeClasses}`}>
                 {/* Mobile Backdrop */}
                 {sidebarOpen && (
                     <div
@@ -315,9 +315,9 @@ function App() {
                     <header
                         className={`lg:hidden flex items-center justify-between p-2 sm:p-4 border-b shrink-0 ${computedDarkMode ? 'bg-surface-900 border-gray-800' : 'bg-white border-gray-200'}`}
                         style={{
-                            paddingTop: 'max(0.5rem, env(safe-area-inset-top))',
-                            paddingLeft: 'max(0.5rem, env(safe-area-inset-left))',
-                            paddingRight: 'max(0.5rem, env(safe-area-inset-right))'
+                            paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
+                            paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
+                            paddingRight: 'max(0.75rem, env(safe-area-inset-right))'
                         }}
                     >
                         <button
@@ -342,8 +342,8 @@ function App() {
                         </button>
                     </header>
 
-                    <main className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
-                        <div className="max-w-full h-full">
+                    <main className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar relative" style={{ WebkitOverflowScrolling: 'touch' }}>
+                        <div className="max-w-full min-h-full pb-safe overscroll-contain">
                             {renderContent()}
                         </div>
                     </main>

@@ -69,10 +69,11 @@ class SiteService {
 
         const encryptedCookies = cryptoUtils.encrypt(cookies);
         const encryptedApiKey = cryptoUtils.encrypt(api_key);
+        const custom_config = site.custom_config ? (typeof site.custom_config === 'string' ? site.custom_config : JSON.stringify(site.custom_config)) : null;
 
         const info = db.prepare(
-            'INSERT INTO sites (name, url, cookies, api_key, default_rss_url, type, enabled, auto_checkin, supports_checkin, cookie_status, last_checked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)'
-        ).run(name, url, encryptedCookies, encryptedApiKey, default_rss_url || null, type, enabled, auto_checkin, supports_checkin);
+            'INSERT INTO sites (name, url, cookies, api_key, default_rss_url, type, enabled, auto_checkin, supports_checkin, cookie_status, last_checked_at, custom_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, ?)'
+        ).run(name, url, encryptedCookies, encryptedApiKey, default_rss_url || null, type, enabled, auto_checkin, supports_checkin, custom_config);
         return info.lastInsertRowid;
     }
 
@@ -91,10 +92,11 @@ class SiteService {
         // Encrypt new values
         const encryptedCookies = cryptoUtils.encrypt(cookies);
         const encryptedApiKey = cryptoUtils.encrypt(api_key);
+        const custom_config = site.custom_config ? (typeof site.custom_config === 'string' ? site.custom_config : JSON.stringify(site.custom_config)) : null;
 
         return db.prepare(
-            'UPDATE sites SET name = ?, url = ?, cookies = ?, api_key = ?, default_rss_url = ?, type = ?, enabled = ?, auto_checkin = ?, supports_checkin = ?, cookie_status = ? WHERE id = ?'
-        ).run(name, url, encryptedCookies, encryptedApiKey, default_rss_url || null, type, enabled, auto_checkin, supports_checkin, status, id);
+            'UPDATE sites SET name = ?, url = ?, cookies = ?, api_key = ?, default_rss_url = ?, type = ?, enabled = ?, auto_checkin = ?, supports_checkin = ?, cookie_status = ?, custom_config = ? WHERE id = ?'
+        ).run(name, url, encryptedCookies, encryptedApiKey, default_rss_url || null, type, enabled, auto_checkin, supports_checkin, status, custom_config, id);
     }
 
     deleteSite(id) {
@@ -169,7 +171,8 @@ class SiteService {
                     ...this.getAuthHeaders(site),
                     'Content-Type': 'application/json'
                 },
-                timeout: 15000
+                timeout: 15000,
+                site: site // Pass site config for custom hosts
             });
 
             if (enableLogs) {
@@ -534,7 +537,8 @@ class SiteService {
                         ...this.getAuthHeaders(site),
                         'Content-Type': 'application/json'
                     },
-                    timeout: 10000
+                    timeout: 10000,
+                    site: site // Pass site config for custom hosts
                 });
 
                 if (enableLogs) console.log(`[M-Team V2] Checkin Response:`, JSON.stringify(response.data));

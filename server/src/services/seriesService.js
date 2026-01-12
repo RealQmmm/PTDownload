@@ -278,40 +278,41 @@ class SeriesService {
         }
     }
 
-    /**
-     * Generate regex for series
-     * e.g. Name="From", Season="2", Quality="4K"
-     * Result: "From.*S0?2.*(2160p|4k)"
-     */
     _generateSmartRegex(name, season, quality, alias = null) {
-        let namePart = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape special chars
+        // Simple escape for name and alias
+        let namePart = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-        // If alias exists and is different, create (Name|Alias) group
         if (alias && alias.trim() && alias.trim().toLowerCase() !== name.trim().toLowerCase()) {
             const aliasPart = alias.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             namePart = `(${namePart}|${aliasPart})`;
         }
 
-        let regex = namePart + '.*'; // Separator
+        let regex = namePart + '.*';
 
         if (season) {
-            // Match S02, s2, S 2, Season 2
-            // Simplest robust match: S0?2 (Matches S02 or S2)
             const sNum = parseInt(season);
             regex += `S0?${sNum}`;
         }
 
         if (quality) {
             regex += '.*';
-            const q = quality.toLowerCase();
-            if (q.includes('4k') || q.includes('2160')) {
-                regex += '(2160p|4k|uhd)';
-            } else if (q.includes('1080')) {
-                regex += '1080[pi]';
-            } else if (q.includes('720')) {
-                regex += '720[pi]';
-            } else {
-                regex += quality;
+            const parts = quality.split(',').map(q => q.trim()).filter(Boolean);
+            if (parts.length > 0) {
+                const resGroups = [];
+                parts.forEach(p => {
+                    const low = p.toLowerCase();
+                    if (low.includes('4k') || low.includes('2160')) resGroups.push('(2160p|4k|uhd)');
+                    else if (low.includes('1080')) resGroups.push('1080[pi]');
+                    else if (low.includes('720')) resGroups.push('720[pi]');
+                    else resGroups.push(p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+                });
+
+                if (resGroups.length > 1) {
+                    regex += `(${resGroups.join('|')})`;
+                } else if (resGroups.length === 1) {
+                    // Remove outer parens if not needed for single complex group
+                    regex += resGroups[0];
+                }
             }
         }
 

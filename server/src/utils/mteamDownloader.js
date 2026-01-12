@@ -2,11 +2,18 @@ const https = require('https');
 
 /**
  * Download M-Team torrent file using native HTTPS module
- * This is more reliable than axios in Docker environments
+ * @param {string} downloadUrl 
+ * @param {object} customConfig - Optional site config to allow custom domains
  */
-async function downloadMTeamTorrent(downloadUrl) {
+async function downloadMTeamTorrent(downloadUrl, customConfig = null) {
     return new Promise((resolve, reject) => {
         const urlParsed = new URL(downloadUrl);
+
+        // Extract custom allowed hosts
+        let customAllowedHosts = [];
+        if (customConfig && customConfig.mteam_api_hosts) {
+            customAllowedHosts = customConfig.mteam_api_hosts;
+        }
 
         const options = {
             hostname: urlParsed.hostname,
@@ -15,6 +22,7 @@ async function downloadMTeamTorrent(downloadUrl) {
             method: 'GET',
             timeout: 60000,
             rejectUnauthorized: false,
+            customAllowedHosts, // Pass to the response handler
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Accept': '*/*',
@@ -33,17 +41,23 @@ async function downloadMTeamTorrent(downloadUrl) {
                 const redirectUrl = res.headers.location;
                 console.log(`[M-Team Download] Received redirect to: ${redirectUrl}`);
 
-                // Check if redirect is to M-Team domains (api.m-team.cc or CDN halomt.com)
+                // Check if redirect is to M-Team domains
                 try {
                     const redirectParsed = new URL(redirectUrl);
-                    const allowedDomains = ['api.m-team.cc', 'api.m-team.io', 'halomt.com'];
+                    let allowedDomains = ['api.m-team.cc', 'api.m-team.io', 'halomt.com'];
+
+                    // Add custom hosts if provided
+                    if (options.customAllowedHosts && Array.isArray(options.customAllowedHosts)) {
+                        allowedDomains = [...new Set([...allowedDomains, ...options.customAllowedHosts])];
+                    }
+
                     const isAllowed = allowedDomains.some(domain =>
                         redirectParsed.hostname === domain || redirectParsed.hostname.endsWith('.' + domain)
                     );
 
                     if (isAllowed) {
                         console.log(`[M-Team Download] Following redirect to M-Team CDN: ${redirectParsed.hostname}`);
-                        return downloadMTeamTorrent(redirectUrl).then(resolve).catch(reject);
+                        return downloadMTeamTorrent(redirectUrl, customConfig).then(resolve).catch(reject);
                     } else {
                         console.error(`[M-Team Download] Refusing to follow external redirect to: ${redirectParsed.hostname}`);
                         return reject(new Error(`M-Team API 重定向到未知域名 ${redirectParsed.hostname}`));
