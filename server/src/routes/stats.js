@@ -185,14 +185,21 @@ router.get('/dashboard', async (req, res) => {
         );
         const validClientStats = clientStats.filter(s => s !== null);
 
-        // Aggregate
+        // Calculate speed stats from actual torrent list instead of client global stats
+        // This ensures the instant speed card matches the sum of speeds in the active tasks list
         const aggregatedStats = validClientStats.reduce(
-            (acc, clientStat) => ({
-                totalDownloadSpeed: acc.totalDownloadSpeed + (clientStat.stats.dlSpeed || 0),
-                totalUploadSpeed: acc.totalUploadSpeed + (clientStat.stats.upSpeed || 0),
-                activeTorrents: acc.activeTorrents + clientStat.activeTorrents,
-                totalTorrents: acc.totalTorrents + clientStat.totalTorrents
-            }),
+            (acc, clientStat) => {
+                // Sum up speeds from all torrents in this client
+                const clientDlSpeed = clientStat.torrents.reduce((sum, t) => sum + (Number(t.dlspeed) || 0), 0);
+                const clientUpSpeed = clientStat.torrents.reduce((sum, t) => sum + (Number(t.upspeed) || 0), 0);
+
+                return {
+                    totalDownloadSpeed: acc.totalDownloadSpeed + clientDlSpeed,
+                    totalUploadSpeed: acc.totalUploadSpeed + clientUpSpeed,
+                    activeTorrents: acc.activeTorrents + clientStat.activeTorrents,
+                    totalTorrents: acc.totalTorrents + clientStat.totalTorrents
+                };
+            },
             { totalDownloadSpeed: 0, totalUploadSpeed: 0, activeTorrents: 0, totalTorrents: 0 }
         );
 
@@ -270,7 +277,7 @@ router.get('/dashboard', async (req, res) => {
                 };
             });
 
-            // Update aggregated counts for UI display (Active Taks count)
+            // Update aggregated counts for UI display (Active Tasks count)
             displayAggregatedStats.activeTorrents = displayClientStats.reduce((acc, c) => acc + c.activeTorrents, 0);
             displayAggregatedStats.totalTorrents = displayClientStats.reduce((acc, c) => acc + c.totalTorrents, 0);
         }
