@@ -8,8 +8,8 @@
         scroll-behavior: smooth;
         height: 100%;
         width: 100%;
-        overflow: hidden;
     }
+
 
     /* Safe Area Support for PWA */
     :root {
@@ -21,10 +21,11 @@
 
     body {
         @apply antialiased text-gray-900 dark:text-gray-100 bg-surface-100 dark:bg-surface-950 transition-colors duration-300;
-        height: 100%;
+        min-height: 100%;
         width: 100%;
-        /* Smooth scrolling physics on mobile */
-        overscroll-behavior-y: none;
+        /* Allow pull-to-refresh and other native gestures */
+        overscroll-behavior-y: auto;
+
 
         /* Safe Area Variables */
         --sat: env(safe-area-inset-top);
@@ -105,5 +106,37 @@
 
     .mb-safe {
         margin-bottom: env(safe-area-inset-bottom);
+    }
+
+    /* Global Scrollbar Styling */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+    }
+
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: rgba(156, 163, 175, 0.3);
+        border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgba(156, 163, 175, 0.5);
+    }
+
+    .dark ::-webkit-scrollbar-thumb {
+        background: rgba(75, 85, 99, 0.4);
+    }
+
+    .dark ::-webkit-scrollbar-thumb:hover {
+        background: rgba(75, 85, 99, 0.6);
     }
 }

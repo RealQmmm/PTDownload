@@ -282,7 +282,7 @@ function App() {
             user,
             authenticatedFetch
         }}>
-            <div className={`fixed inset-0 flex overflow-hidden font-sans ${themeClasses}`}>
+            <div className={`min-h-screen flex font-sans ${themeClasses}`}>
                 {/* Mobile Backdrop */}
                 {sidebarOpen && (
                     <div
@@ -293,7 +293,7 @@ function App() {
 
                 {/* Sidebar */}
                 <div className={`
-                    fixed inset-y-0 left-0 z-30 transform lg:relative lg:translate-x-0 transition-all duration-300 ease-in-out
+                    fixed inset-y-0 left-0 z-30 transform lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 transition-all duration-300 ease-in-out
                     ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
                     ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-64'}
                 `}>
@@ -310,10 +310,10 @@ function App() {
                 </div>
 
                 {/* Main Content */}
-                <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative bg-surface-50 dark:bg-surface-950 transition-colors duration-300">
+                <div className="flex-1 flex flex-col min-w-0 relative bg-surface-50 dark:bg-surface-950 transition-colors duration-300">
                     {/* Mobile Header */}
                     <header
-                        className={`lg:hidden flex items-center justify-between p-2 sm:p-4 border-b shrink-0 ${computedDarkMode ? 'bg-surface-900 border-gray-800' : 'bg-white border-gray-200'}`}
+                        className={`sticky top-0 z-20 lg:hidden flex items-center justify-between p-2 sm:p-4 border-b shrink-0 ${computedDarkMode ? 'bg-surface-900 border-gray-800' : 'bg-white border-gray-200'}`}
                         style={{
                             paddingTop: 'max(0.75rem, env(safe-area-inset-top))',
                             paddingLeft: 'max(0.75rem, env(safe-area-inset-left))',
@@ -342,7 +342,7 @@ function App() {
                         </button>
                     </header>
 
-                    <main className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar relative" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    <main className="flex-1 overflow-x-hidden relative">
                         <div className="max-w-full min-h-full pb-safe overscroll-contain">
                             {renderContent()}
                         </div>
