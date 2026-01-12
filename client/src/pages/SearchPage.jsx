@@ -404,7 +404,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
     };
 
     return (
-        <div className="p-2 sm:p-4 md:p-8 h-full flex flex-col">
+        <div className="p-2 sm:p-4 md:p-8 flex flex-col">
             <div className="mb-2 sm:mb-4 md:mb-8">
                 <h1 className={`hidden sm:block text-2xl md:text-3xl font-bold mb-4 md:mb-6 ${textPrimary}`}>资源搜索</h1>
 

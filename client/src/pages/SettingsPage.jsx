@@ -2146,10 +2146,10 @@ const SettingsPage = () => {
     };
 
     return (
-        <div className="p-4 md:p-8 h-full flex flex-col">
+        <div className="p-4 md:p-8 flex flex-col">
             <h1 className={`text-2xl md:text-3xl font-bold ${textPrimary} mb-6 md:mb-8`}>系统设置</h1>
 
-            <div className={`flex-1 flex flex-col lg:flex-row ${bgMain} rounded-xl border ${borderColor} overflow-hidden shadow-sm`}>
+            <div className={`flex flex-col lg:flex-row ${bgMain} rounded-xl border ${borderColor} shadow-sm`}>
                 {/* Settings Navigation */}
                 <div className={`w-full lg:w-48 ${darkMode ? 'bg-gray-800' : 'bg-gray-50'} border-b lg:border-b-0 lg:border-r ${borderColor} p-2 md:p-4`}>
                     <nav className="flex lg:flex-col space-x-1 lg:space-x-0 lg:space-y-1 overflow-x-auto lg:overflow-x-visible pb-2 lg:pb-0 scrollbar-hide">
@@ -2185,7 +2185,7 @@ const SettingsPage = () => {
                 </div>
 
                 {/* Settings Content */}
-                <div className="flex-1 p-4 md:p-8 overflow-y-auto">
+                <div className="flex-1 p-4 md:p-8">
                     {renderContent()}
                 </div>
             </div>
