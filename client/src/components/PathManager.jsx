@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../App';
+import { useTheme } from '../contexts/ThemeContext';
 import Card from './ui/Card';
 import Button from './ui/Button';
 import Modal from './ui/Modal';
@@ -92,10 +92,7 @@ const PathManager = () => {
 
     return (
         <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider`}>
-                    路径管理
-                </h3>
+            <div className="flex justify-end items-center">
                 <Button onClick={handleAdd} size="sm" variant="primary">
                     + 添加路径
                 </Button>

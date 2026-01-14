@@ -57,6 +57,8 @@ async function downloadMTeamTorrent(downloadUrl, customConfig = null) {
 
                     if (isAllowed) {
                         console.log(`[M-Team Download] Following redirect to M-Team CDN: ${redirectParsed.hostname}`);
+                        // Important: consume the response data to free up the socket
+                        res.resume();
                         return downloadMTeamTorrent(redirectUrl, customConfig).then(resolve).catch(reject);
                     } else {
                         console.error(`[M-Team Download] Refusing to follow external redirect to: ${redirectParsed.hostname}`);

@@ -63,7 +63,7 @@ router.post('/config', async (req, res) => {
  */
 router.post('/check', async (req, res) => {
     try {
-        const result = await hotResourcesService.detectHotResources();
+        const result = await hotResourcesService.detectHotResources(true); // Pass true for manual detection
         res.json(result);
     } catch (err) {
         console.error('Manual hot resources check error:', err);

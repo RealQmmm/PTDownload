@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useTheme } from '../App';
+import { useTheme } from '../contexts/ThemeContext';
 import Button from '../components/ui/Button';
 
 const LogsPage = () => {

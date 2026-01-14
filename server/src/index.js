@@ -112,6 +112,7 @@ app.use('/api/settings', require('./routes/settings'));
 app.use('/api/logs', require('./routes/logs'));
 app.use('/api/series', require('./routes/series'));
 app.use('/api/download-paths', require('./routes/downloadPaths'));
+app.use('/api/hot-resources', require('./routes/hotResources'));
 
 // Serve static files from React app
 const clientDistPath = path.join(__dirname, '../../client/dist');

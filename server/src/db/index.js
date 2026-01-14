@@ -285,6 +285,27 @@ function createTables() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS hot_resources (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      resource_hash TEXT UNIQUE,
+      site_id INTEGER,
+      title TEXT NOT NULL,
+      url TEXT,
+      download_url TEXT,
+      size INTEGER DEFAULT 0,
+      seeders INTEGER DEFAULT 0,
+      leechers INTEGER DEFAULT 0,
+      category TEXT,
+      promotion TEXT,
+      publish_time DATETIME,
+      hot_score INTEGER DEFAULT 0,
+      notified INTEGER DEFAULT 0,
+      downloaded INTEGER DEFAULT 0,
+      user_action TEXT, -- 'ignored', 'downloaded', 'pending'
+      detected_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(site_id) REFERENCES sites(id)
+    );
+
   `;
 
   db.exec(schema);
@@ -360,6 +381,26 @@ function createTables() {
         include: ['series', 'tv', '剧集', 'soap', 'show', 'all', '综合', '聚合']
       })
     },
+    { key: 'hot_resources_enabled', value: 'false' },
+    { key: 'hot_resources_check_interval', value: '10' },
+    { key: 'hot_resources_auto_download', value: 'false' },
+    { key: 'hot_resources_default_client', value: '' },
+    {
+      key: 'hot_resources_rules', value: JSON.stringify({
+        minSeeders: 0, // Lowered from 20 since RSS often doesn't provide this
+        minLeechers: 0, // Lowered from 5 since RSS often doesn't provide this
+        minSize: 0,
+        maxSize: 0,
+        scoreThreshold: 30, // Lowered from 40 to account for new scoring
+        minPublishMinutes: 1440, // 24 hours
+        enabledSites: [],
+        categories: [],
+        keywords: [], // Users can add keywords they're interested in
+        excludeKeywords: [],
+        enabledPromotions: ['Free', '2xFree', '50%', '30%']
+      })
+    },
+    { key: 'notify_on_hot_resource', value: 'true' },
   ];
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');

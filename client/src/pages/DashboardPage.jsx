@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../App';
+import { useTheme } from '../contexts/ThemeContext';
 import Card from '../components/ui/Card';
 
 // Format bytes to human readable format

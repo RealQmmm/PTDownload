@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useTheme } from '../App';
+import { useTheme } from '../contexts/ThemeContext';
 import { FormatUtils } from '../utils/formatUtils';
 import { suggestPathByTorrentName } from '../utils/pathUtils';
 import Card from '../components/ui/Card';
@@ -44,8 +44,27 @@ const getCategoryIcon = (category) => {
     return iconMap[category] || '📦';
 };
 
+// Helper function to get hot score color
+const getHotScoreColor = (score) => {
+    if (score >= 80) return 'text-red-500';
+    if (score >= 60) return 'text-orange-500';
+    if (score >= 40) return 'text-yellow-500';
+    return 'text-green-500';
+};
+
+// Helper function to get risk label style
+const getRiskLabelStyle = (level, darkMode) => {
+    switch (level) {
+        case 'GREAT': return darkMode ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-red-50 text-red-600 border-red-200';
+        case 'SAFE': return darkMode ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-green-50 text-green-600 border-green-200';
+        case 'RISKY': return darkMode ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-yellow-50 text-yellow-600 border-yellow-200';
+        case 'TRASH': return darkMode ? 'bg-gray-500/20 text-gray-400 border-gray-500/30' : 'bg-gray-100 text-gray-600 border-gray-200';
+        default: return '';
+    }
+};
+
 const SearchPage = ({ searchState, setSearchState }) => {
-    const { darkMode, authenticatedFetch } = useTheme();
+    const { darkMode, authenticatedFetch, hotResourcesEnabled } = useTheme();
     const [query, setQuery] = useState(searchState?.query || '');
     const [results, setResults] = useState(searchState?.results || []);
 
@@ -170,7 +189,34 @@ const SearchPage = ({ searchState, setSearchState }) => {
             const data = await res.json();
 
             if (data) {
-                setResults(Array.isArray(data) ? data : (data.results || []));
+                const searchResults = Array.isArray(data) ? data : (data.results || []);
+
+                // Check download status for each result
+                try {
+                    const checkRes = await authenticatedFetch('/api/search/check-downloaded', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            items: searchResults.map(item => ({
+                                link: item.link,
+                                name: item.name
+                            }))
+                        })
+                    });
+                    const downloadStatus = await checkRes.json();
+
+                    // Merge download status into results
+                    const resultsWithStatus = searchResults.map((item, index) => ({
+                        ...item,
+                        isDownloaded: downloadStatus[index] || false
+                    }));
+
+                    setResults(resultsWithStatus);
+                } catch (statusErr) {
+                    console.warn('Failed to check download status:', statusErr);
+                    // Fallback: show results without download status
+                    setResults(searchResults);
+                }
             } else {
                 setResults([]);
             }
@@ -376,9 +422,55 @@ const SearchPage = ({ searchState, setSearchState }) => {
             } else if (sortConfig.key === 'seeders' || sortConfig.key === 'leechers') {
                 valA = Number(valA) || 0;
                 valB = Number(valB) || 0;
+            } else if (sortConfig.key === 'hotScore') {
+                valA = Number(valA) || 0;
+                valB = Number(valB) || 0;
             } else if (sortConfig.key === 'date') {
-                valA = new Date(valA).getTime();
-                valB = new Date(valB).getTime();
+                // Enhanced date parsing to handle various formats
+                const parseDate = (dateStr) => {
+                    if (!dateStr) return 0;
+
+                    // Try direct parsing first
+                    let date = new Date(dateStr);
+                    if (!isNaN(date.getTime())) {
+                        return date.getTime();
+                    }
+
+                    // Handle relative time formats (e.g., "5分钟前", "2小时前")
+                    const now = Date.now();
+
+                    // Match patterns like "X分钟前", "X小时前", "X天前"
+                    const relativeMatch = dateStr.match(/(\d+)\s*(分钟|小时|天|周|月|年)/);
+                    if (relativeMatch) {
+                        const value = parseInt(relativeMatch[1]);
+                        const unit = relativeMatch[2];
+
+                        const multipliers = {
+                            '分钟': 60 * 1000,
+                            '小时': 60 * 60 * 1000,
+                            '天': 24 * 60 * 60 * 1000,
+                            '周': 7 * 24 * 60 * 60 * 1000,
+                            '月': 30 * 24 * 60 * 60 * 1000,
+                            '年': 365 * 24 * 60 * 60 * 1000
+                        };
+
+                        return now - (value * (multipliers[unit] || 0));
+                    }
+
+                    // Try parsing as ISO string with timezone
+                    const isoMatch = dateStr.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/);
+                    if (isoMatch) {
+                        date = new Date(`${isoMatch[1]}T${isoMatch[2]}`);
+                        if (!isNaN(date.getTime())) {
+                            return date.getTime();
+                        }
+                    }
+
+                    return 0; // Invalid date
+                };
+
+                valA = parseDate(valA);
+                valB = parseDate(valB);
             } else {
                 valA = (valA || '').toString().toLowerCase();
                 valB = (valB || '').toString().toLowerCase();
@@ -406,7 +498,12 @@ const SearchPage = ({ searchState, setSearchState }) => {
     return (
         <div className="p-2 sm:p-4 md:p-8 flex flex-col">
             <div className="mb-2 sm:mb-4 md:mb-8">
-                <h1 className={`hidden sm:block text-2xl md:text-3xl font-bold mb-4 md:mb-6 ${textPrimary}`}>资源搜索</h1>
+                <h1 className={`hidden sm:block text-2xl md:text-3xl font-bold mb-4 md:mb-6 ${textPrimary} flex items-center`}>
+                    资源搜索
+                    {hotResourcesEnabled && searchMode === 'recent' && (
+                        <span className="ml-3 text-2xl" title="热门资源模式已启用">🔥</span>
+                    )}
+                </h1>
 
                 <form onSubmit={handleSearch} className="flex gap-1 sm:gap-2">
                     <div className="flex-1 min-w-0">
@@ -467,6 +564,11 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                             <th className={`p-4 font-bold border-b ${borderColor} text-xs text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('date')}>
                                                 <div className="flex items-center justify-center">发布时间 <SortIcon columnKey="date" /></div>
                                             </th>
+                                            {hotResourcesEnabled && searchMode === 'recent' && (
+                                                <th className={`p-4 font-bold border-b ${borderColor} text-xs text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('hotScore')}>
+                                                    <div className="flex items-center justify-center">🔥 热度 <SortIcon columnKey="hotScore" /></div>
+                                                </th>
+                                            )}
                                             <th className={`p-4 font-bold border-b ${borderColor} text-xs text-right pr-6`}>操作</th>
                                         </tr>
                                     </thead>
@@ -527,6 +629,25 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                                 <td className={`p-4 ${textSecondary} text-[10px] font-mono text-center align-middle whitespace-nowrap`}>
                                                     {item.date}
                                                 </td>
+                                                {hotResourcesEnabled && searchMode === 'recent' && (
+                                                    <td className="p-4 text-center align-middle">
+                                                        {item.hotScore !== undefined && (
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                <div className="flex items-baseline justify-center">
+                                                                    <span className={`text-lg font-bold leading-none ${getHotScoreColor(item.hotScore)}`}>
+                                                                        {item.hotScore}
+                                                                    </span>
+                                                                    <span className="text-[9px] text-gray-500 ml-0.5">分</span>
+                                                                </div>
+                                                                {item.riskLabel && (
+                                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border whitespace-nowrap ${getRiskLabelStyle(item.riskLevel, darkMode)}`}>
+                                                                        {item.riskLabel}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                )}
                                                 <td className="p-4 text-right pr-6 align-middle">
                                                     <div className="flex items-center justify-end gap-1.5">
                                                         <Button
@@ -586,16 +707,29 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                                 </span>
                                             )}
                                             {item.isFree && <span className="px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[9px] font-medium whitespace-nowrap">🎁{item.freeType || '免费'}</span>}
+                                            {hotResourcesEnabled && searchMode === 'recent' && item.hotScore !== undefined && (
+                                                <>
+                                                    <span className={`font-bold px-1.5 py-0.5 rounded text-[9px] whitespace-nowrap ${getHotScoreColor(item.hotScore)} bg-gray-100 dark:bg-gray-700`}>
+                                                        🔥{item.hotScore}
+                                                    </span>
+                                                    {item.riskLabel && (
+                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border whitespace-nowrap ${getRiskLabelStyle(item.riskLevel, darkMode)}`}>
+                                                            {item.riskLabel}
+                                                        </span>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                     <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} font-bold text-xs line-clamp-2 mb-1 leading-tight block`}>
                                         {item.name}
                                     </a>
                                     <div className="flex items-center justify-between text-[10px] mb-2">
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-2 items-center flex-wrap">
                                             <span className={textSecondary}>{item.size}</span>
                                             <span className="text-green-500 font-bold">↑{item.seeders}</span>
                                             <span className="text-red-400">↓{item.leechers}</span>
+                                            {item.date && <span className={`${textSecondary} opacity-70`}>📅{item.date}</span>}
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                             <Button

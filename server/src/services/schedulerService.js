@@ -318,6 +318,11 @@ class SchedulerService {
             console.log(`Task type ${task.type} not yet implemented`);
         }
     }
+
+    restartHotResourcesJob() {
+        // Stub for now, will be implemented when timing function is added
+        if (this._isLogEnabled()) console.log('[Scheduler] Hot resources job restart requested (not implemented yet)');
+    }
 }
 
 module.exports = new SchedulerService();

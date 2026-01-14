@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../App';
+import { useTheme } from '../contexts/ThemeContext';
 import LogsPage from './LogsPage';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -9,7 +9,7 @@ import PathManager from '../components/PathManager';
 import CategoryMapEditor from '../components/CategoryMapEditor';
 
 const SettingsPage = () => {
-    const { darkMode, themeMode, setThemeMode, siteName, setSiteName, authenticatedFetch, user: me } = useTheme();
+    const { darkMode, themeMode, setThemeMode, siteName, setSiteName, authenticatedFetch, user: me, setHotResourcesEnabled } = useTheme();
     const [subTab, setSubTab] = useState('general');
     const [tempSiteName, setTempSiteName] = useState(siteName);
     const [logSettings, setLogSettings] = useState({
@@ -70,9 +70,32 @@ const SettingsPage = () => {
     // Create series subfolder
     const [createSeriesSubfolder, setCreateSeriesSubfolder] = useState(false);
 
-    // User management states
+    // Hot resources settings
+    const [hotResourcesSettings, setHotResourcesSettings] = useState({
+        enabled: false,
+        checkInterval: '10',
+        autoDownload: false,
+        defaultClient: '',
+        notifyEnabled: true,
+        enableSearchIntegration: false,
+        rules: {
+            minSeeders: 20,
+            minLeechers: 5,
+            minSize: 0,
+            maxSize: 0,
+            scoreThreshold: 40,
+            minPublishMinutes: 1440,
+            enabledSites: [],
+            categories: [],
+            keywords: [],
+            excludeKeywords: [],
+            enabledPromotions: ['Free', '2xFree', '50%']
+        }
+    });
+
     const [users, setUsers] = useState([]);
     const [currentUser, setCurrentUser] = useState(null);
+    const [showTmdbDetails, setShowTmdbDetails] = useState(false);
     const [showAddUserModal, setShowAddUserModal] = useState(false);
     const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -83,11 +106,20 @@ const SettingsPage = () => {
     const [showPermissionsModal, setShowPermissionsModal] = useState(false);
     const [selectedPermissions, setSelectedPermissions] = useState({ menus: [], settings: [] });
 
+    // Collapsible sections state
+    const [showLogSettings, setShowLogSettings] = useState(false);
+    const [showDashboardSettings, setShowDashboardSettings] = useState(false);
+    const [showPathManager, setShowPathManager] = useState(false);
+    const [showCategoryMap, setShowCategoryMap] = useState(false);
+    const [showCategoryManagement, setShowCategoryManagement] = useState(false);
+    const [showAutoCleanup, setShowAutoCleanup] = useState(false);
+    const [showThresholdHint, setShowThresholdHint] = useState(false);
+
     // Handle subTab permission redirection
     useEffect(() => {
         if (me?.role !== 'admin') {
             const permissions = me?.permissions ? (typeof me.permissions === 'string' ? JSON.parse(me.permissions) : me.permissions) : null;
-            const allowedSettings = permissions?.settings || ['general', 'about'];
+            const allowedSettings = permissions?.settings || ['general', 'hot-resources', 'about'];
             if (!allowedSettings.includes(subTab)) {
                 if (allowedSettings.length > 0) {
                     setSubTab(allowedSettings[0]);
@@ -183,6 +215,17 @@ const SettingsPage = () => {
             setDefaultDownloadPath(data.default_download_path || '');
             setEnableMultiPath(data.enable_multi_path === 'true' || data.enable_multi_path === true);
             setCreateSeriesSubfolder(data.create_series_subfolder === 'true' || data.create_series_subfolder === true);
+
+            // Load hot resources settings
+            setHotResourcesSettings({
+                enabled: data.hot_resources_enabled === 'true',
+                checkInterval: data.hot_resources_check_interval || '10',
+                autoDownload: data.hot_resources_auto_download === 'true',
+                defaultClient: data.hot_resources_default_client || '',
+                notifyEnabled: data.notify_on_hot_resource !== 'false',
+                enableSearchIntegration: data.hot_resources_enable_search_integration === 'true' || data.hot_resources_enable_search_integration === true,
+                rules: data.hot_resources_rules ? (typeof data.hot_resources_rules === 'string' ? JSON.parse(data.hot_resources_rules) : data.hot_resources_rules) : hotResourcesSettings.rules
+            });
         } catch (err) {
             console.error('Fetch settings failed:', err);
         }
@@ -239,6 +282,37 @@ const SettingsPage = () => {
             });
             if (res.ok) {
                 setMessage({ type: 'success', text: '通知设置已保存' });
+            } else {
+                setMessage({ type: 'error', text: '保存失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const handleSaveHotResources = async () => {
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await authenticatedFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    hot_resources_enabled: hotResourcesSettings.enabled,
+                    hot_resources_check_interval: hotResourcesSettings.checkInterval,
+                    hot_resources_auto_download: hotResourcesSettings.autoDownload,
+                    hot_resources_default_client: hotResourcesSettings.defaultClient,
+                    notify_on_hot_resource: hotResourcesSettings.notifyEnabled ? 'true' : 'false',
+                    hot_resources_enable_search_integration: hotResourcesSettings.enableSearchIntegration ? 'true' : 'false',
+                    hot_resources_rules: typeof hotResourcesSettings.rules === 'string' ? hotResourcesSettings.rules : JSON.stringify(hotResourcesSettings.rules)
+                })
+            });
+            if (res.ok) {
+                setHotResourcesEnabled(hotResourcesSettings.enableSearchIntegration);
+                setMessage({ type: 'success', text: '热门资源设置已保存' });
             } else {
                 setMessage({ type: 'error', text: '保存失败' });
             }
@@ -930,86 +1004,137 @@ const SettingsPage = () => {
                             <hr className={borderColor} />
 
                             <div>
-                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>日志与站点设置</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <Input
-                                        label="日志保留天数"
-                                        type="number"
-                                        value={logSettings.log_retention_days}
-                                        onChange={(e) => setLogSettings({ ...logSettings, log_retention_days: e.target.value })}
-                                        placeholder="7"
-                                    />
-                                    <Input
-                                        label="最大日志条数/任务"
-                                        type="number"
-                                        value={logSettings.log_max_count}
-                                        onChange={(e) => setLogSettings({ ...logSettings, log_max_count: e.target.value })}
-                                        placeholder="100"
-                                    />
-                                    <Input
-                                        label="站点数据检查间隔 (分钟)"
-                                        type="number"
-                                        min="5"
-                                        value={cookieCheckInterval}
-                                        onChange={(e) => setCookieCheckInterval(e.target.value)}
-                                        placeholder="60"
-                                    />
-                                    <Input
-                                        label="每日自动签到时间"
-                                        type="time"
-                                        value={checkinTime}
-                                        onChange={(e) => setCheckinTime(e.target.value)}
-                                    />
-                                    <Input
-                                        label="RSS 缓存时间 (秒)"
-                                        type="number"
-                                        min="60"
-                                        max="3600"
-                                        value={rssCacheTTL}
-                                        onChange={(e) => setRssCacheTTL(e.target.value)}
-                                    />
-                                    <div>
-                                        <Input
-                                            label="搜索超时重试次数"
-                                            type="number"
-                                            min="0"
-                                            max="3"
-                                            value={searchRetryCount}
-                                            onChange={(e) => setSearchRetryCount(e.target.value)}
-                                        />
-                                        <p className={`text-[10px] ${textSecondary} mt-1`}>
-                                            0=不重试（默认），1-3=重试次数
-                                        </p>
-                                    </div>
+                                <div
+                                    className="flex items-center justify-between cursor-pointer group"
+                                    onClick={() => setShowLogSettings(!showLogSettings)}
+                                >
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                        <span className="mr-2">📋</span> 日志与站点设置
+                                    </h3>
+                                    <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                        {showLogSettings ? '收起配置 ▴' : '展开配置 ▾'}
+                                    </button>
                                 </div>
+
+                                {showLogSettings ? (
+                                    <div className="space-y-4 mt-4 animate-in slide-in-from-top-2 duration-200">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <Input
+                                                label="日志保留天数"
+                                                type="number"
+                                                value={logSettings.log_retention_days}
+                                                onChange={(e) => setLogSettings({ ...logSettings, log_retention_days: e.target.value })}
+                                                placeholder="7"
+                                            />
+                                            <Input
+                                                label="最大日志条数/任务"
+                                                type="number"
+                                                value={logSettings.log_max_count}
+                                                onChange={(e) => setLogSettings({ ...logSettings, log_max_count: e.target.value })}
+                                                placeholder="100"
+                                            />
+                                            <Input
+                                                label="站点数据检查间隔 (分钟)"
+                                                type="number"
+                                                min="5"
+                                                value={cookieCheckInterval}
+                                                onChange={(e) => setCookieCheckInterval(e.target.value)}
+                                                placeholder="60"
+                                            />
+                                            <Input
+                                                label="每日自动签到时间"
+                                                type="time"
+                                                value={checkinTime}
+                                                onChange={(e) => setCheckinTime(e.target.value)}
+                                            />
+                                            <Input
+                                                label="RSS 缓存时间 (秒)"
+                                                type="number"
+                                                min="60"
+                                                max="3600"
+                                                value={rssCacheTTL}
+                                                onChange={(e) => setRssCacheTTL(e.target.value)}
+                                            />
+                                            <div>
+                                                <Input
+                                                    label="搜索超时重试次数"
+                                                    type="number"
+                                                    min="0"
+                                                    max="3"
+                                                    value={searchRetryCount}
+                                                    onChange={(e) => setSearchRetryCount(e.target.value)}
+                                                />
+                                                <p className={`text-[10px] ${textSecondary} mt-1`}>
+                                                    0=不重试（默认），1-3=重试次数
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            日志保留: {logSettings.log_retention_days}天
+                                        </div>
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            站点检查: {cookieCheckInterval}分钟
+                                        </div>
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            签到时间: {checkinTime}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <hr className={borderColor} />
 
                             <div>
-                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>仪表盘刷新设置</h3>
-                                <p className={`text-xs ${textSecondary} mb-4`}>根据任务活跃状态智能调整数据刷新频率，减少不必要的请求</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <Input
-                                        label="活跃时刷新间隔 (秒)"
-                                        type="number"
-                                        min="5"
-                                        max="60"
-                                        value={dashboardActiveInterval}
-                                        onChange={(e) => setDashboardActiveInterval(e.target.value)}
-                                        placeholder="10"
-                                    />
-                                    <Input
-                                        label="空闲时刷新间隔 (秒)"
-                                        type="number"
-                                        min="10"
-                                        max="300"
-                                        value={dashboardIdleInterval}
-                                        onChange={(e) => setDashboardIdleInterval(e.target.value)}
-                                        placeholder="30"
-                                    />
+                                <div
+                                    className="flex items-center justify-between cursor-pointer group"
+                                    onClick={() => setShowDashboardSettings(!showDashboardSettings)}
+                                >
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                        <span className="mr-2">📊</span> 仪表盘刷新设置
+                                    </h3>
+                                    <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                        {showDashboardSettings ? '收起配置 ▴' : '展开配置 ▾'}
+                                    </button>
                                 </div>
-                                <p className={`text-[10px] ${textSecondary} mt-2`}>活跃时：有任务正在上传或下载时的刷新间隔；空闲时：无活跃任务或无任何任务时的刷新间隔</p>
+
+                                {showDashboardSettings ? (
+                                    <div className="space-y-4 mt-4 animate-in slide-in-from-top-2 duration-200">
+                                        <p className={`text-xs ${textSecondary}`}>根据任务活跃状态智能调整数据刷新频率，减少不必要的请求</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <Input
+                                                label="活跃时刷新间隔 (秒)"
+                                                type="number"
+                                                min="5"
+                                                max="60"
+                                                value={dashboardActiveInterval}
+                                                onChange={(e) => setDashboardActiveInterval(e.target.value)}
+                                                placeholder="10"
+                                            />
+                                            <Input
+                                                label="空闲时刷新间隔 (秒)"
+                                                type="number"
+                                                min="10"
+                                                max="300"
+                                                value={dashboardIdleInterval}
+                                                onChange={(e) => setDashboardIdleInterval(e.target.value)}
+                                                placeholder="30"
+                                            />
+                                        </div>
+                                        <p className={`text-[10px] ${textSecondary}`}>活跃时：有任务正在上传或下载时的刷新间隔；空闲时：无活跃任务或无任何任务时的刷新间隔</p>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            活跃: {dashboardActiveInterval}秒
+                                        </div>
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            空闲: {dashboardIdleInterval}秒
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <hr className={borderColor} />
@@ -1086,29 +1211,55 @@ const SettingsPage = () => {
                             <hr className={borderColor} />
 
                             <div>
-                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>TMDB 刮削设置</h3>
-                                <div className="space-y-4">
-                                    <Input
-                                        label="API Key"
-                                        value={tmdbSettings.tmdb_api_key}
-                                        onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_api_key: e.target.value })}
-                                        placeholder="例如: 107492d..."
-                                    />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <Input
-                                            label="API Base URL"
-                                            value={tmdbSettings.tmdb_base_url}
-                                            onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_base_url: e.target.value })}
-                                            placeholder="默认: https://api.themoviedb.org/3"
-                                        />
-                                        <Input
-                                            label="Image Base URL"
-                                            value={tmdbSettings.tmdb_image_base_url}
-                                            onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_image_base_url: e.target.value })}
-                                            placeholder="默认: https://image.tmdb.org/t/p/w300"
-                                        />
-                                    </div>
+                                <div
+                                    className="flex items-center justify-between cursor-pointer group"
+                                    onClick={() => setShowTmdbDetails(!showTmdbDetails)}
+                                >
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                        <span className="mr-2">🎬</span> TMDB 刮削设置
+                                    </h3>
+                                    <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                        {showTmdbDetails ? '收起配置 ▴' : '展开配置 ▾'}
+                                    </button>
                                 </div>
+
+                                {showTmdbDetails ? (
+                                    <div className="space-y-4 mt-4 animate-in slide-in-from-top-2 duration-200">
+                                        <Input
+                                            label="API Key"
+                                            value={tmdbSettings.tmdb_api_key}
+                                            onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_api_key: e.target.value })}
+                                            placeholder="例如: 107492d..."
+                                        />
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <Input
+                                                label="API Base URL"
+                                                value={tmdbSettings.tmdb_base_url}
+                                                onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_base_url: e.target.value })}
+                                                placeholder="默认: https://api.themoviedb.org/3"
+                                            />
+                                            <Input
+                                                label="Image Base URL"
+                                                value={tmdbSettings.tmdb_image_base_url}
+                                                onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_image_base_url: e.target.value })}
+                                                placeholder="默认: https://image.tmdb.org/t/p/w300"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 flex items-center space-x-2">
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${tmdbSettings.tmdb_api_key ? (darkMode ? 'bg-green-500/10 text-green-400' : 'bg-green-50 text-green-600') : (darkMode ? 'bg-gray-800 text-gray-500' : 'bg-gray-100 text-gray-400')}`}>
+                                            {tmdbSettings.tmdb_api_key
+                                                ? `KEY: ${tmdbSettings.tmdb_api_key.substring(0, 4)}••••${tmdbSettings.tmdb_api_key.slice(-4)}`
+                                                : '未配置 API Key'}
+                                        </div>
+                                        {tmdbSettings.tmdb_base_url && tmdbSettings.tmdb_base_url !== 'https://api.themoviedb.org/3' && (
+                                            <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                                                自定义代理
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </Card>
 
@@ -1393,68 +1544,102 @@ const SettingsPage = () => {
                             <hr className={borderColor} />
 
                             <div className="space-y-4">
-                                <div className="flex items-center justify-between">
+                                <div
+                                    className="flex items-center justify-between cursor-pointer group"
+                                    onClick={() => setShowAutoCleanup(!showAutoCleanup)}
+                                >
                                     <div>
                                         <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
                                             <span className="mr-2">🧹</span> 自动清理 (实验性)
                                         </h3>
                                         <p className={`text-xs ${textSecondary} mt-1`}>
-                                            根据分享率或做种时间自动删除下载器中的任务和文件。
+                                            根据分享率或做种时间自动删除下载器中的任务和文件
                                         </p>
                                     </div>
-                                    <button
-                                        onClick={() => handleSaveCleanup(!cleanupSettings.cleanup_enabled)}
-                                        className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${cleanupSettings.cleanup_enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
-                                    >
-                                        <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${cleanupSettings.cleanup_enabled ? 'left-6.5' : 'left-0.5'}`} />
-                                    </button>
+                                    <div className="flex items-center gap-3">
+                                        <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                            {showAutoCleanup ? '收起配置 ▴' : '展开配置 ▾'}
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleSaveCleanup(!cleanupSettings.cleanup_enabled);
+                                            }}
+                                            className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${cleanupSettings.cleanup_enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+                                        >
+                                            <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${cleanupSettings.cleanup_enabled ? 'left-6.5' : 'left-0.5'}`} />
+                                        </button>
+                                    </div>
                                 </div>
 
-                                <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-100/50'} border ${borderColor}`}>
-                                    <div>
-                                        <Input
-                                            label="最小分享率"
-                                            type="number"
-                                            step="0.1"
-                                            value={cleanupSettings.cleanup_min_ratio}
-                                            onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_min_ratio: e.target.value })}
-                                        />
-                                        <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此分享率时删除</p>
-                                    </div>
-                                    <div>
-                                        <Input
-                                            label="最长做种时间 (小时)"
-                                            type="number"
-                                            value={cleanupSettings.cleanup_max_seeding_time}
-                                            onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_max_seeding_time: e.target.value })}
-                                        />
-                                        <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此时间时删除 ({(cleanupSettings.cleanup_max_seeding_time / 24).toFixed(1)} 天)</p>
-                                    </div>
-                                    <div className="md:col-span-2 space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <label className={`block text-xs font-bold ${textSecondary} uppercase`}>同时删除文件</label>
-                                                <p className={`text-[10px] ${textSecondary}`}>如果关闭，仅移除下载器中的任务，保留硬盘上的文件</p>
+                                {showAutoCleanup ? (
+                                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-100/50'} border ${borderColor} animate-in slide-in-from-top-2 duration-200`}>
+                                        <div>
+                                            <Input
+                                                label="最小分享率"
+                                                type="number"
+                                                step="0.1"
+                                                value={cleanupSettings.cleanup_min_ratio}
+                                                onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_min_ratio: e.target.value })}
+                                            />
+                                            <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此分享率时删除</p>
+                                        </div>
+                                        <div>
+                                            <Input
+                                                label="最长做种时间 (小时)"
+                                                type="number"
+                                                value={cleanupSettings.cleanup_max_seeding_time}
+                                                onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_max_seeding_time: e.target.value })}
+                                            />
+                                            <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此时间时删除 ({(cleanupSettings.cleanup_max_seeding_time / 24).toFixed(1)} 天)</p>
+                                        </div>
+                                        <div className="md:col-span-2 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <label className={`block text-xs font-bold ${textSecondary} uppercase`}>同时删除文件</label>
+                                                    <p className={`text-[10px] ${textSecondary}`}>如果关闭，仅移除下载器中的任务，保留硬盘上的文件</p>
+                                                </div>
+                                                <button
+                                                    onClick={() => setCleanupSettings({ ...cleanupSettings, cleanup_delete_files: !cleanupSettings.cleanup_delete_files })}
+                                                    className={`relative inline-block w-10 h-5 transition duration-200 ease-in-out rounded-full cursor-pointer ${cleanupSettings.cleanup_delete_files ? 'bg-red-500' : 'bg-gray-300'}`}
+                                                >
+                                                    <span className={`absolute top-0.5 inline-block w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${cleanupSettings.cleanup_delete_files ? 'left-5.5' : 'left-0.5'}`} />
+                                                </button>
                                             </div>
-                                            <button
-                                                onClick={() => setCleanupSettings({ ...cleanupSettings, cleanup_delete_files: !cleanupSettings.cleanup_delete_files })}
-                                                className={`relative inline-block w-10 h-5 transition duration-200 ease-in-out rounded-full cursor-pointer ${cleanupSettings.cleanup_delete_files ? 'bg-red-500' : 'bg-gray-300'}`}
+                                        </div>
+                                        <div className="md:col-span-2 pt-2">
+                                            <Button
+                                                variant="secondary"
+                                                onClick={handleSaveCleanupConfig}
+                                                disabled={saving}
+                                                className="w-full text-blue-600 dark:text-blue-400"
                                             >
-                                                <span className={`absolute top-0.5 inline-block w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${cleanupSettings.cleanup_delete_files ? 'left-5.5' : 'left-0.5'}`} />
-                                            </button>
+                                                保存清理策略
+                                            </Button>
                                         </div>
                                     </div>
-                                    <div className="md:col-span-2 pt-2">
-                                        <Button
-                                            variant="secondary"
-                                            onClick={handleSaveCleanupConfig}
-                                            disabled={saving}
-                                            className="w-full text-blue-600 dark:text-blue-400"
-                                        >
-                                            保存清理策略
-                                        </Button>
+                                ) : (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            状态: {cleanupSettings.cleanup_enabled ? '已启用' : '已禁用'}
+                                        </div>
+                                        {cleanupSettings.cleanup_enabled && (
+                                            <>
+                                                <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                                    分享率 ≥ {cleanupSettings.cleanup_min_ratio}
+                                                </div>
+                                                <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                                    时间 ≥ {(cleanupSettings.cleanup_max_seeding_time / 24).toFixed(1)}天
+                                                </div>
+                                                {cleanupSettings.cleanup_delete_files && (
+                                                    <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600'}`}>
+                                                        删除文件
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
                                     </div>
-                                </div>
+                                )}
                             </div>
 
                             <hr className={borderColor} />
@@ -2007,7 +2192,27 @@ const SettingsPage = () => {
                             <>
                                 {/* 2. 路径管理 */}
                                 <Card>
-                                    <PathManager />
+                                    <div
+                                        className="flex items-center justify-between cursor-pointer group mb-4"
+                                        onClick={() => setShowPathManager(!showPathManager)}
+                                    >
+                                        <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                            <span className="mr-2">📁</span> 路径管理
+                                        </h3>
+                                        <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                            {showPathManager ? '收起配置 ▴' : '展开配置 ▾'}
+                                        </button>
+                                    </div>
+
+                                    {showPathManager ? (
+                                        <div className="animate-in slide-in-from-top-2 duration-200">
+                                            <PathManager />
+                                        </div>
+                                    ) : (
+                                        <div className={`text-xs ${textSecondary}`}>
+                                            点击展开以管理下载路径
+                                        </div>
+                                    )}
                                 </Card>
 
                                 {/* 3. 智能分类管理开关 */}
@@ -2034,77 +2239,101 @@ const SettingsPage = () => {
 
                                     {/* 智能分类管理的子选项 */}
                                     {enableCategoryManagement && (
-                                        <div className={`mt-4 pt-4 border-t ${borderColor} space-y-3`}>
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className={`text-sm ${textPrimary}`}>类型精确匹配</p>
-                                                    <p className={`text-xs ${textSecondary}`}>优先使用 PT 站点提供的类型字段匹配</p>
-                                                </div>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={matchByCategory}
-                                                    onChange={(e) => handleToggleAutoDownloadOption('match_by_category', e.target.checked)}
-                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                                    disabled={saving}
-                                                />
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className={`text-sm ${textPrimary}`}>关键词评分匹配</p>
-                                                    <p className={`text-xs ${textSecondary}`}>根据标题关键词模糊匹配</p>
-                                                </div>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={matchByKeyword}
-                                                    onChange={(e) => handleToggleAutoDownloadOption('match_by_keyword', e.target.checked)}
-                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                                    disabled={saving}
-                                                />
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className={`text-sm ${textPrimary}`}>使用默认路径兜底</p>
-                                                    <p className={`text-xs ${textSecondary}`}>如果未匹配到类型，使用标记为默认的路径</p>
-                                                </div>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={fallbackToDefaultPath}
-                                                    onChange={(e) => handleToggleAutoDownloadOption('fallback_to_default_path', e.target.checked)}
-                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                                    disabled={saving}
-                                                />
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className={`text-sm ${textPrimary}`}>使用下载器默认路径</p>
-                                                    <p className={`text-xs ${textSecondary}`}>当所有规则都不匹配时，不指定路径</p>
-                                                </div>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={useDownloaderDefault}
-                                                    onChange={(e) => handleToggleAutoDownloadOption('use_downloader_default', e.target.checked)}
-                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                                    disabled={saving}
-                                                />
-                                            </div>
-
-                                            {/* 一键下载 */}
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className={`text-sm ${textPrimary} font-bold`}>⚡ 一键下载</p>
-                                                    <p className={`text-xs ${textSecondary}`}>开启后，点击下载将无需弹出多路劲选择框</p>
-                                                </div>
-                                                <button
-                                                    onClick={() => handleToggleAutoDownload(!autoDownloadEnabled)}
-                                                    disabled={saving}
-                                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${autoDownloadEnabled ? 'bg-blue-600' : 'bg-gray-300'
-                                                        } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        <>
+                                            <div className={`mt-4 pt-4 border-t ${borderColor}`}>
+                                                <div
+                                                    className="flex items-center justify-between cursor-pointer group mb-3"
+                                                    onClick={() => setShowCategoryManagement(!showCategoryManagement)}
                                                 >
-                                                    <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${autoDownloadEnabled ? 'left-6.5' : 'left-0.5'
-                                                        }`} />
-                                                </button>
+                                                    <h4 className={`text-sm font-bold ${textPrimary} flex items-center`}>
+                                                        <span className="mr-2">⚙️</span> 高级选项
+                                                    </h4>
+                                                    <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                                        {showCategoryManagement ? '收起配置 ▴' : '展开配置 ▾'}
+                                                    </button>
+                                                </div>
+
+                                                {showCategoryManagement ? (
+                                                    <div className="space-y-3 animate-in slide-in-from-top-2 duration-200">
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className={`text-sm ${textPrimary}`}>类型精确匹配</p>
+                                                                <p className={`text-xs ${textSecondary}`}>优先使用 PT 站点提供的类型字段匹配</p>
+                                                            </div>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={matchByCategory}
+                                                                onChange={(e) => handleToggleAutoDownloadOption('match_by_category', e.target.checked)}
+                                                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                                disabled={saving}
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className={`text-sm ${textPrimary}`}>关键词评分匹配</p>
+                                                                <p className={`text-xs ${textSecondary}`}>根据标题关键词模糊匹配</p>
+                                                            </div>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={matchByKeyword}
+                                                                onChange={(e) => handleToggleAutoDownloadOption('match_by_keyword', e.target.checked)}
+                                                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                                disabled={saving}
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className={`text-sm ${textPrimary}`}>使用默认路径兜底</p>
+                                                                <p className={`text-xs ${textSecondary}`}>如果未匹配到类型，使用标记为默认的路径</p>
+                                                            </div>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={fallbackToDefaultPath}
+                                                                onChange={(e) => handleToggleAutoDownloadOption('fallback_to_default_path', e.target.checked)}
+                                                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                                disabled={saving}
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className={`text-sm ${textPrimary}`}>使用下载器默认路径</p>
+                                                                <p className={`text-xs ${textSecondary}`}>当所有规则都不匹配时，不指定路径</p>
+                                                            </div>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={useDownloaderDefault}
+                                                                onChange={(e) => handleToggleAutoDownloadOption('use_downloader_default', e.target.checked)}
+                                                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                                disabled={saving}
+                                                            />
+                                                        </div>
+
+                                                        {/* 一键下载 */}
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className={`text-sm ${textPrimary} font-bold`}>⚡ 一键下载</p>
+                                                                <p className={`text-xs ${textSecondary}`}>开启后，点击下载将无需弹出多路劲选择框</p>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleToggleAutoDownload(!autoDownloadEnabled)}
+                                                                disabled={saving}
+                                                                className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${autoDownloadEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                                                                    } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                            >
+                                                                <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${autoDownloadEnabled ? 'left-6.5' : 'left-0.5'
+                                                                    }`} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        {matchByCategory && <div className={`px-2 py-1 rounded text-[10px] ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>类型匹配</div>}
+                                                        {matchByKeyword && <div className={`px-2 py-1 rounded text-[10px] ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>关键词匹配</div>}
+                                                        {autoDownloadEnabled && <div className={`px-2 py-1 rounded text-[10px] ${darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>⚡ 一键下载</div>}
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
+                                        </>
                                     )}
                                 </Card>
 
@@ -2114,20 +2343,37 @@ const SettingsPage = () => {
                                 <div className={`transition-opacity duration-300 ${enableCategoryManagement ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
                                     <Card className="space-y-4 relative">
                                         {!enableCategoryManagement && <div className="absolute inset-0 z-10 bg-gray-100/10 dark:bg-black/10 cursor-not-allowed"></div>}
-                                        <div>
-                                            <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-2`}>
-                                                类型映射配置
-                                            </h3>
-                                            <p className={`text-xs ${textSecondary} mb-4`}>
-                                                配置资源类型的识别规则。添加"类型"并为其指定多个"别名"（如 movie, film）。
-                                            </p>
+
+                                        <div
+                                            className="flex items-center justify-between cursor-pointer group"
+                                            onClick={() => enableCategoryManagement && setShowCategoryMap(!showCategoryMap)}
+                                        >
+                                            <div>
+                                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                                    <span className="mr-2">🗂️</span> 类型映射配置
+                                                </h3>
+                                                <p className={`text-xs ${textSecondary} mt-1`}>
+                                                    配置资源类型的识别规则
+                                                </p>
+                                            </div>
+                                            {enableCategoryManagement && (
+                                                <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                                    {showCategoryMap ? '收起配置 ▴' : '展开配置 ▾'}
+                                                </button>
+                                            )}
                                         </div>
 
-                                        <div>
-                                            <CategoryMapEditor
-                                                disabled={!enableCategoryManagement}
-                                            />
-                                        </div>
+                                        {showCategoryMap ? (
+                                            <div className="animate-in slide-in-from-top-2 duration-200 pt-4">
+                                                <CategoryMapEditor
+                                                    disabled={!enableCategoryManagement}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className={`text-xs ${textSecondary} pt-2`}>
+                                                {enableCategoryManagement ? '点击展开以配置类型映射规则' : '请先启用智能分类管理功能'}
+                                            </div>
+                                        )}
                                     </Card>
                                 </div>
                             </>
@@ -2138,6 +2384,213 @@ const SettingsPage = () => {
             case 'logs':
                 return (
                     <div key="logs"><LogsPage /></div>
+                );
+
+            case 'hot-resources':
+                return (
+                    <div className="space-y-6 animate-fade-in" key="hot-resources">
+                        {message && (
+                            <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {message.text}
+                            </div>
+                        )}
+
+                        <Card className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <div>
+                                    <h3 className={`text-lg font-bold ${textPrimary}`}>🔥 热门资源检测</h3>
+                                    <p className={`text-sm ${textSecondary}`}>
+                                        系统将定期通过站点的 RSS 订阅链接自动发现高热度资源。
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setHotResourcesSettings(prev => ({ ...prev, enabled: !prev.enabled }))}
+                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${hotResourcesSettings.enabled ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'
+                                        }`}
+                                >
+                                    <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${hotResourcesSettings.enabled ? 'left-6.5' : 'left-0.5'
+                                        }`} />
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <Input
+                                        label="检测间隔 (分钟)"
+                                        type="number"
+                                        value={hotResourcesSettings.checkInterval}
+                                        onChange={(e) => setHotResourcesSettings(prev => ({ ...prev, checkInterval: e.target.value }))}
+                                        placeholder="建议 10-60 分钟"
+                                    />
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1 mr-4">
+                                            <p className={`text-sm font-medium ${textPrimary}`}>启用搜索集成</p>
+                                            <p className={`text-xs ${textSecondary}`}>在资源搜索页面无关键词搜索时，自动计算热门分数并过滤</p>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={hotResourcesSettings.enableSearchIntegration}
+                                            onChange={(e) => setHotResourcesSettings(prev => ({ ...prev, enableSearchIntegration: e.target.checked }))}
+                                            className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1 mr-4">
+                                            <p className={`text-sm font-medium ${textPrimary}`}>自动开启下载</p>
+                                            <p className={`text-xs ${textSecondary}`}>匹配成功后自动添加到下载器 (需谨慎开启)</p>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={hotResourcesSettings.autoDownload}
+                                            onChange={(e) => setHotResourcesSettings(prev => ({ ...prev, autoDownload: e.target.checked }))}
+                                            className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1 mr-4">
+                                            <p className={`text-sm font-medium ${textPrimary}`}>推送通知</p>
+                                            <p className={`text-xs ${textSecondary}`}>发现热门资源时通过已配置的渠道通知您</p>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={hotResourcesSettings.notifyEnabled}
+                                            onChange={(e) => setHotResourcesSettings(prev => ({ ...prev, notifyEnabled: e.target.checked }))}
+                                            className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <Input
+                                            label="最低种子数"
+                                            type="number"
+                                            value={hotResourcesSettings.rules.minSeeders}
+                                            onChange={(e) => setHotResourcesSettings(prev => ({
+                                                ...prev,
+                                                rules: { ...prev.rules, minSeeders: parseInt(e.target.value) || 0 }
+                                            }))}
+                                        />
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex items-center gap-2">
+                                                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>热度阈值</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowThresholdHint(true)}
+                                                    className="text-gray-400 hover:text-blue-500 transition-colors"
+                                                    title="查看分数说明"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                                        <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm11.378-3.917c-.89-.777-2.366-.777-3.255 0a.75.75 0 01-.988-1.129c1.454-1.272 3.776-1.272 5.23 0 1.513 1.324 1.513 3.518 0 4.842a3.75 3.75 0 01-.837.552c-.676.328-1.028.774-1.028 1.152v.202a.75.75 0 01-1.5 0v-.202c0-.944.606-1.657 1.336-1.996.342-.158.656-.372.936-.617 1.256-1.099 1.256-2.587 0-3.686z" clipRule="evenodd" />
+                                                        <path d="M12 18a.75.75 0 100-1.5.75.75 0 000 1.5z" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            <Input
+                                                type="number"
+                                                value={hotResourcesSettings.rules.scoreThreshold}
+                                                onChange={(e) => setHotResourcesSettings(prev => ({
+                                                    ...prev,
+                                                    rules: { ...prev.rules, scoreThreshold: parseInt(e.target.value) || 0 }
+                                                }))}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className={`block text-sm font-medium ${textSecondary} mb-1`}>排除关键字 (逗号分隔)</label>
+                                        <textarea
+                                            className={`w-full px-3 py-2 rounded-lg text-sm border ${borderColor} ${darkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} focus:ring-2 focus:ring-primary-500`}
+                                            rows="2"
+                                            value={hotResourcesSettings.rules.excludeKeywords?.join(', ')}
+                                            onChange={(e) => setHotResourcesSettings(prev => ({
+                                                ...prev,
+                                                rules: { ...prev.rules, excludeKeywords: e.target.value.split(',').map(k => k.trim()).filter(k => k) }
+                                            }))}
+                                            placeholder="例如: 官推, 广告, 求种"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-8 flex justify-end">
+                                <Button
+                                    variant="primary"
+                                    onClick={handleSaveHotResources}
+                                    disabled={saving}
+                                >
+                                    {saving ? '正在保存...' : '💾 保存配置'}
+                                </Button>
+                            </div>
+                        </Card>
+
+                        <div className={`p-4 rounded-xl border ${darkMode ? 'bg-blue-900/10 border-blue-800/50' : 'bg-blue-50 border-blue-200'} flex items-start`}>
+                            <span className="text-xl mr-3">💡</span>
+                            <div className="text-sm">
+                                <p className={`font-bold ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>什么是热门资源？</p>
+                                <p className={`mt-1 ${darkMode ? 'text-blue-300' : 'text-blue-600'}`}>
+                                    系统会根据做种数、下载数、发布时间以及优惠促销（如 Free）进行综合评分。
+                                    <br />
+                                    请确保在站点管理中为各站点配置了正确的 <b>RSS 链接</b>，否则系统无法获取数据。
+                                </p>
+                            </div>
+                        </div>
+
+                        {showThresholdHint && (
+                            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200" onClick={() => setShowThresholdHint(false)}>
+                                <div className={`${bgMain} rounded-xl p-6 w-full max-w-lg shadow-2xl relative`} onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className={`text-lg font-bold ${textPrimary}`}>评分阈值参考 (TDI 2.0)</h3>
+                                        <button onClick={() => setShowThresholdHint(false)} className="text-gray-400 hover:text-gray-500">
+                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div className={`p-3 rounded-lg border ${darkMode ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50 border-blue-200'}`}>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-lg">💰</span>
+                                                <span className={`font-bold ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>30分 (激进)</span>
+                                            </div>
+                                            <p className={`text-sm ${textSecondary} mb-1`}><strong>适合：</strong>刮地皮策略</p>
+                                            <p className={`text-xs ${textSecondary}`}>
+                                                收取所有 Free 资源 (最差约30分) 以及优质的 50% Off 资源。
+                                                <br />逻辑：只要不亏（Free），或者大概率能赚（优质 50% Off），我都收。
+                                            </p>
+                                        </div>
+
+                                        <div className={`p-3 rounded-lg border ${darkMode ? 'bg-green-900/20 border-green-800' : 'bg-green-50 border-green-200'}`}>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-lg">🛡️</span>
+                                                <span className={`font-bold ${darkMode ? 'text-green-400' : 'text-green-700'}`}>50分 (推荐)</span>
+                                            </div>
+                                            <p className={`text-sm ${textSecondary} mb-1`}><strong>适合：</strong>安全理财策略</p>
+                                            <p className={`text-xs ${textSecondary}`}>
+                                                收取绝大部分合格的 Free 资源 (基础分 &gt; 20) + 极品 50% Off 资源。
+                                                <br />逻辑：彻底过滤掉平庸的 50% Off 资源。这是最安全的“无脑挂机”线。
+                                            </p>
+                                        </div>
+
+                                        <div className={`p-3 rounded-lg border ${darkMode ? 'bg-red-900/20 border-red-800' : 'bg-red-50 border-red-200'}`}>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-lg">🚀</span>
+                                                <span className={`font-bold ${darkMode ? 'text-red-400' : 'text-red-700'}`}>90分 (精英)</span>
+                                            </div>
+                                            <p className={`text-sm ${textSecondary} mb-1`}><strong>适合：</strong>只玩精品策略</p>
+                                            <p className={`text-xs ${textSecondary}`}>
+                                                只收 2xFree + 顶级 Free 资源。
+                                                <br />逻辑：只做必赚的生意。
+                                            </p>
+                                        </div>
+
+                                        <div className="flex justify-end mt-4">
+                                            <Button onClick={() => setShowThresholdHint(false)}>我知道了</Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 );
 
             default:
@@ -2158,6 +2611,7 @@ const SettingsPage = () => {
                             { id: 'category', name: '下载', icon: '⚡' },
                             { id: 'notifications', name: '通知', icon: '🔔' },
                             { id: 'backup', name: '备份', icon: '💾' },
+                            { id: 'hot-resources', name: '热门资源', icon: '🔥' },
                             { id: 'maintenance', name: '维护', icon: '🛠️' },
 
                             { id: 'logs', name: '日志', icon: '📜' },
@@ -2166,7 +2620,7 @@ const SettingsPage = () => {
                         ].filter(item => {
                             if (me?.role === 'admin') return true;
                             const permissions = me?.permissions ? (typeof me.permissions === 'string' ? JSON.parse(me.permissions) : me.permissions) : null;
-                            const allowedSettings = permissions?.settings || ['general', 'about'];
+                            const allowedSettings = permissions?.settings || ['general', 'hot-resources', 'about'];
                             return allowedSettings.includes(item.id);
                         }).map(item => (
                             <button

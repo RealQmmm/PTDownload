@@ -11,11 +11,16 @@ const hotResourcesService = {
      */
     getConfig() {
         const db = getDB();
-        const enabled = db.prepare("SELECT value FROM settings WHERE key = 'hot_resources_enabled'").get()?.value === 'true';
+        const enabledRow = db.prepare("SELECT value FROM settings WHERE key = 'hot_resources_enabled'").get();
+        const enabled = enabledRow && (enabledRow.value === 'true' || enabledRow.value === '1');
         const checkInterval = parseInt(db.prepare("SELECT value FROM settings WHERE key = 'hot_resources_check_interval'").get()?.value || '10');
-        const autoDownload = db.prepare("SELECT value FROM settings WHERE key = 'hot_resources_auto_download'").get()?.value === 'true';
+        const autoDownloadRow = db.prepare("SELECT value FROM settings WHERE key = 'hot_resources_auto_download'").get();
+        const autoDownload = autoDownloadRow && (autoDownloadRow.value === 'true' || autoDownloadRow.value === '1');
         const defaultClient = db.prepare("SELECT value FROM settings WHERE key = 'hot_resources_default_client'").get()?.value || '';
-        const notifyEnabled = db.prepare("SELECT value FROM settings WHERE key = 'notify_on_hot_resource'").get()?.value === 'true';
+        const notifyRow = db.prepare("SELECT value FROM settings WHERE key = 'notify_on_hot_resource'").get();
+        const notifyEnabled = notifyRow && (notifyRow.value === 'true' || notifyRow.value === '1' || notifyRow.value !== 'false');
+        const searchIntRow = db.prepare("SELECT value FROM settings WHERE key = 'hot_resources_enable_search_integration'").get();
+        const enableSearchIntegration = searchIntRow && (searchIntRow.value === 'true' || searchIntRow.value === '1');
 
         const rulesRow = db.prepare("SELECT value FROM settings WHERE key = 'hot_resources_rules'").get();
         const rules = rulesRow ? JSON.parse(rulesRow.value) : {};
@@ -26,6 +31,7 @@ const hotResourcesService = {
             autoDownload,
             defaultClient,
             notifyEnabled,
+            enableSearchIntegration,
             rules
         };
     },
@@ -52,6 +58,9 @@ const hotResourcesService = {
         if (config.notifyEnabled !== undefined) {
             updateSetting.run('notify_on_hot_resource', config.notifyEnabled ? 'true' : 'false');
         }
+        if (config.enableSearchIntegration !== undefined) {
+            updateSetting.run('hot_resources_enable_search_integration', config.enableSearchIntegration ? 'true' : 'false');
+        }
         if (config.rules !== undefined) {
             updateSetting.run('hot_resources_rules', JSON.stringify(config.rules));
         }
@@ -61,42 +70,151 @@ const hotResourcesService = {
 
     /**
      * Calculate hot score for a resource
+     * Priority: 1. Promotion (most important) 2. Seeders/Leechers (real popularity) 3. Freshness 4. Size 5. Keywords
+     * Returns object with total score and breakdown for debugging
      */
-    calculateHotScore(resource, rules) {
-        let score = 0;
+    /**
+     * Calculate hot score for a resource (TDI 2.0 Model)
+     * Formula: Score = (S_demand + S_speed + S_extra) * P_promotion
+     * 核心逻辑：优惠是第一优先级，作为强乘数。
+     */
+    calculateHotScore(resource, rules, returnBreakdown = false) {
+        let baseScore = 0;
+        const breakdown = {
+            base: 0,
+            demand: 0,
+            speed: 0,
+            extra: 0,
+            multiplier: 1
+        };
 
-        // Seeders contribution (weight: 2)
-        score += (resource.seeders || 0) * 2;
+        // ==========================================
+        // 1. 基础分计算 (Base Score) - 满分约 60分
+        // ==========================================
 
-        // Leechers contribution (weight: 3)
-        score += (resource.leechers || 0) * 3;
+        const seeders = parseInt(resource.seeders) || 0;
+        const leechers = parseInt(resource.leechers) || 0;
 
-        // Promotion bonus
-        const promotion = (resource.promotion || '').toLowerCase();
-        if (promotion.includes('2xfree') || promotion.includes('2x free')) {
-            score += 30;
-        } else if (promotion.includes('free')) {
-            score += 20;
-        } else if (promotion.includes('50%')) {
-            score += 10;
+        // --- A. 供需得分 (S_demand) ---
+        // 权重 30分。采用 min(L/S, 10) * 3
+        let lsRatio = 0;
+        if (seeders > 0) {
+            lsRatio = leechers / seeders;
+        } else if (leechers > 0) {
+            lsRatio = 100; // 无种有下，视为极度稀缺
         }
 
-        // Freshness bonus (based on publish time)
+        breakdown.demand = Math.min(lsRatio, 10) * 3;
+        baseScore += breakdown.demand;
+
+        // --- B. 速度/可行性得分 (S_speed) ---
+        // 权重 20分。根据种子数区间评分
+        let speedFactor = 0;
+        if (seeders < 5) {
+            speedFactor = 0.2; // 太少，可能断种或慢
+        } else if (seeders >= 5 && seeders <= 30) {
+            speedFactor = 1.0; // 黄金区间，肉多狼少
+        } else if (seeders > 30 && seeders <= 100) {
+            speedFactor = 0.8; // 竞争稍微有点大
+        } else {
+            speedFactor = 0.5; // 种子太多，抢不到上传
+        }
+
+        breakdown.speed = 20 * speedFactor;
+        baseScore += breakdown.speed;
+
+        // --- C. 时效/体积/其他 (S_extra) ---
+        // 权重 10分
+        let extraScore = 0;
+
+        // 体积 (5分): 30GB-80GB 最优
+        if (resource.size) {
+            const sizeGB = resource.size / (1024 * 1024 * 1024);
+            if (sizeGB >= 30 && sizeGB <= 80) {
+                extraScore += 5;
+            } else if (sizeGB >= 10 && sizeGB < 30) {
+                extraScore += 3;
+            } else if (sizeGB > 80 && sizeGB <= 200) {
+                extraScore += 2;
+            }
+        }
+
+        // 时效 (5分)
         if (resource.publishTime) {
             const now = new Date();
             const publishDate = new Date(resource.publishTime);
             const minutesAgo = (now - publishDate) / (1000 * 60);
 
-            if (minutesAgo < 30) {
-                score += 15;
-            } else if (minutesAgo < 60) {
-                score += 10;
-            } else if (minutesAgo < 120) {
-                score += 5;
+            if (minutesAgo < 60) extraScore += 5;       // 1小时内
+            else if (minutesAgo < 240) extraScore += 3; // 4小时内
+            else if (minutesAgo < 1440) extraScore += 1; // 24小时内
+        }
+
+        // 关键词加分 (整合进 Extra)
+        if (rules.keywords && rules.keywords.length > 0) {
+            const title = (resource.title || '').toLowerCase();
+            const matchedKeywords = rules.keywords.filter(k => title.includes(k.toLowerCase()));
+            if (matchedKeywords.length > 0) {
+                extraScore += 5; // 命中关键词额外加分
             }
         }
 
-        return Math.floor(score);
+        breakdown.extra = extraScore;
+        baseScore += extraScore;
+        breakdown.base = baseScore;
+
+        // ==========================================
+        // 2. 优惠乘数 (Promotion Multiplier)
+        // ==========================================
+
+        const promotion = (resource.promotion || '').toLowerCase();
+        let multiplier = 0.1; // 默认极低，过滤普通资源
+
+        if (promotion.includes('2xfree') || promotion.includes('2x free')) {
+            multiplier = 3.0; // 神作
+        } else if (promotion.includes('free')) {
+            multiplier = 2.5; // 核心目标
+        } else if (promotion.includes('50%') || promotion.includes('2x')) {
+            multiplier = 1.2; // 勉强能下
+        } else if (rules.enabledPromotions === false) {
+            // 如果用户关闭了促销过滤（虽然现在是乘数逻辑），
+            // 某种特殊配置下可能允许普通资源
+            // 但按 TDI 2.0 逻辑，这里维持 0.1 即可
+        }
+
+        breakdown.multiplier = multiplier;
+
+        // ==========================================
+        // 3. 最终得分
+        // ==========================================
+
+        let totalScore = baseScore * multiplier;
+        totalScore = parseFloat(totalScore.toFixed(1));
+
+        // ==========================================
+        // 4. 风险评级 (Risk Level)
+        // ==========================================
+        let riskLevel = 'NONE';
+        let riskLabel = '未知';
+
+        if (totalScore >= 90) {
+            riskLevel = 'GREAT';
+            riskLabel = '绝佳机会'; // 🚀
+        } else if (totalScore >= 70) {
+            riskLevel = 'SAFE';
+            riskLabel = '安全理财'; // 💰
+        } else if (totalScore >= 40) {
+            riskLevel = 'RISKY';
+            riskLabel = '高能博弈'; // 🎲
+        } else {
+            riskLevel = 'TRASH';
+            riskLabel = '避坑'; // 🗑️
+        }
+
+        if (returnBreakdown) {
+            return { total: totalScore, breakdown, riskLevel, riskLabel };
+        }
+        return totalScore;
     },
 
     /**
@@ -118,16 +236,21 @@ const hotResourcesService = {
                 }
             }
 
-            // Check seeders
-            if (rules.minSeeders && (resource.seeders || 0) < rules.minSeeders) {
-                if (enableLogs) console.log(`[Hot Resources] Filtered out ${resource.title}: not enough seeders (${resource.seeders})`);
-                return false;
+            // Check seeders (only if minSeeders > 0 AND seeders data is available)
+            // Skip check if seeders is null/undefined (RSS doesn't provide this data)
+            if (rules.minSeeders && rules.minSeeders > 0 && resource.seeders != null) {
+                if (resource.seeders < rules.minSeeders) {
+                    if (enableLogs) console.log(`[Hot Resources] Filtered out ${resource.title}: not enough seeders (${resource.seeders} < ${rules.minSeeders})`);
+                    return false;
+                }
             }
 
-            // Check leechers
-            if (rules.minLeechers && (resource.leechers || 0) < rules.minLeechers) {
-                if (enableLogs) console.log(`[Hot Resources] Filtered out ${resource.title}: not enough leechers (${resource.leechers})`);
-                return false;
+            // Check leechers (only if minLeechers > 0 AND leechers data is available)
+            if (rules.minLeechers && rules.minLeechers > 0 && resource.leechers != null) {
+                if (resource.leechers < rules.minLeechers) {
+                    if (enableLogs) console.log(`[Hot Resources] Filtered out ${resource.title}: not enough leechers (${resource.leechers} < ${rules.minLeechers})`);
+                    return false;
+                }
             }
 
             // Check size
@@ -140,7 +263,10 @@ const hotResourcesService = {
                 return false;
             }
 
-            // Check promotions
+            // Check promotions (OPTIONAL filter - resources without promotions can still pass)
+            // This is just a preference, not a hard requirement
+            // Uncomment the code below if you want to REQUIRE promotions:
+            /*
             if (rules.enabledPromotions && rules.enabledPromotions.length > 0) {
                 const promotion = (resource.promotion || '').toLowerCase();
                 const hasPromotion = rules.enabledPromotions.some(p => promotion.includes(p.toLowerCase()));
@@ -149,6 +275,9 @@ const hotResourcesService = {
                     return false;
                 }
             }
+            */
+            // Note: Promotion filtering is disabled. Resources will be scored based on all factors,
+            // and promotion status will contribute to the score but not filter out resources.
 
             // Check categories
             if (rules.categories && rules.categories.length > 0) {
@@ -195,13 +324,17 @@ const hotResourcesService = {
 
     /**
      * Main detection method - detects hot resources from RSS feeds
+     * @param {boolean} manual - If true, bypass the enabled check (for manual triggers)
      */
-    async detectHotResources() {
+    async detectHotResources(manual = false) {
         const enableLogs = appConfig.isLogsEnabled();
         const config = this.getConfig();
+        const loggerService = require('./loggerService');
 
-        if (!config.enabled) {
+        // Only check enabled status for automatic detection, not manual
+        if (!manual && !config.enabled) {
             if (enableLogs) console.log('[Hot Resources] Detection is disabled');
+            loggerService.log('热门资源检测已禁用', 'info', null, 0, 0);
             return { success: false, message: 'Detection is disabled' };
         }
 
@@ -210,43 +343,155 @@ const hotResourcesService = {
             const rssService = require('./rssService');
             const siteService = require('./siteService');
 
-            // Get all enabled sites
-            const sites = db.prepare('SELECT * FROM sites WHERE enabled = 1').all();
+            // Get all enabled sites (use siteService to ensure decryption)
+            const allSites = siteService.getAllSites();
+            const sites = allSites.filter(site => site.enabled === 1);
+
             if (sites.length === 0) {
                 if (enableLogs) console.log('[Hot Resources] No enabled sites found');
+                loggerService.log('热门资源检测失败：没有已启用的站点', 'error', null, 0, 0);
                 return { success: false, message: 'No enabled sites' };
             }
 
             if (enableLogs) console.log(`[Hot Resources] Starting detection across ${sites.length} sites...`);
+            loggerService.log(`开始热门资源检测 (${manual ? '手动' : '自动'})，遍历 ${sites.length} 个站点`, 'info', null, 0, 0);
 
             let totalDetected = 0;
             let totalNew = 0;
+            const sitesProcessed = [];
 
             for (const site of sites) {
                 try {
-                    // Get RSS feed for this site
-                    const rssUrl = site.default_rss_url || `${site.url}/torrentrss.php`;
-                    const headers = siteService.getAuthHeaders(site);
-                    const feedResult = await rssService.getRSSFeed(rssUrl, headers);
+                    let items = [];
 
-                    if (!feedResult || !feedResult.items || feedResult.items.length === 0) {
+                    // Special handling for M-Team: Use API if available for better data
+                    if (site.name === 'M-Team' && site.api_key) {
+                        if (enableLogs) {
+                            console.log(`[Hot Resources] ${site.name}: Using API for accurate seeder data`);
+                            console.log(`[Hot Resources] ${site.name}: API Key info - Length: ${site.api_key.length}, First 4: ${site.api_key.substring(0, 4)}, Last 4: ${site.api_key.substring(site.api_key.length - 4)}`);
+                        }
 
-                        if (enableLogs) console.log(`[Hot Resources] No items from ${site.name}`);
-                        continue;
+                        try {
+                            const mteamApi = require('../utils/mteamApi');
+
+                            const requestConfig = {
+                                headers: {
+                                    ...siteService.getAuthHeaders(site),
+                                    'Content-Type': 'application/json'
+                                },
+                                data: {
+                                    keyword: '',
+                                    pageNumber: 1,
+                                    pageSize: 50,
+                                    mode: 'NORMAL'
+                                },
+                                timeout: 15000,
+                                site
+                            };
+
+                            if (enableLogs) {
+                                console.log(`[Hot Resources] ${site.name}: API request config:`, {
+                                    headers: { ...requestConfig.headers, 'x-api-key': requestConfig.headers['x-api-key'] ? '***' : undefined },
+                                    data: requestConfig.data
+                                });
+                            }
+
+                            const response = await mteamApi.request('/api/torrent/search', requestConfig);
+
+                            if (enableLogs) console.log(`[Hot Resources] ${site.name}: API response code:`, response.data?.code);
+
+                            if (response.data && (response.data.code === 0 || response.data.code === '0') && response.data.data) {
+                                const torrents = response.data.data.data || [];
+                                items = torrents.map(t => ({
+                                    title: t.name,
+                                    link: `https://kp.m-team.cc/details.php?id=${t.id}`,
+                                    guid: String(t.id),
+                                    pubDate: t.createdDate,
+                                    size: t.size,
+                                    category: t.category,
+                                    promotion: this._extractMTeamPromotion(t.status),
+                                    seeders: t.status?.seeders || 0,
+                                    leechers: t.status?.leechers || 0,
+                                    enclosure: {
+                                        url: `https://kp.m-team.cc/download.php?id=${t.id}`,
+                                        length: t.size
+                                    }
+                                }));
+
+                                if (enableLogs) console.log(`[Hot Resources] ${site.name}: Fetched ${items.length} items from API (with seeder data)`);
+                            } else {
+                                if (enableLogs) console.warn(`[Hot Resources] ${site.name}: API returned unexpected response:`, response.data);
+                            }
+                        } catch (apiErr) {
+                            if (enableLogs) console.warn(`[Hot Resources] ${site.name}: API failed, falling back to web parse:`, apiErr.message);
+                        }
                     }
 
-                    // Convert RSS items to resource format
-                    const resources = feedResult.items.map(item => ({
+                    // Use web parsing for non-M-Team sites or if M-Team API failed
+                    if (items.length === 0) {
+                        if (enableLogs) console.log(`[Hot Resources] ${site.name}: Using web parsing for accurate seeder/leecher data`);
+
+                        try {
+                            const searchService = require('./searchService');
+                            const siteParsers = require('../utils/siteParsers');
+                            const axios = require('axios');
+                            const https = require('https');
+
+                            // Fetch recent torrents from the site (first page only for hot resources)
+                            const searchUrl = new URL('/torrents.php', site.url);
+                            searchUrl.searchParams.append('notsticky', '1');
+
+                            const headers = siteService.getAuthHeaders(site);
+                            const response = await axios.get(searchUrl.toString(), {
+                                headers,
+                                timeout: 20000,
+                                httpsAgent: new https.Agent({
+                                    rejectUnauthorized: false,
+                                    servername: new URL(site.url).hostname
+                                })
+                            });
+
+                            if (response.status === 200) {
+                                // Parse the HTML to extract torrent data with seeders/leechers
+                                const parsedResults = siteParsers.parse(response.data, site.type, site.url);
+
+                                // Convert parsed results to items format
+                                items = parsedResults.map(r => ({
+                                    title: r.name,
+                                    link: r.link,
+                                    guid: r.id || r.link,
+                                    pubDate: r.date,
+                                    size: this._parseSizeToBytes(r.size),
+                                    category: r.category,
+                                    promotion: r.freeType || '',
+                                    seeders: r.seeders || 0,
+                                    leechers: r.leechers || 0,
+                                    enclosure: {
+                                        url: r.torrentUrl || r.link,
+                                        length: this._parseSizeToBytes(r.size)
+                                    }
+                                }));
+
+                                if (enableLogs) console.log(`[Hot Resources] ${site.name}: Fetched ${items.length} items from web parsing (with accurate seeder/leecher data)`);
+                            }
+                        } catch (webErr) {
+                            if (enableLogs) console.error(`[Hot Resources] ${site.name}: Web parsing failed:`, webErr.message);
+                        }
+                    } // End of web parsing if block
+
+                    // Convert items to resource format (works for both API and RSS)
+                    const resources = items.map(item => ({
                         title: item.title,
                         url: item.link,
                         downloadUrl: item.enclosure?.url || item.link,
-                        size: item.enclosure?.length || 0,
+                        size: item.enclosure?.length || item.size || 0,
                         seeders: item.seeders || 0,
                         leechers: item.leechers || item.peers || 0,
                         category: item.category,
                         promotion: item.promotion || '',
                         publishTime: item.pubDate,
                         siteId: site.id,
+                        siteName: site.name,
                         hash: item.guid || item.link
                     }));
 
@@ -255,20 +500,45 @@ const hotResourcesService = {
                     if (enableLogs) console.log(`[Hot Resources] ${site.name}: ${filtered.length}/${resources.length} passed filters`);
 
                     // Calculate scores and filter by threshold
-                    const hotResources = filtered
-                        .map(resource => ({
+                    const scored = filtered.map(resource => {
+                        const scoreResult = this.calculateHotScore(resource, config.rules, true);
+                        return {
                             ...resource,
-                            hotScore: this.calculateHotScore(resource, config.rules)
-                        }))
-                        .filter(resource => resource.hotScore >= (config.rules.scoreThreshold || 40));
+                            hotScore: scoreResult.total,
+                            scoreBreakdown: scoreResult.breakdown,
+                            riskLevel: scoreResult.riskLevel,
+                            riskLabel: scoreResult.riskLabel
+                        };
+                    });
 
-                    if (enableLogs) console.log(`[Hot Resources] ${site.name}: ${hotResources.length} hot resources found`);
+                    // Sort by score for logging
+                    scored.sort((a, b) => b.hotScore - a.hotScore);
 
+                    // Log top 5 scored resources for debugging
+                    if (enableLogs && scored.length > 0) {
+                        console.log(`[Hot Resources] ${site.name}: Top scored resources:`);
+                        scored.slice(0, 5).forEach((r, idx) => {
+                            const sizeGB = r.size ? (r.size / (1024 * 1024 * 1024)).toFixed(2) : '0';
+                            const age = r.publishTime ? Math.floor((new Date() - new Date(r.publishTime)) / 60000) : '?';
+                            console.log(`  ${idx + 1}. [${r.riskLabel}] [Total: ${r.hotScore}] ${r.title.substring(0, 50)}...`);
+                            console.log(`     📊 TDI 2.0: (Base ${r.scoreBreakdown.base.toFixed(1)}) x Multi (${r.scoreBreakdown.multiplier}) | Demand(${r.scoreBreakdown.demand.toFixed(1)}) + Speed(${r.scoreBreakdown.speed.toFixed(1)}) + Extra(${r.scoreBreakdown.extra})`);
+                            console.log(`     📦 Data: Promo=${r.promotion || 'None'}, Size=${sizeGB}GB, Age=${age}min, Seeds=${r.seeders}, Leechers=${r.leechers}`);
+                        });
+                    }
+
+                    const hotResources = scored.filter(resource => resource.hotScore >= (config.rules.scoreThreshold || 30));
+
+                    if (enableLogs) {
+                        console.log(`[Hot Resources] ${site.name}: ${hotResources.length}/${scored.length} resources passed threshold (${config.rules.scoreThreshold || 30})`);
+                    }
+
+                    let siteNewCount = 0;
                     // Save to database
                     for (const resource of hotResources) {
                         const saved = this.saveHotResource(resource);
                         if (saved.isNew) {
                             totalNew++;
+                            siteNewCount++;
 
                             // Trigger notification if enabled
                             if (config.notifyEnabled) {
@@ -278,13 +548,21 @@ const hotResourcesService = {
                     }
 
                     totalDetected += hotResources.length;
+                    sitesProcessed.push(`${site.name}(${siteNewCount}/${hotResources.length})`);
 
                 } catch (siteErr) {
                     console.error(`[Hot Resources] Error processing site ${site.name}:`, siteErr.message);
+                    loggerService.log(`热门资源检测错误 [${site.name}]: ${siteErr.message}`, 'error', null, 0, 0);
                 }
             }
 
             if (enableLogs) console.log(`[Hot Resources] Detection complete: ${totalDetected} total, ${totalNew} new`);
+
+            const summary = sitesProcessed.length > 0
+                ? `检测完成：发现 ${totalDetected} 个热门资源，其中 ${totalNew} 个新资源。站点详情：${sitesProcessed.join(', ')}`
+                : `检测完成：未发现符合条件的热门资源`;
+
+            loggerService.log(summary, 'success', null, totalDetected, totalNew);
 
             // Cleanup old records (keep last 7 days)
             this.cleanupOldRecords();
@@ -465,6 +743,83 @@ const hotResourcesService = {
         } catch (err) {
             console.error('[Hot Resources] Notification error:', err);
         }
+    },
+
+    /**
+     * Extract promotion information from title and description
+     */
+    _extractPromotion(title, description) {
+        const titleLower = (title || '').toLowerCase();
+        const descLower = (description || '').toLowerCase();
+
+        // Check for various promotion markers
+        if (titleLower.includes('[2xfree]') || titleLower.includes('【2xfree】') ||
+            descLower.includes('class="pro_2xfree"') || descLower.includes('2xfree')) {
+            return '2xFree';
+        }
+        if (titleLower.includes('[free]') || titleLower.includes('【free】') ||
+            titleLower.includes('keys="free"') || descLower.includes('class="pro_free"') ||
+            descLower.includes('>free<')) {
+            return 'Free';
+        }
+        if (titleLower.includes('[50%]') || titleLower.includes('【50%】') ||
+            descLower.includes('class="pro_50"') || descLower.includes('50%')) {
+            return '50%';
+        }
+        if (titleLower.includes('[30%]') || titleLower.includes('【30%】') ||
+            descLower.includes('class="pro_30"') || descLower.includes('30%')) {
+            return '30%';
+        }
+
+        return '';
+    },
+
+    /**
+     * Extract promotion information from M-Team API status object
+     */
+    _extractMTeamPromotion(status) {
+        if (!status) return '';
+
+        const discount = status.discount || '';
+        const twoXFree = status.twoXFree || false;
+
+        if (twoXFree) {
+            return '2xFree';
+        }
+        if (discount === 'FREE') {
+            return 'Free';
+        }
+        if (discount === '_50pctDown') {
+            return '50%';
+        }
+        if (discount === '_30pctDown') {
+            return '30%';
+        }
+
+        return '';
+    },
+
+    /**
+     * Parse size string (e.g., "25.6 GB", "1.5 TB") to bytes
+     */
+    _parseSizeToBytes(sizeStr) {
+        if (!sizeStr || sizeStr === 'N/A') return 0;
+
+        const match = sizeStr.match(/^([\d.]+)\s*([KMGT]?B)$/i);
+        if (!match) return 0;
+
+        const value = parseFloat(match[1]);
+        const unit = match[2].toUpperCase();
+
+        const multipliers = {
+            'B': 1,
+            'KB': 1024,
+            'MB': 1024 * 1024,
+            'GB': 1024 * 1024 * 1024,
+            'TB': 1024 * 1024 * 1024 * 1024
+        };
+
+        return Math.floor(value * (multipliers[unit] || 1));
     }
 };
 

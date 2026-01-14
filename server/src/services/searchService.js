@@ -341,10 +341,19 @@ class SearchService {
                     if (!title || !link) return;
 
                     let sizeStr = $(el).find('size').text();
-                    if (!sizeStr) {
+                    const enclosureLength = $(el).find('enclosure').attr('length');
+
+                    if (enclosureLength) {
+                        sizeStr = FormatUtils.formatBytes(parseInt(enclosureLength));
+                    } else if (!sizeStr) {
                         const desc = $(el).find('description').text();
-                        const sizeMatch = desc.match(/Size:\s*([\d\.]+)\s*([KMGT]B?)/i) || desc.match(/([\d\.]+)\s*([KMGT]B?)/i);
-                        sizeStr = sizeMatch ? `${sizeMatch[1]} ${sizeMatch[2]}` : '0 B';
+                        // 优化正则：
+                        // 1. 必须有数字 \d
+                        // 2. 必须有单位 B (KB, MB, GB, TB)
+                        // 3. 可以在 Size: 后面匹配
+                        const sizeMatch = desc.match(/Size:\s*(\d+(?:\.\d+)?)\s*([KMGT]B?)/i) ||
+                            desc.match(/(\d+(?:\.\d+)?)\s*([KMGT]B)/i); // 如果没有Size前缀，必须带B
+                        sizeStr = sizeMatch ? `${sizeMatch[1]} ${sizeMatch[2].toUpperCase()}` : '0 B';
                     } else {
                         sizeStr = FormatUtils.formatBytes(parseInt(sizeStr));
                     }

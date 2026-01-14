@@ -62,6 +62,12 @@ router.post('/', (req, res) => {
             appConfig.setSystemLogsEnabled(settings.enable_system_logs === 'true' || settings.enable_system_logs === true);
         }
 
+        // If hot_resources_enable_search_integration was updated, sync to appConfig
+        if (settings.hot_resources_enable_search_integration !== undefined) {
+            const appConfig = require('../utils/appConfig');
+            appConfig.setHotResourcesSearchIntegrationEnabled(settings.hot_resources_enable_search_integration === 'true' || settings.hot_resources_enable_search_integration === true);
+        }
+
         res.json({ success: true });
     } catch (err) {
         console.error('Failed to update settings:', err);

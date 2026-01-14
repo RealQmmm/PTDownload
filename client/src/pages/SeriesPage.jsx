@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../App';
+import { useTheme } from '../contexts/ThemeContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
@@ -284,9 +284,10 @@ const SeriesPage = () => {
                             <div className="flex-1 p-5 min-w-0 flex flex-col">
                                 <div className="flex justify-between items-start mb-3">
                                     <div className="min-w-0 flex-1 mr-2">
-                                        <div className="flex items-center gap-2 overflow-hidden">
+                                        {/* Mobile: Stack title and badges vertically */}
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 overflow-hidden">
                                             <h3 className={`text-lg font-bold ${textPrimary} truncate`} title={sub.name}>{sub.name}</h3>
-                                            <div className="flex gap-1 flex-shrink-0 items-center">
+                                            <div className="flex gap-1 flex-shrink-0 items-center flex-wrap">
                                                 {sub.vote_average > 0 && (
                                                     <span className="bg-[#F5C518] text-black px-2 py-0.5 rounded text-[11px] font-bold flex items-center">
                                                         TMDB {sub.vote_average.toFixed(1)}
@@ -430,8 +431,8 @@ const SeriesPage = () => {
                                                     setFormData({ ...formData, quality: next.join(',') });
                                                 }}
                                                 className={`flex-1 min-w-[80px] sm:min-w-0 px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${isSelected
-                                                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20 scale-[1.02]'
-                                                        : `bg-white dark:bg-gray-800 ${textSecondary} border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700`
+                                                    ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20 scale-[1.02]'
+                                                    : `bg-white dark:bg-gray-800 ${textSecondary} border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700`
                                                     }`}
                                             >
                                                 {opt.label}

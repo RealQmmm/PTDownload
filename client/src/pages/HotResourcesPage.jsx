@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../App';
+import { useTheme } from '../contexts/ThemeContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 
@@ -366,55 +366,50 @@ const HotResourcesPage = () => {
                     </p>
                 </Card>
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="space-y-2">
                     {displayedResources.map((resource) => (
-                        <Card key={resource.id} className="hover:shadow-lg transition-shadow">
-                            <div className="space-y-3">
-                                {/* Header */}
-                                <div className="flex justify-between items-start">
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className={`font-bold ${textPrimary} text-sm line-clamp-2`} title={resource.title}>
-                                            {resource.title}
-                                        </h3>
-                                        <p className={`text-xs ${textSecondary} mt-1`}>
-                                            {resource.site_name} · {formatTime(resource.publish_time)}
-                                        </p>
-                                    </div>
-                                    <div className={`ml-2 px-2 py-1 rounded-full text-xs font-bold ${getScoreColor(resource.hot_score)} ${bgSecondary}`}>
-                                        🔥 {resource.hot_score}
-                                    </div>
+                        <Card key={resource.id} className="p-3 hover:shadow-md transition-shadow">
+                            {/* Header - Title and Score */}
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                                <h3 className={`font-bold ${textPrimary} text-sm line-clamp-2 flex-1`} title={resource.title}>
+                                    {resource.title}
+                                </h3>
+                                <div className={`px-2 py-0.5 rounded-full text-xs font-bold whitespace-nowrap ${getScoreColor(resource.hot_score)} ${bgSecondary}`}>
+                                    🔥 {resource.hot_score}
+                                </div>
+                            </div>
+
+                            {/* Meta Info - Site and Time */}
+                            <p className={`text-xs ${textSecondary} mb-2`}>
+                                {resource.site_name} · {formatTime(resource.publish_time)}
+                            </p>
+
+                            {/* Stats and Actions - Combined */}
+                            <div className="flex items-center justify-between gap-2 text-xs">
+                                <div className="flex items-center gap-3 flex-1">
+                                    <span className={textSecondary}>
+                                        🌱 <span className={textPrimary}>{resource.seeders}</span>
+                                    </span>
+                                    <span className={textSecondary}>
+                                        📥 <span className={textPrimary}>{resource.leechers}</span>
+                                    </span>
+                                    <span className={textSecondary}>
+                                        📦 <span className={textPrimary}>{formatSize(resource.size)}</span>
+                                    </span>
+                                    {resource.promotion && resource.promotion !== '无' && (
+                                        <span className="text-green-500 font-bold">
+                                            🎁 {resource.promotion}
+                                        </span>
+                                    )}
                                 </div>
 
-                                {/* Stats */}
-                                <div className={`grid grid-cols-4 gap-2 p-2 rounded ${bgSecondary}`}>
-                                    <div className="text-center">
-                                        <p className={`text-[10px] ${textSecondary}`}>种子</p>
-                                        <p className={`text-xs font-bold ${textPrimary}`}>{resource.seeders}</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className={`text-[10px] ${textSecondary}`}>下载</p>
-                                        <p className={`text-xs font-bold ${textPrimary}`}>{resource.leechers}</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className={`text-[10px] ${textSecondary}`}>大小</p>
-                                        <p className={`text-xs font-bold ${textPrimary}`}>{formatSize(resource.size)}</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className={`text-[10px] ${textSecondary}`}>促销</p>
-                                        <p className={`text-xs font-bold text-green-500`}>
-                                            {resource.promotion || '无'}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Actions */}
-                                <div className="flex space-x-2">
+                                <div className="flex gap-1.5 shrink-0">
                                     {resource.downloaded ? (
-                                        <div className="flex-1 text-center py-2 bg-green-500/10 text-green-500 rounded text-xs font-bold">
+                                        <div className="px-3 py-1 bg-green-500/10 text-green-500 rounded text-xs font-bold whitespace-nowrap">
                                             ✓ 已下载
                                         </div>
                                     ) : resource.user_action === 'ignored' ? (
-                                        <div className="flex-1 text-center py-2 bg-gray-500/10 text-gray-500 rounded text-xs font-bold">
+                                        <div className="px-3 py-1 bg-gray-500/10 text-gray-500 rounded text-xs font-bold whitespace-nowrap">
                                             已忽略
                                         </div>
                                     ) : (
@@ -422,17 +417,18 @@ const HotResourcesPage = () => {
                                             <Button
                                                 size="sm"
                                                 variant="primary"
-                                                className="flex-1"
+                                                className="text-xs py-1 px-3"
                                                 onClick={() => handleDownload(resource)}
                                             >
-                                                ⬇️ 下载
+                                                ⬇️
                                             </Button>
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
+                                                className="text-xs py-1 px-2"
                                                 onClick={() => handleIgnore(resource)}
                                             >
-                                                忽略
+                                                ✕
                                             </Button>
                                         </>
                                     )}
