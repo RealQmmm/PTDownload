@@ -10,6 +10,10 @@ const loggerService = require('./loggerService');
 const appConfig = require('../utils/appConfig');
 const torrentFetcher = require('../utils/torrentFetcher');
 
+// Refactored modules for better maintainability
+const EpisodeTracker = require('./rss/EpisodeTracker');
+const DownloadCoordinator = require('./rss/DownloadCoordinator');
+
 class RSSService {
     constructor() {
         // RSS feed cache: { url: { data: responseData, timestamp: Date.now() } }
@@ -204,96 +208,19 @@ class RSSService {
                     if (!exists) {
                         // Smart Series Filter: Check if episodes are already downloaded
                         try {
-                            const episodeParser = require('../utils/episodeParser');
-                            const candidateInfo = episodeParser.parse(item.title);
+                            // === Use refactored EpisodeTracker module ===
+                            const subscription = db.prepare('SELECT id, season, name, alias FROM series_subscriptions WHERE task_id = ?').get(task.id);
+                            const { isRedundant, downloadedEpisodes, candidateInfo } = EpisodeTracker.checkEpisodeExists(
+                                item,
+                                task.id,
+                                subscription,
+                                enableLogs
+                            );
 
-                            // Only apply if we detected valid episode info
-                            if (candidateInfo && candidateInfo.episodes.length > 0) {
-                                const downloadedEpisodes = new Set();
-                                const targetSeason = candidateInfo.season !== null ? candidateInfo.season : 1;
-
-                                // === Source 1: Query series_episodes table (most reliable) ===
-                                // Find the series subscription linked to this task (if any)
-                                const subscription = db.prepare('SELECT id, season, name, alias FROM series_subscriptions WHERE task_id = ?').get(task.id);
-                                if (subscription) {
-                                    const seriesEpisodes = db.prepare(
-                                        'SELECT episode FROM series_episodes WHERE subscription_id = ? AND season = ?'
-                                    ).all(subscription.id, targetSeason);
-
-                                    seriesEpisodes.forEach(ep => downloadedEpisodes.add(ep.episode));
-
-                                    if (enableLogs && seriesEpisodes.length > 0) {
-                                        console.log(`[RSS] Found ${seriesEpisodes.length} episodes in series_episodes table for season ${targetSeason}`);
-                                    }
-                                }
-
-                                // === Source 2: Parse from this task's history ===
-                                const historyItems = db.prepare('SELECT item_title FROM task_history WHERE task_id = ?').all(task.id);
-
-                                historyItems.forEach(hItem => {
-                                    const hInfo = episodeParser.parse(hItem.item_title);
-                                    if (hInfo) {
-                                        if (targetSeason !== null) {
-                                            if (hInfo.season === targetSeason) {
-                                                hInfo.episodes.forEach(ep => downloadedEpisodes.add(ep));
-                                            }
-                                        } else {
-                                            hInfo.episodes.forEach(ep => downloadedEpisodes.add(ep));
-                                        }
-                                    }
-                                });
-
-                                // === Source 3: Scan ALL history for matching series name (catches manual/external downloads) ===
-                                // This is important for detecting downloads added directly to the client
-                                if (subscription) {
-                                    const seriesName = (subscription.name || '').toLowerCase().trim();
-                                    const seriesAlias = (subscription.alias || '').toLowerCase().trim();
-
-                                    // Get all history records (including task_id = NULL)
-                                    const allHistory = db.prepare('SELECT item_title FROM task_history WHERE task_id IS NULL OR task_id != ?').all(task.id);
-
-                                    allHistory.forEach(hItem => {
-                                        const titleLower = (hItem.item_title || '').toLowerCase();
-
-                                        // Check if title matches series name or alias
-                                        let isMatch = seriesName && titleLower.includes(seriesName);
-                                        if (!isMatch && seriesAlias) {
-                                            isMatch = titleLower.includes(seriesAlias);
-                                        }
-
-                                        // Normalize and try again
-                                        if (!isMatch) {
-                                            const normalizedTitle = titleLower.replace(/[\s._\-\[\](){}+]/g, '');
-                                            const normalizedName = seriesName.replace(/[\s._\-\[\](){}+]/g, '');
-                                            isMatch = normalizedName && normalizedTitle.includes(normalizedName);
-
-                                            if (!isMatch && seriesAlias) {
-                                                const normalizedAlias = seriesAlias.replace(/[\s._\-\[\](){}+]/g, '');
-                                                isMatch = normalizedAlias && normalizedTitle.includes(normalizedAlias);
-                                            }
-                                        }
-
-                                        if (isMatch) {
-                                            const hInfo = episodeParser.parse(hItem.item_title);
-                                            if (hInfo && hInfo.season === targetSeason) {
-                                                hInfo.episodes.forEach(ep => downloadedEpisodes.add(ep));
-                                            }
-                                        }
-                                    });
-
-                                    if (enableLogs && downloadedEpisodes.size > 0) {
-                                        console.log(`[RSS] Total tracked episodes for S${targetSeason}: ${Array.from(downloadedEpisodes).sort((a, b) => a - b).join(', ')}`);
-                                    }
-                                }
-
-                                // Check if ALL candidate episodes exist in any source
-                                const isRedundant = candidateInfo.episodes.every(ep => downloadedEpisodes.has(ep));
-
-                                if (isRedundant) {
-                                    if (enableLogs) console.log(`[RSS] Smart Skip: ${item.title} (Episodes ${candidateInfo.episodes.join(', ')} already downloaded, total tracked: ${downloadedEpisodes.size})`);
-                                    loggerService.log(`匹配到资源但已存在: ${item.title} (原因: 剧集 ${candidateInfo.episodes.join(', ')} 已下载)`, 'success', task.id, items.length, matchCount);
-                                    continue; // Skip processing this item
-                                }
+                            if (isRedundant && candidateInfo) {
+                                if (enableLogs) console.log(`[RSS] Smart Skip: ${item.title} (Episodes ${candidateInfo.episodes.join(', ')} already downloaded, total tracked: ${downloadedEpisodes.size})`);
+                                loggerService.log(`匹配到资源但已存在: ${item.title} (原因: 剧集 ${candidateInfo.episodes.join(', ')} 已下载)`, 'success', task.id, items.length, matchCount);
+                                continue; // Skip processing this item
                             }
                         } catch (err) {
                             if (enableLogs) console.warn(`[RSS] Smart check error: ${err.message}`);
@@ -499,70 +426,33 @@ class RSSService {
                                 console.error('[RSS] Notification failed:', notifyErr.message);
                             }
 
-                            // === STEP 3: Pre-record episodes to series_episodes table ===
+                            // === STEP 3: Pre-record episodes using EpisodeTracker ===
                             try {
                                 const subscription = db.prepare('SELECT id, season FROM series_subscriptions WHERE task_id = ?').get(task.id);
                                 if (subscription) {
+                                    const episodeParser = require('../utils/episodeParser');
                                     const candidateInfo = episodeParser.parse(item.title);
-                                    if (candidateInfo && candidateInfo.episodes.length > 0) {
-                                        const season = candidateInfo.season !== null ? candidateInfo.season : (subscription.season || 1);
-                                        const insertEpStmt = db.prepare(`
-                                            INSERT OR IGNORE INTO series_episodes 
-                                            (subscription_id, season, episode, torrent_hash, torrent_title, download_time)
-                                            VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
-                                        `);
-
-                                        let insertedCount = 0;
-                                        candidateInfo.episodes.forEach(ep => {
-                                            const epResult = insertEpStmt.run(subscription.id, season, ep, torrentHash, item.title);
-                                            if (epResult.changes > 0) insertedCount++;
-                                        });
-
-                                        if (enableLogs && insertedCount > 0) {
-                                            console.log(`[RSS] Pre-recorded ${insertedCount} episodes to series_episodes: S${season}E${candidateInfo.episodes.join(',E')}`);
-                                        }
-                                    }
+                                    EpisodeTracker.preRecordEpisodes(subscription.id, candidateInfo, torrentHash, item.title, enableLogs);
                                 }
                             } catch (epErr) {
                                 if (enableLogs) console.warn(`[RSS] Failed to pre-record episodes: ${epErr.message}`);
                             }
 
-                            // === STEP 4: NOW submit to downloader ===
-                            let result;
-                            // Check if torrentData is base64 content or just the URL
-                            const isData = torrentData && torrentData !== item.link;
 
-                            if (isData && !item.link.startsWith('magnet:')) {
-                                // If we have the file data, pass it along with save path, category, and file selection
-                                result = await downloaderService.addTorrentFromData(targetClient, torrentData, {
-                                    savePath: finalSavePath,
-                                    category: task.category,
-                                    fileIndices: fileIndices
-                                });
-                            } else {
-                                // Magnet or fallback to URL (file selection not supported for magnets or URL adds)
-                                result = await downloaderService.addTorrent(targetClient, item.link, {
-                                    savePath: finalSavePath,
-                                    category: task.category
-                                });
-                            }
+                            // === STEP 4: Submit to downloader using DownloadCoordinator ===
+                            const result = await DownloadCoordinator.executeDownload({
+                                item,
+                                task,
+                                targetClient,
+                                torrentData,
+                                finalSavePath,
+                                fileIndices,
+                                preRecordId,
+                                enableLogs
+                            });
 
-                            if (result.success) {
-                                let successMsg = `[RSS] Successfully added: ${item.title}`;
-                                if (fileIndices && fileIndices.length > 0) {
-                                    successMsg += ` (${fileIndices.length} files selected)`;
-                                }
-                                if (enableLogs) console.log(successMsg);
-                            } else {
-                                // === STEP 5: ROLLBACK if downloader failed ===
-                                // Delete the pre-recorded task_history entry since download actually failed
-                                if (enableLogs) console.error(`[RSS] Failed to add ${item.title}: ${result.message}. Rolling back pre-record.`);
-                                try {
-                                    db.prepare('DELETE FROM task_history WHERE id = ?').run(preRecordId);
-                                    if (enableLogs) console.log(`[RSS] Rolled back task_history entry ID: ${preRecordId}`);
-                                } catch (rollbackErr) {
-                                    console.error(`[RSS] Rollback failed: ${rollbackErr.message}`);
-                                }
+                            if (!result.success && enableLogs) {
+                                console.error(`[RSS] Failed to add ${item.title}: ${result.message}`);
                             }
                         } catch (err) {
                             if (enableLogs) console.error(`[RSS] Error processing item ${item.title}: ${err.message}`);

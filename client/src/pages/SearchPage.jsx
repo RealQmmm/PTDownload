@@ -188,29 +188,22 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const bgMain = darkMode ? 'bg-gray-800' : 'bg-white';
     const bgSecondary = darkMode ? 'bg-gray-900' : 'bg-gray-50';
 
-    // Fetch clients on mount
+    // Fetch clients on mount - using aggregated endpoint for performance
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const clientsRes = await authenticatedFetch('/api/clients');
-                const clientsData = await clientsRes.json();
+                // Single aggregated request instead of 4 separate ones
+                const initRes = await authenticatedFetch('/api/search/init');
+                const { clients: clientsData, sites: sitesData, paths: pathsData, settings: settingsData } = await initRes.json();
+
                 setClients(clientsData || []);
-
-                const sitesRes = await authenticatedFetch('/api/sites');
-                const sitesData = await sitesRes.json();
                 setSites(sitesData || []);
-
-                const pathsRes = await authenticatedFetch('/api/download-paths');
-                const pathsData = await pathsRes.json();
                 setDownloadPaths(pathsData || []);
                 if (pathsData && pathsData.length > 0) {
                     setSelectedPath(pathsData[0].path);
                 }
 
-                // Load auto download setting
-                const settingsRes = await authenticatedFetch('/api/settings');
-                const settingsData = await settingsRes.json();
-
+                // Apply settings
                 const categoryMgmt = settingsData.enable_category_management !== 'false';
                 const autoEnabled = settingsData.auto_download_enabled === 'true';
                 setEnableCategoryManagement(categoryMgmt);

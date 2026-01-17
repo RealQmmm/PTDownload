@@ -599,6 +599,24 @@ function createTables() {
     console.log('[Migration] Added check_interval column to series_subscriptions table');
   } catch (e) { /* Column might already exist */ }
 
+  // Performance Indexes (2026-01-17)
+  const performanceIndexes = [
+    { name: 'idx_task_history_hash', sql: 'CREATE INDEX IF NOT EXISTS idx_task_history_hash ON task_history(item_hash)' },
+    { name: 'idx_series_episodes_lookup', sql: 'CREATE INDEX IF NOT EXISTS idx_series_episodes_lookup ON series_episodes(subscription_id, season, episode)' },
+    { name: 'idx_hot_resources_score', sql: 'CREATE INDEX IF NOT EXISTS idx_hot_resources_score ON hot_resources(hot_score DESC)' },
+    { name: 'idx_task_history_task_guid', sql: 'CREATE INDEX IF NOT EXISTS idx_task_history_task_guid ON task_history(task_id, item_guid)' },
+    { name: 'idx_sites_enabled', sql: 'CREATE INDEX IF NOT EXISTS idx_sites_enabled ON sites(enabled)' }
+  ];
+
+  performanceIndexes.forEach(({ name, sql }) => {
+    try {
+      db.prepare(sql).run();
+      console.log(`[Index] Created or verified: ${name}`);
+    } catch (e) {
+      console.error(`[Index] Failed to create ${name}:`, e.message);
+    }
+  });
+
   // Final settings to ensure foreign keys
   db.prepare('PRAGMA foreign_keys = ON').run();
   console.log('Database tables initialized');

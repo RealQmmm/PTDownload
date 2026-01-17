@@ -4,6 +4,56 @@ const searchService = require('../services/searchService');
 const hotResourcesService = require('../services/hotResourcesService');
 const appConfig = require('../utils/appConfig');
 const { getDB } = require('../db');
+const clientService = require('../services/clientService');
+const siteService = require('../services/siteService');
+
+// Aggregated initialization endpoint for SearchPage
+// Combines: clients, sites, download-paths, settings into a single request
+router.get('/init', async (req, res) => {
+    try {
+        const db = getDB();
+
+        // Fetch all required data in parallel
+        const [clients, sites, paths, settingsRows] = await Promise.all([
+            Promise.resolve(clientService.getAllClients()),
+            Promise.resolve(siteService.getAllSites()),
+            Promise.resolve(db.prepare('SELECT * FROM download_paths ORDER BY is_default DESC, name ASC').all()),
+            Promise.resolve(db.prepare('SELECT key, value FROM settings').all())
+        ]);
+
+        // Convert settings array to object
+        const settings = {};
+        settingsRows.forEach(row => {
+            settings[row.key] = row.value;
+        });
+
+        // Extract only the settings needed by SearchPage
+        const searchSettings = {
+            auto_download_enabled: settings.auto_download_enabled,
+            enable_category_management: settings.enable_category_management,
+            match_by_category: settings.match_by_category,
+            match_by_keyword: settings.match_by_keyword,
+            fallback_to_default_path: settings.fallback_to_default_path,
+            use_downloader_default: settings.use_downloader_default,
+            default_download_path: settings.default_download_path,
+            enable_multi_path: settings.enable_multi_path,
+            create_series_subfolder: settings.create_series_subfolder,
+            hot_resources_enabled: settings.hot_resources_enabled,
+            hot_resources_rules: settings.hot_resources_rules,
+            category_map: settings.category_map
+        };
+
+        res.json({
+            clients,
+            sites: sites.map(s => ({ id: s.id, name: s.name, url: s.url, enabled: s.enabled, site_icon: s.site_icon })),
+            paths,
+            settings: searchSettings
+        });
+    } catch (err) {
+        console.error('Search init error:', err);
+        res.status(500).json({ error: 'Failed to load initialization data' });
+    }
+});
 
 // Search torrents
 router.get('/', async (req, res) => {

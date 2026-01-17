@@ -1,181 +1,121 @@
-# PT Download Manager (PT下载管理助手)
+# PT Download Manager (PT 下载管理助手)
 
-这是一个现代化、轻量级且强大的 PT (Private Tracker) 资源聚合管理工具。它通过统一的界面为您提供多站点的资源搜索、RSS 订阅、自动化下载以及实时流量统计，旨在成为您的私人 PT 管家。
+这是一个现代化、高性能且全自动化的 PT (Private Tracker) 资源管理助手。它不仅仅是一个搜索工具，更是您的私人 PT 资产管家，提供从**资源发现、智能评分、精密订阅、全速下载到流量统计**的全生命周期管理功能。
 
-## ✨ 主要功能
+---
 
-*   **📊 综合仪表盘**: 
-    - **实时监控**：直观展示下载/上传速度、活动任务进度。
-    - **流量统计**：基于差值计算的精准今日流量统计，支持最近 7 天流量趋势图。
-    - **智能同步**：采用服务端缓存与接口聚合技术，实现毫秒级的数据响应体验。
-*   **🔍 智能聚合搜索**:
-    - **全站搜索**：一键横跨多个 PT 站点搜索排版优美的资源列表。
-    - **近期资源发现**：特有的"近期资源"模式，无需关键词即可发现全站最新发布的种子。
-    - **精准日期解析**：内置智能解析器，支持绝对日期、相对日期（如：2 小时前）以及复杂的"存活时间"计算。
-*   **📡 自动化 RSS 订阅**:
-    - **灵活订阅**：管理多个 RSS 源，支持自定义执行周期（Cron）。
-    - **精细化过滤器**：支持关键词包含/排除、文件大小范围限制。
-    - **自动化流水线**：匹配成功的资源将自动推送到下载客户端并发送通知。
-*   **⚙️ 客户端与站点管理**:
-    - **多客户端支持**：深度集成 qBittorrent 和 Transmission。
-    - **站点适配**：完美适配 NexusPHP 架构站点，支持 Cookie 认证。
-*   **🔔 消息通知**:
-    - 支持 **Bark** 和 **自定义 Webhook**，让您随时随地掌握下载动态。
-*   **🌓 极致视觉体验**:
-    - **现代化 UI**：极速、流畅的响应式界面，支持浅色、深色及系统跟随模式。
-    - **移动端适配**：针对手机端进行了专门的排版优化。
+## ✨ 核心特性
 
-## 🔍 功能机制详解
+### 1. 📊 智能仪表盘 (Precision Monitoring)
+- **实时流动统计**：基于服务端增量计算，精准捕捉每一位流量的起伏，支持 7x24 小时流量趋势分析。
+- **全量种子监控**：自动发现并管理手动添加、RSS 订阅或外部注入（如直接在 qB 添加）的所有种子。
+- **状态感知**：实时监控各站点 Cookie 状态、上传下载总量及分享率。
 
-### 1. 全场景流量监控
-系统核心实现了对流量和种子的全方位覆盖监控：
-*   **全局流量**: 实时采集下载器（qBittorrent/Transmission）的全局传输数据，结合本地增量计算逻辑，精确统计今日流量，不受下载器重启或计数器重置影响。
-*   **种子覆盖**: 
-    - **平台添加**: 无论是通过 RSS 自动订阅还是手动搜索下载的种子，都会实时记录。
-    - **外部添加**: 支持自动发现用户直接在下载器中添加的种子，并自动导入系统的历史记录中，确保"今日下载"数据无遗漏。
-    - **完成检测**: 统一轮询所有任务状态，准确记录完成时间。
-*   **站点热力图**: 基于站点 Cookie 抓取个人中心数据，涵盖了所有上传贡献（包含辅种及非本系统添加的种子）。
+### 2. � 热门资源探测 (TDI 2.0 Scoring Engine)
+- **多维度评分**：基于做种人数、下载人数及发布时间，采用 **TDI 2.0 (Transmission Difficulty Index)** 算法评估资源上传潜力。
+- **自动捡漏**：自动识别“绝佳机会”与“安全理财”资源，支持发现即通知或自动推送到下载器。
+- **可视化评分**：搜索结果实时显示热度评分，通过色块区分风险等级。
 
-### 2. 数据备份与恢复
-为了保障数据安全，系统提供了完善的备份机制（位于`设置 -> 系统设置 -> 备份与恢复`）：
-*   **备份范围**: 涵盖所有持久化数据，包括站点配置、任务规则、历史记录、流量统计、热力图数据及用户设置等共 11 张核心数据表。
-*   **智能导入**:
-    - **版本兼容**: 导入逻辑具备字段自动匹配功能，能智能处理因版本更迭导致的字段差异，防止报错。
-    - **数据完整**: 导入时会自动处理数据依赖（如任务与站点的关联），确保存储的一致性。
-    - **无缝衔接**: 导入后系统会自动重载统计服务，确保流量计数连续不断层。
+### 3. 📡 智能 RSS 订阅 (Smart Subscription)
+- **精密剧集追踪**：内置 `EpisodeTracker`，通过跨任务、跨站点的历史数据比对，智能识别更新，杜绝重复下载。
+- **灵活过滤体系**：支持关键词正则表达式、文件大小限制，配合自定义执行周期。
+- **下载协调逻辑**：`DownloadCoordinator` 确保下载指令下发成功，失败自动执行回滚逻辑维护数据一致性。
+
+### 4. 🔍 聚合搜索与促销感知
+- **跨站一键搜索**：统一展示多个 NexuPHP 站点的搜索结果，排版整洁一致。
+- **促销信息透传**：实时识别并标记“免费 (Free)”、“2X免费”、“50%”等站点促销状态。
+- **精密日期解析**：精准识别发布日期与存活时间（TTL），即使是“2 小时前”这种相对日期也能准确转化为绝对时间统计。
+
+### 5. ⚙️ 企业级管理体验
+- **多用户架构**：支持用户增删改查及权限控制（管理员/普通用户）。
+- **极简部署**：深度优化 Docker 镜像，支持自动挂载外部数据库。
+- **安全保障**：支持强密码策略，提供 JSON 配置与原生 SQLite 数据库双重备份机制。
+
+
+---
 
 ## 🛠️ 技术栈
 
-### 前端 (Client)
-*   **React 18** + **Vite** (构建速度极快)
-*   **Vanilla CSS** (精雕细琢的现代美学设计)
-*   **Lucide React** (高质图标库)
+### 核心架构
+- **前端**: React 18 + Vite + Vanilla CSS
+- **后端**: Node.js 18 + Express
+- **存储**: SQLite (better-sqlite3) + 自动持久化映射
 
-### 后端 (Server)
-*   **Node.js** + **Express**
-*   **SQLite (Better-SQLite3)** (轻量高性能)
-*   **Cheerio** (强大的 HTML 解析能力)
-*   **Node-Schedule** (精准任务定时)
+### 关键库
+- **解析**: Cheerio (HTML), Axios (HTTP)
+- **调度**: Node-Schedule (定时规则)
+- **安全**: JWT (身份验证), Crypto (密码加密)
+- **UI**: Lucide React (图标), Modern CSS Grid/Flexbox
 
-### 部署与性能
-*   **Docker & Docker Compose** (一键式多阶段构建)
-*   **智能缓存层**：减少下载器 API 负担，提升页面加载速度。
+---
 
-## 🚀 快速开始 (使用 Docker)
+## 📦 项目结构
 
-### 前置要求
-*   安装 [Docker](https://www.docker.com/) 和 [Docker Compose](https://docs.docker.com/compose/)。
-
-### 部署步骤
-
-1.  **准备环境**
-    ```bash
-    mkdir -p PTDownload/data
-    cd PTDownload
-    ```
-
-2.  **创建 docker-compose.yml**
-    ```yaml
-    version: '3.8'
-    services:
-      pt-manager:
-        image: realqmmm/pt-download:latest
-        container_name: pt-app
-        ports:
-          - "3000:3000"
-        volumes:
-          - ./data:/data
-        restart: unless-stopped
-    ```
-
-3.  **启动服务**
-    ```bash
-    docker-compose up -d
-    ```
-
-4.  **访问应用**
-    打开浏览器访问 `http://localhost:3000`。默认端口为 3000。
-
-## 🔧 环境变量
-
-### 基础配置
-
-| 变量名 | 默认值 | 描述 |
-| ------ | ------ | ---- |
-| PORT | 3000 | 服务运行端口 |
-| TZ | Asia/Shanghai | 时区设置 |
-
-### 数据库配置
-
-系统支持两种数据库存储方式，**自动检测，无需手动配置环境变量**：
-
-#### 方式一：内置数据库（默认）
-数据存储在容器内的 `/data` 目录，适合快速部署和单机使用。
-
-```yaml
-volumes:
-  - ./data:/data
-  # 不配置 /external_db 映射，自动使用内置数据库
-```
-
-数据库位置：`./data/ptdownload.db`
-
-#### 方式二：外部数据库（推荐）
-数据存储在用户指定的外部路径，**便于数据迁移，无需备份导入**。
-
-```yaml
-volumes:
-  - ./data:/data
-  - /your/path:/external_db  # 添加这一行，系统自动使用外部数据库
-```
-
-数据库位置：`/your/path/ptdownload.db`
-
-**使用外部数据库的优势：**
-- ✅ 迁移镜像时无需备份和导入设置
-- ✅ 数据与容器分离，更安全可靠
-- ✅ 支持 NAS 等网络存储
-- ✅ 便于多环境部署
-- ✅ 只需配置 volume 映射，系统自动检测
-
-**NAS 配置示例：**
-```yaml
-volumes:
-  - ./data:/data
-  - /share/Container/PTdownload:/external_db  # 群晖 NAS
-```
-
-> **💡 图形化界面提示：**
-> 如果您使用的是 Synology Container Manager、Unraid 或 Portainer 等图形化管理界面，系统镜像已内置路径声明。在添加卷映射时，右侧的容器内部路径通常会自动可选或显示为 `/data` 和 `/external_db`，您只需填入左侧的宿主机路径即可。
-
-📖 **详细配置指南**：
-- [超简单配置指南](docs/database-simple-guide.md) - **推荐新手阅读**
-- [数据库外部挂载使用指南](docs/database-external-mount.md)
-
-💡 **已有数据需要迁移？**
-1. 在 UI 中导出数据库：**设置** → **系统设置** → **备份与恢复** → **导出数据库文件**
-2. 将导出的文件复制到外部路径
-3. 在 docker-compose.yml 中添加 volume 映射
-4. 重启容器
-
-或使用自动化迁移脚本：
-```bash
-./migrate-to-external-db.sh /path/to/your/external/database
-```
-或查看 [详细迁移指南](docs/migrate-to-external-db.md)
-
-## 📦 目录结构
 ```
 PTDownload/
-├── client/                 # 前端代码 (React)
-├── server/                 # 后端代码 (Node.js)
-├── data/                   # 数据库持久化目录
-├── Dockerfile              # 多阶段镜像构建配置
-└── docker-compose.yml      # 容器编排配置
+├── client/                 # 现代化前端界面
+│   ├── src/pages/          # 页面组件
+│   │   ├── settings/       # 模块化设置组件 (新)
+│   │   └── SearchPage.jsx  # 聚合搜索核心
+│   └── ...
+├── server/                 # 高性能后端服务
+│   ├── src/services/       # 业务逻辑层
+│   │   ├── rss/            # RSS 核心逻辑 (EpisodeTracker, DownloadCoordinator)
+│   │   └── ...
+│   ├── src/routes/         # 聚合 API 路由
+│   └── src/db/             # 数据库层 (优化的索引结构)
+├── data/                   # 持久化数据
+├── Dockerfile              # 多阶段构建
+└── docker-compose.yml      # 一键编排
 ```
 
-## 🤝 贡献
-如果您在使用过程中发现任何问题，欢迎提交 Issue 或 Pull Request。
+---
+
+## � 快速部署
+
+### 1. 环境准备
+确保已安装 [Docker](https://www.docker.com/) 和 [Docker Compose](https://docs.docker.com/compose/)。
+
+### 2. 一键启动
+创建 `docker-compose.yml`:
+```yaml
+version: '3.8'
+services:
+  pt-manager:
+    image: realqmmm/pt-download:latest
+    container_name: pt-app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/data
+      # 推荐：挂载外部数据库路径实现无缝升级
+      # - /path/to/db:/external_db
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+```
+
+执行启动：
+```bash
+docker-compose up -d
+```
+访问 `http://localhost:3000` 即可开始您的 PT 管理之旅。
+
+---
+
+## 📂 数据库存储模式
+
+系统提供**自动数据库检测**机制，适配不同存储习惯：
+
+- **模式 A (简单型)**：仅挂载 `/data` 卷。数据存储在 `./data/ptdownload.db`。
+- **模式 B (专业型)**：额外挂载宿主机目录到 `/external_db`。系统将自动检测并切换到该路径，**升级容器无需导出导入设置**。
+
+> 💡 **建议**：强烈推荐使用模式 B，配合 NAS 的外部存储，让您的数据更安全且迁移更无忧。
+
+---
+
+## 🤝 参与贡献
+欢迎提交 Issue 报告 Bug，或发起 Pull Request 贡献代码。
 
 ## 📄 许可证
-[MIT License](LICENSE)
+本项目采用 [MIT License](LICENSE) 许可。
