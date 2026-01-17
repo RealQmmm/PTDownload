@@ -15,6 +15,9 @@ const authService = require('./services/authService');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust proxy (required for rate limiting behind Nginx/Docker proxy)
+app.set('trust proxy', 1);
+
 // Security Middleware
 app.use(helmet({
   contentSecurityPolicy: false, // Set to false if you have trouble with frontend assets
