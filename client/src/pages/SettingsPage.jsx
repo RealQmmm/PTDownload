@@ -2241,8 +2241,7 @@ const SettingsPage = () => {
                                                         { id: 'tasks', name: '自动任务', icon: '⏰' },
                                                         { id: 'sites', name: '站点管理', icon: '🌐' },
                                                         { id: 'clients', name: '下载客户端', icon: '📥' },
-                                                        { id: 'settings', name: '系统设置', icon: '⚙️' },
-                                                        { id: 'help', name: '使用帮助', icon: '❓' },
+                                                        { id: 'settings', name: '系统设置', icon: '⚙️' }
                                                     ].map(menu => (
                                                         <label key={menu.id} className={`flex items-center p-3 rounded-lg border cursor-pointer transition-all ${selectedPermissions.menus.includes(menu.id) ? activeSelectionClass : `${bgMain} ${borderColor} hover:border-blue-400`}`}>
                                                             <input

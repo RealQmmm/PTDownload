@@ -25,7 +25,7 @@ const Sidebar = ({ activeTab, setActiveTab, user, collapsed, onToggle }) => {
         { id: 'clients', name: '下载客户端', icon: '📥' },
 
         { id: 'settings', name: '系统设置', icon: '⚙️' },
-        { id: 'help', name: '使用帮助', icon: '❓' },
+        //{ id: 'help', name: '使用帮助', icon: '❓' },
     ];
 
     // Filter menus based on user permissions
@@ -46,7 +46,7 @@ const Sidebar = ({ activeTab, setActiveTab, user, collapsed, onToggle }) => {
         if (permissions && Array.isArray(permissions.menus)) {
             allowedMenus = permissions.menus;
         } else {
-            allowedMenus = ['dashboard', 'search', 'series', 'help'];
+            allowedMenus = ['dashboard', 'search'];
         }
     }
 
