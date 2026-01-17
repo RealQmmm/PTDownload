@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../App';
+import { useTheme } from '../contexts/ThemeContext';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
@@ -63,7 +63,8 @@ const SeriesPage = () => {
         rss_source_id: '',
         client_id: '',
         saved_path: '/downloads/series',
-        smart_switch: false
+        smart_switch: false,
+        check_interval: 0
     });
     const [clients, setClients] = useState([]);
     const [editId, setEditId] = useState(null);
@@ -228,7 +229,8 @@ const SeriesPage = () => {
             rss_source_id: sub.rss_source_id || '',
             client_id: sub.client_id || '',
             saved_path: '/downloads/series', // Keep default or fetch if needed
-            smart_switch: sub.smart_switch === 1
+            smart_switch: sub.smart_switch === 1,
+            check_interval: sub.check_interval || 0
         });
         setEditId(sub.id);
         setShowModal(true);
@@ -236,7 +238,7 @@ const SeriesPage = () => {
 
     const openCreateModal = () => {
         const defClient = clients.find(c => c.is_default) || clients[0];
-        setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', client_id: defClient?.id || '', saved_path: '/downloads/series', smart_switch: false });
+        setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', client_id: defClient?.id || '', saved_path: '/downloads/series', smart_switch: false, check_interval: 0 });
         setEditId(null);
         setShowModal(true);
     };
@@ -284,9 +286,10 @@ const SeriesPage = () => {
                             <div className="flex-1 p-5 min-w-0 flex flex-col">
                                 <div className="flex justify-between items-start mb-3">
                                     <div className="min-w-0 flex-1 mr-2">
-                                        <div className="flex items-center gap-2 overflow-hidden">
+                                        {/* Mobile: Stack title and badges vertically */}
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 overflow-hidden">
                                             <h3 className={`text-lg font-bold ${textPrimary} truncate`} title={sub.name}>{sub.name}</h3>
-                                            <div className="flex gap-1 flex-shrink-0 items-center">
+                                            <div className="flex gap-1 flex-shrink-0 items-center flex-wrap">
                                                 {sub.vote_average > 0 && (
                                                     <span className="bg-[#F5C518] text-black px-2 py-0.5 rounded text-[11px] font-bold flex items-center">
                                                         TMDB {sub.vote_average.toFixed(1)}
@@ -317,8 +320,13 @@ const SeriesPage = () => {
                                     </div>
                                 </div>
 
-                                <div className="mt-auto flex justify-between items-center text-xs">
-                                    <span className={textSecondary}>追剧来源: {sub.smart_switch === 1 ? '跨站智能聚合' : (sub.site_name || '未知')}</span>
+                                <div className="mt-auto flex justify-between items-center text-[10px]">
+                                    <div className="flex flex-col gap-0.5">
+                                        <span className={textSecondary}>追剧来源: {sub.smart_switch === 1 ? '跨站智能聚合' : (sub.site_name || '未知')}</span>
+                                        {sub.check_interval > 0 && (
+                                            <span className="text-blue-500 font-bold">抓取周期: {sub.check_interval} 天</span>
+                                        )}
+                                    </div>
                                     <div className="space-x-2 whitespace-nowrap">
                                         <button
                                             onClick={async () => {
@@ -430,8 +438,8 @@ const SeriesPage = () => {
                                                     setFormData({ ...formData, quality: next.join(',') });
                                                 }}
                                                 className={`flex-1 min-w-[80px] sm:min-w-0 px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 ${isSelected
-                                                        ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20 scale-[1.02]'
-                                                        : `bg-white dark:bg-gray-800 ${textSecondary} border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700`
+                                                    ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/20 scale-[1.02]'
+                                                    : `bg-white dark:bg-gray-800 ${textSecondary} border border-gray-200/50 dark:border-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700`
                                                     }`}
                                             >
                                                 {opt.label}
@@ -500,20 +508,35 @@ const SeriesPage = () => {
                             </div>
                         )}
 
-                        <Select
-                            label="下载器"
-                            required
-                            value={formData.client_id}
-                            onChange={e => setFormData({ ...formData, client_id: e.target.value })}
-                            className="text-base sm:text-sm"
-                        >
-                            <option value="">请选择下载器</option>
-                            {clients.map(c => (
-                                <option key={c.id} value={c.id}>
-                                    {c.name || c.type}
-                                </option>
-                            ))}
-                        </Select>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Select
+                                label="下载器"
+                                required
+                                value={formData.client_id}
+                                onChange={e => setFormData({ ...formData, client_id: e.target.value })}
+                                className="text-base sm:text-sm"
+                            >
+                                <option value="">请选择下载器</option>
+                                {clients.map(c => (
+                                    <option key={c.id} value={c.id}>
+                                        {c.name || c.type}
+                                    </option>
+                                ))}
+                            </Select>
+
+                            <div>
+                                <Input
+                                    label="抓取周期 (天)"
+                                    type="number"
+                                    min="0"
+                                    value={formData.check_interval}
+                                    onChange={e => setFormData({ ...formData, check_interval: parseInt(e.target.value) || 0 })}
+                                    placeholder="例如: 7 (对于周播剧)"
+                                    className="text-base sm:text-sm"
+                                />
+                                <p className={`text-[10px] ${textSecondary} mt-1`}>0 代表遵循全局设置。若设为 7 天，下载后前 6 天将跳过，第 7 天恢复高频抓取。</p>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </Modal>

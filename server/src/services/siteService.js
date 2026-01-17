@@ -150,6 +150,7 @@ class SiteService {
 
         // 如果有 Cookie，也添加（某些站点可能同时需要）
         if (site.cookies) {
+
             headers['Cookie'] = site.cookies;
         }
 

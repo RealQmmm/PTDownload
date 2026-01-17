@@ -38,13 +38,22 @@ const normalizeCategory = (category) => {
 };
 
 const parseDate = (dateStr) => {
-    if (!dateStr || dateStr === 'Unknown') return timeUtils.getLocalISOString();
+    if (!dateStr || dateStr === 'Unknown') return timeUtils.getLocalDateTimeString();
 
     dateStr = dateStr.trim();
 
-    // If it looks like a standard absolute date (YYYY-MM-DD...), return it
     if (/^\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(dateStr)) {
-        return dateStr.replace(/\//g, '-');
+        let normalized = dateStr.trim().replace(/\//g, '-').replace(/T/g, ' ');
+        // If it's only a date (YYYY-MM-DD), pad with 00:00:00
+        if (normalized.length <= 10) {
+            normalized += ' 00:00:00';
+        }
+        // If it's YYYY-MM-DD HH:mm, pad with :00
+        else if (normalized.length <= 16 && normalized.includes(':')) {
+            const parts = normalized.split(':');
+            if (parts.length === 2) normalized += ':00';
+        }
+        return normalized;
     }
 
     const date = new Date(); // Start from current time
@@ -57,7 +66,7 @@ const parseDate = (dateStr) => {
         date.setHours(date.getHours() - parseInt(hmsMatch[1]));
         date.setMinutes(date.getMinutes() - parseInt(hmsMatch[2]));
         if (hmsMatch[4]) {
-            date.setSeconds(date.setSeconds() - parseInt(hmsMatch[4]));
+            date.setSeconds(date.getSeconds() - parseInt(hmsMatch[4]));
         }
     } else {
         // Parse parts like "1年2月", "3月5天", "5天2小时", "5小时30分", "10分钟"
@@ -94,7 +103,7 @@ const parseDate = (dateStr) => {
         return timeUtils.getLocalDateTimeString(date);
     }
 
-    return dateStr;
+    return timeUtils.getLocalDateTimeString();
 };
 
 const parsers = {
@@ -181,59 +190,273 @@ const parsers = {
                 const seedLink = $(el).find('a[href*="viewpeerlist"][href*="seeder"], a[href*="toseeders"], a[href*="seedl"]').first();
                 const leechLink = $(el).find('a[href*="viewpeerlist"]:not([href*="seeder"]), a[href*="toleechers"], a[href*="downl"]').first();
 
-                if (seedLink.length) seeders = parseInt(seedLink.text().trim()) || 0;
-                if (leechLink.length) leechers = parseInt(leechLink.text().trim()) || 0;
+                if (seedLink.length) seeders = parseInt(seedLink.text().trim().replace(/,/g, '')) || 0;
+                if (leechLink.length) leechers = parseInt(leechLink.text().trim().replace(/,/g, '')) || 0;
 
-                // Fallback columns
-                if (seeders === 0 && leechers === 0 && cells.length >= 7) {
-                    for (let j = cells.length - 5; j < cells.length - 1; j++) {
-                        if (j < 0) continue;
-                        const cellText = $(cells[j]).text().trim();
-                        const num = parseInt(cellText);
-                        if (!isNaN(num) && num >= 0 && num < 10000 && cellText === String(num)) {
-                            if (seeders === 0) seeders = num;
-                            else if (leechers === 0) { leechers = num; break; }
+                // Improved text-based fallback (looking for colors common in NexusPHP)
+                if (seeders === 0 && leechers === 0) {
+                    // Many sites use <font color="green"> or <span class="green"> for seeders
+                    const greenText = $(el).find('font[color="green"], span.green, span[style*="green"]').first();
+                    if (greenText.length) {
+                        const num = parseInt(greenText.text().trim().replace(/,/g, ''));
+                        if (!isNaN(num)) seeders = num;
+                    }
+
+                    // Red/Orange for leechers
+                    const redText = $(el).find('font[color="red"], span.red, span[style*="red"], font[color="#ff0000"]').first();
+                    if (redText.length) {
+                        const num = parseInt(redText.text().trim().replace(/,/g, ''));
+                        if (!isNaN(num)) leechers = num;
+                    }
+                }
+
+                // Fallback columns: Try to find columns relative to Size
+                if (seeders === 0 && leechers === 0) {
+                    let sizeIndex = -1;
+                    for (let j = 0; j < cells.length; j++) {
+                        if (/^[0-9.]+\s*([KMGT]B)$/i.test($(cells[j]).text().trim())) {
+                            sizeIndex = j;
+                            break;
                         }
+                    }
+
+                    if (sizeIndex !== -1 && sizeIndex + 2 < cells.length) {
+                        // Usually Seeders is 1 or 2 columns after Size
+                        // Size | Seeders | Leechers | Completed | Owner
+
+                        const potentialSeeder = $(cells[sizeIndex + 1]).text().trim().replace(/,/g, '');
+                        const potentialLeecher = $(cells[sizeIndex + 2]).text().trim().replace(/,/g, '');
+
+                        if (/^\d+$/.test(potentialSeeder)) seeders = parseInt(potentialSeeder);
+                        if (/^\d+$/.test(potentialLeecher)) leechers = parseInt(potentialLeecher);
                     }
                 }
 
                 let dateRaw = 'Unknown';
+                const isTarget = name.includes('The Upshaws 2026');
+
+                // 强制调试：输出目标种子的各列原始 HTML，查找干扰源
+                if (isTarget) {
+                    console.log(`[DateDebug] Dumping raw HTML for '${name}':`);
+                    cells.each((idx, cellEl) => {
+                        const h = $(cellEl).html() || '';
+                        console.log(`[DateDebug] Cell ${idx}: ${h.substring(0, 100)}${h.length > 100 ? '...' : ''}`);
+                    });
+                }
+
+                // 优先从包含日期特征的单元格中寻找完整时间
                 for (let j = 0; j < cells.length; j++) {
                     const cell = $(cells[j]);
-                    const title = cell.find('span[title], time[title], a[title]').attr('title') || cell.attr('title');
-                    if (title && /^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/.test(title)) {
-                        dateRaw = title;
-                        break;
+                    // 跳过前三列（分类、图标、标题），特别跳过 Cell 2 (标题列)，因为它内部常包含置顶到期时间
+                    if (j <= 2) continue;
+
+                    const title = (cell.find('*[title]').attr('title') || cell.attr('title') || '').trim();
+                    const text = cell.text().trim();
+                    // 处理 <br> 导致的日期时间粘连问题：将换行符替换为空格
+                    const htmlAsText = (cell.html() || '').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ' ').trim();
+                    const htmlRaw = cell.html() || '';
+
+                    // 排除干扰词库
+                    const excludeKeywords = ['置顶', '直到', '过期', 'Sticky', 'Expires', '限时', '永久', '有效'];
+                    const sources = [title, text, htmlAsText, htmlRaw];
+
+                    for (let sIdx = 0; sIdx < sources.length; sIdx++) {
+                        const src = sources[sIdx];
+                        if (!src) continue;
+
+                        // 不区分大小写的排除校验
+                        if (excludeKeywords.some(k => src.toLowerCase().includes(k.toLowerCase()))) continue;
+
+                        // 1. 优先匹配：完整年月日时分秒 (支持 - / 和 T，且允许日期时间之间无空格)
+                        const fullMatch = src.match(/\d{4}[-/]\d{1,2}[-/]\d{1,2}([T\s]*)?\d{1,2}:\d{1,2}(?::\d{1,2})?/);
+                        if (fullMatch) {
+                            // 标题属性如果不纯（包含干扰字符），跳过
+                            if (sIdx === 0 && (src.length > 30 || /[^\d\s\-\/\:T]/.test(src))) continue;
+
+                            dateRaw = fullMatch[0];
+                            // 如果匹配结果中间没有空格且非T，补一个空格 (适配粘连情况)
+                            if (dateRaw.length >= 10 && !dateRaw.includes(' ') && !dateRaw.includes('T')) {
+                                dateRaw = dateRaw.substring(0, 10) + ' ' + dateRaw.substring(10);
+                            }
+                            if (isTarget) console.log(`[DateDebug] Match(Full): ${dateRaw} from cell ${j} src ${sIdx}`);
+                            break;
+                        }
+                    }
+                    if (dateRaw !== 'Unknown') break;
+                }
+
+                // 如果没找到完整的，再找短日期 (YYYY-MM-DD)
+                if (dateRaw === 'Unknown') {
+                    for (let j = 0; j < cells.length; j++) {
+                        if (j <= 2) continue;
+                        const cell = $(cells[j]);
+                        const sources = [(cell.find('*[title]').attr('title') || cell.attr('title') || ''), cell.text().trim()];
+
+                        for (const src of sources) {
+                            if (!src || excludeKeywords.some(k => src.toLowerCase().includes(k.toLowerCase()))) continue;
+                            const shortMatch = src.match(/\d{4}[-/]\d{1,2}[-/]\d{1,2}/);
+                            if (shortMatch) {
+                                dateRaw = shortMatch[0];
+                                if (isTarget) console.log(`[DateDebug] Match(Short): ${dateRaw} from cell ${j}`);
+                                break;
+                            }
+                        }
+                        if (dateRaw !== 'Unknown') break;
                     }
                 }
 
+                // 如果依然没找到，尝试处理相对时间
+                if (dateRaw === 'Unknown') {
+                    for (let j = 0; j < cells.length; j++) {
+                        if (j <= 2) continue;
+                        const text = $(cells[j]).text().trim();
+                        if (text.includes('前') || text.includes('昨天') || /^\d{1,2}:\d{2}(:\d{2})?$/.test(text)) {
+                            if (['置顶', '直到', '过期', 'Sticky', 'Expires', '限时', '永久'].some(k => text.includes(k))) continue;
+                            dateRaw = text;
+                            if (isTarget) console.log(`[DateDebug] Match(Rel): ${dateRaw} from cell ${j}`);
+                            break;
+                        }
+                    }
+                }
+
+                if (isTarget) console.log(`[DateDebug] Final match for '${name}': ${dateRaw}`);
                 const date = parseDate(dateRaw);
+
 
                 let isFree = false;
                 let freeType = '';
                 let isHot = false;
                 let isNew = false;
+                let promotionTimeLeft = '';
+
+                // Helper function to extract promotion time left
+                const extractPromotionTime = (text) => {
+                    if (!text) return '';
+
+                    // 匹配各种时间格式
+                    const patterns = [
+                        // 中文格式：剩余2天3小时、还剩5小时30分
+                        /(?:剩余|还剩)[：:\s]*([^<\n]+?)(?:\s|$|<)/i,
+                        // 英文格式：Remaining: 2d 3h、Expires in 1h 30m
+                        /(?:Remaining|Expires\s+in)[：:\s]*([^<\n]+?)(?:\s|$|<)/i,
+                        // 直接匹配时间格式：2天3小时、2d 3h
+                        /(\d+\s*(?:天|日|d|day|days))?[\s,]*(\d+\s*(?:小时|时|h|hour|hours))?[\s,]*(\d+\s*(?:分钟|分|m|min|mins|minute|minutes))?/i,
+                        // 匹配倒计时格式：2:30:45 (天:时:分)
+                        /(\d+):(\d+):(\d+)/
+                    ];
+
+                    for (const pattern of patterns) {
+                        const match = text.match(pattern);
+                        if (match) {
+                            let timeStr = match[1] || match[0];
+
+                            // 清理和标准化
+                            timeStr = timeStr.trim()
+                                .replace(/\s+/g, '')
+                                .replace(/,/g, '')
+                                .replace(/\n/g, '')
+                                .substring(0, 50); // 限制长度
+
+                            // 过滤掉明显不是时间的内容
+                            if (timeStr.length > 0 && timeStr.length < 50) {
+                                // 如果包含时间单位，认为是有效的
+                                if (/\d/.test(timeStr) && (/天|日|时|分|秒|d|h|m|s|day|hour|min|sec/i.test(timeStr) || /^\d+:\d+/.test(timeStr))) {
+                                    return timeStr;
+                                }
+                            }
+                        }
+                    }
+
+                    return '';
+                };
 
                 // Typical NexusPHP promotion images/classes
-                const promotionImg = titleCell.find('img.pro_free, img.pro_free2down, img.pro_2xfree, img.pro_50pctdown, img.pro_2x50pctdown, img.pro_30pctdown, img.pro_2x');
+                const promotionImg = titleCell.find('img.pro_free, img.pro_free2down, img.pro_free2up, img.pro_2xfree, img.pro_50pctdown, img.pro_2x50pctdown, img.pro_30pctdown, img.pro_2x, img.pro_2up, img.pro_twoup, img.pro_twoupfree');
                 if (promotionImg.length) {
                     isFree = true;
-                    const alt = promotionImg.attr('alt') || '';
-                    const src = promotionImg.attr('src') || '';
-                    if (src.includes('free') || alt.includes('Free')) freeType = src.includes('2x') || alt.includes('2x') ? '2xFree' : 'Free';
-                    else if (src.includes('50pct') || alt.includes('50%')) freeType = src.includes('2x') || alt.includes('2x') ? '2x50%' : '50%';
-                    else if (src.includes('30pct')) freeType = '30%';
-                    else freeType = '促销';
+                    const alt = (promotionImg.attr('alt') || '').toLowerCase();
+                    const src = (promotionImg.attr('src') || '').toLowerCase();
+                    const cls = (promotionImg.attr('class') || '').toLowerCase();
+
+                    if (src.includes('free') || alt.includes('free') || src.includes('免费') || cls.includes('free')) {
+                        const is2x = src.includes('2x') || alt.includes('2x') || src.includes('2up') || src.includes('twoup') ||
+                            alt.includes('2倍') || alt.includes('twoup') || cls.includes('2up') || cls.includes('free2up');
+                        freeType = is2x ? '2xFree' : 'Free';
+                    }
+                    else if (src.includes('50pct') || alt.includes('50%') || src.includes('half')) {
+                        const is2x = src.includes('2x') || alt.includes('2x') || src.includes('2up') || src.includes('twoup') || alt.includes('2倍');
+                        freeType = is2x ? '2x50%' : '50%';
+                    }
+                    else if (src.includes('30pct') || alt.includes('30%')) {
+                        freeType = '30%';
+                    }
+                    else if (src.includes('2x') || alt.includes('2x') || src.includes('2up') || src.includes('twoup') || alt.includes('2倍') || alt.includes('twoup')) {
+                        freeType = '2x';
+                    }
+                    else {
+                        freeType = '促销';
+                    }
+
+                    // Extract promotion time left
+                    // Method 1: From image title attribute
+                    const imgTitle = promotionImg.attr('title') || '';
+                    promotionTimeLeft = extractPromotionTime(imgTitle);
+
+                    // Method 2: From next sibling text
+                    if (!promotionTimeLeft) {
+                        const nextText = promotionImg.next().text() || '';
+                        promotionTimeLeft = extractPromotionTime(nextText);
+                    }
+
+                    // Method 3: From parent element text (but exclude the torrent name)
+                    if (!promotionTimeLeft) {
+                        // Clone the parent and remove the main link to avoid extracting torrent name
+                        const parentClone = promotionImg.parent().clone();
+                        parentClone.find('a[href*="details.php"]').remove();
+                        const parentText = parentClone.text() || '';
+                        promotionTimeLeft = extractPromotionTime(parentText);
+                    }
+
+                    // Method 4: Look for time-related elements near the promotion image
+                    if (!promotionTimeLeft) {
+                        const timeElements = titleCell.find('span[title], font[title], div[title]');
+                        timeElements.each((i, el) => {
+                            if (promotionTimeLeft) return;
+                            const title = $(el).attr('title') || '';
+                            const text = $(el).text() || '';
+                            promotionTimeLeft = extractPromotionTime(title) || extractPromotionTime(text);
+                        });
+                    }
                 } else {
                     // Check for font or span with classes
-                    const fonts = titleCell.find('font.free, font.twoupfree, font.halfdown, span.free, span.twoupfree');
+                    const fonts = titleCell.find('font.free, font.twoupfree, font.halfdown, font.twoup, span.free, span.twoupfree, span.twoup');
                     if (fonts.length) {
                         isFree = true;
-                        const cls = fonts.attr('class');
-                        if (cls === 'free') freeType = 'Free';
-                        else if (cls === 'twoupfree') freeType = '2xFree';
-                        else if (cls === 'halfdown') freeType = '50%';
-                        else freeType = '促销';
+                        const cls = fonts.attr('class') || '';
+                        const text = fonts.text().trim().toLowerCase();
+
+                        if (cls.includes('free') || text.includes('免费')) {
+                            if (cls.includes('twoup') || text.includes('2x') || text.includes('2倍')) freeType = '2xFree';
+                            else freeType = 'Free';
+                        }
+                        else if (cls.includes('twoup') || cls.includes('2up') || text.includes('2x') || text.includes('2倍')) {
+                            freeType = '2x';
+                        }
+                        else if (cls.includes('half') || text.includes('50%')) {
+                            freeType = '50%';
+                        }
+                        else {
+                            freeType = '促销';
+                        }
+
+                        // Try to extract time from font/span title or nearby text
+                        const fontTitle = fonts.attr('title') || '';
+                        promotionTimeLeft = extractPromotionTime(fontTitle);
+
+                        if (!promotionTimeLeft) {
+                            const nextText = fonts.next().text() || '';
+                            promotionTimeLeft = extractPromotionTime(nextText);
+                        }
                     }
                 }
 
@@ -292,14 +515,102 @@ const parsers = {
                 // Normalize category to standard names
                 category = normalizeCategory(category);
 
+                // --- Enhanced metadata extraction for Web Preview ---
+
+                // 1. Poster Extraction
+                let posterUrl = '';
+                // Method A: Look for images with common NexusPHP preview classes
+                const previewImg = $(el).find('img.nexus-lazy-load, img.preview, td.embedded img').first();
+                if (previewImg.length) {
+                    posterUrl = previewImg.attr('data-src') || previewImg.attr('src') || '';
+                }
+                // Method B: Look for any image whose src contains keywords
+                if (!posterUrl) {
+                    const allImgs = $(el).find('img');
+                    allImgs.each((idx, imgEl) => {
+                        const src = $(imgEl).attr('src') || $(imgEl).attr('data-src') || '';
+                        if (/poster|thumb|preview|ptgen|small/i.test(src) && !/promotion|pro_|free|hot|new/i.test(src)) {
+                            posterUrl = src;
+                            return false; // break
+                        }
+                    });
+                }
+                // Ensure absolute URL
+                if (posterUrl && !posterUrl.startsWith('http')) {
+                    posterUrl = new URL(posterUrl, baseUrl).href;
+                }
+
+                // 2. Ratings Extraction (from entire row - icons may be in separate cells)
+                let imdbRating = '';
+                let doubanRating = '';
+
+                // Method A: Icon based - search entire row (not just title cell)
+                const getRatingByIcon = (iconSelector) => {
+                    // Search in the entire row, not just titleCell
+                    const icon = $(el).find(iconSelector).first();
+                    if (icon.length) {
+                        let val = icon.next('span').text().trim();
+                        if (!val) val = icon.parent().text().trim();
+                        if (val && val !== 'N/A' && /\d/.test(val)) {
+                            const m = val.match(/\d+(?:\.\d+)?/);
+                            return m ? m[0] : '';
+                        }
+                    }
+                    return '';
+                };
+
+                imdbRating = getRatingByIcon('img[alt*="imdb"i], img[title*="imdb"i]');
+                doubanRating = getRatingByIcon('img[alt*="douban"i], img[title*="douban"i]');
+                let tmdbRating = getRatingByIcon('img[alt*="tmdb"i], img[title*="tmdb"i]');
+
+                // Method B: Regex Fallback (search in title cell)
+                if (!imdbRating || !doubanRating || !tmdbRating) {
+                    const titleCellText = titleCell.text() || '';
+                    const imdbMatch = titleCellHtml.match(/◎IMDb评分[^\d]*(\d+(?:\.\d+)?)/i) || titleCellText.match(/IMDb:?\s*(\d+(?:\.\d+)?)/i);
+                    const doubanMatch = titleCellHtml.match(/◎豆瓣评分[^\d]*(\d+(?:\.\d+)?)/i) || titleCellText.match(/豆瓣:?\s*(\d+(?:\.\d+)?)/i);
+                    const tmdbMatch = titleCellHtml.match(/TMDB:?\s*(\d+(?:\.\d+)?)/i) || titleCellText.match(/TMDB:?\s*(\d+(?:\.\d+)?)/i);
+
+                    if (!imdbRating && imdbMatch) imdbRating = imdbMatch[1];
+                    if (!doubanRating && doubanMatch) doubanRating = doubanMatch[1];
+                    if (!tmdbRating && tmdbMatch) tmdbRating = tmdbMatch[1];
+                }
+
+                // 3. Labels Extraction
+                const labels = [];
+
+                // A. From title (common quality/format labels)
+                const t = name.toUpperCase();
+                if (t.includes('4K') || t.includes('2160P')) labels.push('4K');
+                if (t.includes('1080P')) labels.push('1080p');
+                if (t.includes('720P')) labels.push('720p');
+                if (t.includes('HDR')) labels.push('HDR');
+                if (t.includes('DOVI') || t.includes('DOLBY VISION')) labels.push('DoVi');
+                if (t.includes('BLU-RAY') || t.includes('BLURAY')) labels.push('Blu-ray');
+                if (t.includes('REMUX')) labels.push('Remux');
+                if (t.includes('WEB-DL') || t.includes('WEBDL')) labels.push('WEB-DL');
+
+                // B. From row HTML (custom site labels like "分集")
+                $(el).find('span[title][style*="background-color"]').each((idx, spanEl) => {
+                    const labelText = $(spanEl).attr('title') || $(spanEl).text().trim();
+                    if (labelText && labelText.length <= 10 && !labels.includes(labelText)) {
+                        labels.push(labelText);
+                    }
+                });
+
                 results.push({
                     id, name, subtitle, link, torrentUrl, size,
                     seeders: parseInt(seeders) || 0,
                     leechers: parseInt(leechers) || 0,
                     date,
                     isFree, freeType, isHot, isNew,
+                    promotionTimeLeft,
                     category: category,
-                    categoryId: categoryId
+                    categoryId: categoryId,
+                    posterUrl,
+                    imdbRating,
+                    doubanRating,
+                    tmdbRating,
+                    labels
                 });
             } catch (err) {
                 // Silently skip rows that fail
@@ -341,7 +652,21 @@ const parseUserStats = (html, type) => {
         if (uploadMatch) stats.upload = uploadMatch[2];
         const downloadMatch = text.match(/(下载量|Downloaded)[:\s]+([\d.]+\s*[MGT]B)/i);
         if (downloadMatch) stats.download = downloadMatch[2];
-        const bonusMatch = text.match(/(魔力值|Bonus|积分|Karma)[:\s]+([\d,.]+)/i);
+        // Bonus extraction - try multiple patterns
+        let bonusMatch = text.match(/(魔力值|Bonus|积分|Karma)[:\s]+([\d,.]+)/i);
+        if (!bonusMatch) {
+            // Try to find bonus after mybonus.php link (format: "]: 178,186.1 ")
+            const mybonusLink = $('a[href*="mybonus.php"]');
+            if (mybonusLink.length) {
+                const parent = mybonusLink.parent();
+                const parentText = parent.text();
+                const afterLink = parentText.split(mybonusLink.text())[1];
+                if (afterLink) {
+                    const numMatch = afterLink.match(/[:\]]\s*([\d,.]+)/);
+                    if (numMatch) bonusMatch = ['', '', numMatch[1]];
+                }
+            }
+        }
         if (bonusMatch) stats.bonus = bonusMatch[2];
         const levelMatch = text.match(/(等级|Class|Level)[:\s]+([^\s]+)/i);
         if (levelMatch) stats.level = levelMatch[2];
@@ -403,5 +728,6 @@ module.exports = {
         return parser ? parser(html, baseUrl) : [];
     },
     parseUserStats,
-    normalizeCategory
+    normalizeCategory,
+    parseDate
 };

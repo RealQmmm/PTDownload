@@ -105,7 +105,8 @@ class DownloaderService {
                     eta: t.eta,
                     added_on: t.added_on > 0 ? timeUtils.getLocalISOString(new Date(t.added_on * 1000)) : null,
                     completion_on: t.completion_on > 0 ? timeUtils.getLocalISOString(new Date(t.completion_on * 1000)) : null,
-                    seeding_time: t.seeding_time || 0
+                    seeding_time: t.seeding_time || 0,
+                    tracker: t.tracker
                 }));
 
                 return {
@@ -145,7 +146,7 @@ class DownloaderService {
                     {
                         method: 'torrent-get',
                         arguments: {
-                            fields: ['hashString', 'name', 'totalSize', 'percentDone', 'status', 'rateDownload', 'rateUpload', 'downloadedEver', 'uploadedEver', 'uploadRatio', 'eta', 'addedDate', 'doneDate', 'secondsSeeding']
+                            fields: ['hashString', 'name', 'totalSize', 'percentDone', 'status', 'rateDownload', 'rateUpload', 'downloadedEver', 'uploadedEver', 'uploadRatio', 'eta', 'addedDate', 'doneDate', 'secondsSeeding', 'trackers']
                         }
                     },
                     {
@@ -182,9 +183,10 @@ class DownloaderService {
                     uploaded: t.uploadedEver,
                     ratio: t.uploadRatio,
                     eta: t.eta,
-                    added_on: t.addedDate > 0 ? timeUtils.getLocalISOString(new Date(t.addedDate * 1000)) : null,
+                    added_on: t.added_on > 0 ? timeUtils.getLocalISOString(new Date(t.addedDate * 1000)) : null,
                     completion_on: t.doneDate > 0 ? timeUtils.getLocalISOString(new Date(t.doneDate * 1000)) : null,
-                    seeding_time: t.secondsSeeding || 0
+                    seeding_time: t.secondsSeeding || 0,
+                    tracker: t.trackers && t.trackers.length > 0 ? t.trackers[0].announce : null
                 }));
 
                 const cumStats = statsRes.data.arguments['cumulative-stats'] || {};
@@ -394,10 +396,13 @@ class DownloaderService {
                 // Check if torrent was added successfully
                 // qBittorrent returns "Ok." on success, "Fails." on failure
                 const responseText = addRes.data?.toString() || addRes.data;
-                console.log(`[qBittorrent] Add torrent response: "${responseText}"`);
+                console.log(`[qBittorrent] Add torrent response: "${responseText}" (HTTP ${addRes.status})`);
 
                 if (responseText === 'Fails.' || (typeof responseText === 'string' && responseText.toLowerCase().includes('fail'))) {
-                    return { success: false, message: 'qBittorrent 添加种子失败，可能是重复种子或种子文件无效' };
+                    return {
+                        success: false,
+                        message: 'qBittorrent 无法添加种子。原因通常是：1. 种子已在下载列表中（重复）；2. 种子文件数据被站点防火墙拦截（如 M-Team 频率限制）。'
+                    };
                 }
 
                 // 4. If fileIndices specified, set file priorities

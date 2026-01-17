@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTheme } from '../App';
+import { useTheme } from '../contexts/ThemeContext';
 
 const Sidebar = ({ activeTab, setActiveTab, user, collapsed, onToggle }) => {
     const { darkMode, siteName, expiredCookiesCount, handleLogout, themeMode, setThemeMode } = useTheme();

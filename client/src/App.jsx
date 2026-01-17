@@ -17,10 +17,7 @@ import useSwipeGesture from './hooks/useSwipeGesture'
 
 
 
-// Create Theme Context
-export const ThemeContext = createContext();
-
-export const useTheme = () => useContext(ThemeContext);
+import { ThemeContext } from './contexts/ThemeContext'
 
 function App() {
     const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'))
@@ -60,11 +57,14 @@ function App() {
 
     const [computedDarkMode, setComputedDarkMode] = useState(false);
 
+    // Site Name state
+    const [siteName, setSiteName] = useState('PT Manager')
+
     // Sites Status state
     const [expiredCookiesCount, setExpiredCookiesCount] = useState(0)
 
-    // Site Name state
-    const [siteName, setSiteName] = useState('PT Manager')
+    // Hot resources integration global state
+    const [hotResourcesEnabled, setHotResourcesEnabled] = useState(false);
 
     // Handle theme changes and system preference synchronization
     useEffect(() => {
@@ -154,6 +154,23 @@ function App() {
         };
         fetchPublicSettings();
     }, []);
+
+    // Fetch initial hot resources config when authenticated
+    useEffect(() => {
+        if (!isAuthenticated) return;
+        const fetchHotResourcesConfig = async () => {
+            try {
+                const res = await authenticatedFetch('/api/hot-resources/config');
+                const data = await res.json();
+                if (data.success && data.config) {
+                    setHotResourcesEnabled(data.config.enableSearchIntegration || false);
+                }
+            } catch (err) {
+                console.error('Failed to fetch initial hot resources config:', err);
+            }
+        };
+        fetchHotResourcesConfig();
+    }, [isAuthenticated]);
 
     // Update Document Title
     useEffect(() => {
@@ -280,7 +297,9 @@ function App() {
             fetchStatus,
             handleLogout,
             user,
-            authenticatedFetch
+            authenticatedFetch,
+            hotResourcesEnabled,
+            setHotResourcesEnabled
         }}>
             <div className={`min-h-screen flex font-sans ${themeClasses}`}>
                 {/* Mobile Backdrop */}

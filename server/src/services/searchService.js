@@ -103,7 +103,7 @@ class SearchService {
                 if (siteService._isMTeamV2(site)) {
                     console.log(`[Search] ${site.name}: Performing ${isRecentSearch ? 'recent' : 'keyword'} search via API...`);
                     const results = await this._searchMTeamV2(site, query, 1);
-                    return results.map(r => ({ ...r, siteName: site.name, siteUrl: site.url, siteIcon: site.site_icon }));
+                    return results.map(r => ({ ...r, siteId: site.id, siteName: site.name, siteUrl: site.url, siteIcon: site.site_icon }));
                 }
 
                 let results = [];
@@ -208,7 +208,7 @@ class SearchService {
         });
 
         const allPagesResults = await Promise.all(pageResultsPromises);
-        return allPagesResults.flat().map(r => ({ ...r, siteName: site.name, siteUrl: site.url, siteIcon: site.site_icon }));
+        return allPagesResults.flat().map(r => ({ ...r, siteId: site.id, siteName: site.name, siteUrl: site.url, siteIcon: site.site_icon }));
     }
 
     async _searchMTeamV2(site, query, pageNum) {
@@ -236,6 +236,14 @@ class SearchService {
             const code = response.data?.code;
             if (response.data && (code === 0 || code === '0') && response.data.data) {
                 const list = response.data.data.data || [];
+
+                // Debug: Log first item to see all available fields
+                if (enableLogs && list.length > 0) {
+                    console.log('[M-Team API] Sample item fields:', Object.keys(list[0]));
+                    console.log('[M-Team API] imageList:', list[0].imageList);
+                    console.log('[M-Team API] Sample item:', JSON.stringify(list[0], null, 2));
+                }
+
                 return list.map(item => {
                     const status = item.status || {};
                     const promotion = item.promotion || {};
@@ -257,18 +265,73 @@ class SearchService {
                         freeType = '2x';
                     }
 
+                    // Extract promotion time left from M-Team API
+                    // Try multiple possible field names (camelCase and snake_case)
+                    let promotionTimeLeft = '';
+                    const endTimeFields = [
+                        status.discountEndTime,
+                        status.discount_end_time,
+                        promotion.discountEndTime,
+                        promotion.discount_end_time,
+                        status.promotionTimeRemaining,
+                        status.promotion_time_remaining
+                    ];
+
+                    for (const endTime of endTimeFields) {
+                        if (endTime) {
+                            promotionTimeLeft = this._calculateMTeamTimeLeft(endTime);
+                            if (promotionTimeLeft) {
+                                if (enableLogs) console.log(`[M-Team] Found promotion time: ${promotionTimeLeft}`);
+                                break;
+                            }
+                        }
+                    }
+
+
+                    // Extract poster URL from M-Team API
+                    // imageList is an array, take the first image
+                    let posterUrl = '';
+                    if (item.imageList && Array.isArray(item.imageList) && item.imageList.length > 0) {
+                        posterUrl = item.imageList[0];
+                    } else if (item.imageList && typeof item.imageList === 'string') {
+                        posterUrl = item.imageList;
+                    }
+
+                    if (enableLogs && posterUrl) {
+                        console.log(`[M-Team] Found poster for ${item.name}: ${posterUrl}`);
+                    }
+
+                    // Extract ratings from M-Team API
+                    const ratings = {
+                        imdb: item.imdbRating || item.imdb || null,
+                        douban: item.doubanRating || item.douban || null
+                    };
+
+                    // Extract labels (4K, HDR, etc.) from M-Team API
+                    let labels = [];
+                    if (item.labelsNew && Array.isArray(item.labelsNew)) {
+                        labels = item.labelsNew;
+                    } else if (item.labels && Array.isArray(item.labels)) {
+                        labels = item.labels;
+                    }
+
                     return {
                         id: String(item.id),
                         name: item.name,
-                        subtitle: item.nameEn || '',
+                        subtitle: item.nameEn || item.smallDescr || '',
                         link: `${site.url}/details.php?id=${item.id}`,
                         torrentUrl: `${site.url}/download.php?id=${item.id}`,
                         size: FormatUtils.formatBytes(parseInt(item.size) || 0),
                         seeders: parseInt(status.seeders) || 0,
                         leechers: parseInt(status.leechers) || 0,
-                        date: item.times || item.createdDate || '',
+                        date: siteParsers.parseDate(item.times || item.createdDate || ''),
                         isFree: freeType !== '',
                         freeType: freeType,
+                        promotionTimeLeft: promotionTimeLeft,
+                        posterUrl: posterUrl,
+                        imdbRating: ratings.imdb,
+                        doubanRating: ratings.douban,
+                        labels: labels,
                         category: this._getMTeamCategory(item.category),
                         categoryId: item.category
                     };
@@ -291,6 +354,61 @@ class SearchService {
             412: '纪录片', 410: '软件', 411: '游戏', 407: '体育', 409: '其他'
         };
         return mapping[catId] || '其他';
+    }
+
+    /**
+     * Calculate time left from M-Team discount_end_time timestamp
+     * @param {number|string} endTime - Unix timestamp (seconds) or ISO date string
+     * @returns {string} - Formatted time like "2d 21h" or "4h 55min"
+     */
+    _calculateMTeamTimeLeft(endTime) {
+        try {
+            let endDate;
+
+            // Handle timestamp (seconds)
+            if (typeof endTime === 'number' || /^\d+$/.test(endTime)) {
+                const timestamp = parseInt(endTime);
+                // M-Team API might return seconds or milliseconds
+                endDate = timestamp > 10000000000 ? new Date(timestamp) : new Date(timestamp * 1000);
+            } else {
+                // Handle ISO date string
+                endDate = new Date(endTime);
+            }
+
+            if (isNaN(endDate.getTime())) {
+                return '';
+            }
+
+            const now = new Date();
+            const diffMs = endDate - now;
+
+            if (diffMs <= 0) {
+                return ''; // Already expired
+            }
+
+            // Convert to total minutes
+            const totalMinutes = Math.floor(diffMs / (1000 * 60));
+            const days = Math.floor(totalMinutes / (60 * 24));
+            const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+            const minutes = totalMinutes % 60;
+
+            // Format like M-Team: "2d 21h" or "4h 55min"
+            if (days > 0) {
+                // Has days: show days and hours
+                return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+            } else if (hours > 0) {
+                // No days, has hours: show hours and minutes
+                return minutes > 0 ? `${hours}h ${minutes}min` : `${hours}h`;
+            } else if (minutes > 0) {
+                // Only minutes
+                return `${minutes}min`;
+            }
+
+            return '';
+        } catch (err) {
+            console.error('[M-Team] Failed to calculate time left:', err);
+            return '';
+        }
     }
 
     async searchViaRSS(sites, query = null) {
@@ -334,17 +452,36 @@ class SearchService {
 
                 $('item').each((i, el) => {
                     const title = $(el).find('title').text();
-                    const link = $(el).find('enclosure').attr('url') || $(el).find('link').text();
-                    const guid = $(el).find('guid').text() || link;
+                    const rawLink = $(el).find('link').text();
+                    const torrentUrl = $(el).find('enclosure').attr('url') || rawLink;
+
+                    // The 'link' tag in RSS usually points to the details page, 
+                    // while 'enclosure' points to the torrent file.
+                    // If 'link' looks like a download URL, try to convert it to details page for NexusPHP sites
+                    let detailsLink = rawLink;
+                    if (detailsLink.includes('download.php') && detailsLink.includes('id=')) {
+                        detailsLink = detailsLink.replace('download.php', 'details.php');
+                    }
+
+                    const guid = $(el).find('guid').text() || torrentUrl;
                     const pubDate = $(el).find('pubDate').text();
 
-                    if (!title || !link) return;
+                    if (!title || !torrentUrl) return;
 
                     let sizeStr = $(el).find('size').text();
-                    if (!sizeStr) {
+                    const enclosureLength = $(el).find('enclosure').attr('length');
+
+                    if (enclosureLength) {
+                        sizeStr = FormatUtils.formatBytes(parseInt(enclosureLength));
+                    } else if (!sizeStr) {
                         const desc = $(el).find('description').text();
-                        const sizeMatch = desc.match(/Size:\s*([\d\.]+)\s*([KMGT]B?)/i) || desc.match(/([\d\.]+)\s*([KMGT]B?)/i);
-                        sizeStr = sizeMatch ? `${sizeMatch[1]} ${sizeMatch[2]}` : '0 B';
+                        // 优化正则：
+                        // 1. 必须有数字 \d
+                        // 2. 必须有单位 B (KB, MB, GB, TB)
+                        // 3. 可以在 Size: 后面匹配
+                        const sizeMatch = desc.match(/Size:\s*(\d+(?:\.\d+)?)\s*([KMGT]B?)/i) ||
+                            desc.match(/(\d+(?:\.\d+)?)\s*([KMGT]B)/i); // 如果没有Size前缀，必须带B
+                        sizeStr = sizeMatch ? `${sizeMatch[1]} ${sizeMatch[2].toUpperCase()}` : '0 B';
                     } else {
                         sizeStr = FormatUtils.formatBytes(parseInt(sizeStr));
                     }
@@ -356,21 +493,51 @@ class SearchService {
                     const leechMatch = desc.match(/(leechers?|L):\s*(\d+)/i);
                     if (leechMatch) leechers = parseInt(leechMatch[2]);
 
+                    // Extract Poster URL from description
+                    const posterMatch = desc.match(/<img[^>]+src=["']([^"']+)["']/i);
+                    const posterUrl = posterMatch ? posterMatch[1] : '';
+
+                    // Extract Ratings from description
+                    const imdbMatch = desc.match(/◎IMDb评分[^\d]*(\d+(?:\.\d+)?)/i);
+                    const doubanMatch = desc.match(/◎豆瓣评分[^\d]*(\d+(?:\.\d+)?)/i);
+                    const tmdbMatch = desc.match(/◎TMDB评分[^\d]*(\d+(?:\.\d+)?)/i) || desc.match(/TMDB:?\s*(\d+(?:\.\d+)?)/i);
+                    const imdbRating = imdbMatch ? imdbMatch[1] : '';
+                    const doubanRating = doubanMatch ? doubanMatch[1] : '';
+                    const tmdbRating = tmdbMatch ? tmdbMatch[1] : '';
+
+                    // Extract common labels from title for non-MTeam sites
+                    const labels = [];
+                    const t = title.toUpperCase();
+                    if (t.includes('4K') || t.includes('2160P')) labels.push('4K');
+                    if (t.includes('1080P')) labels.push('1080p');
+                    if (t.includes('720P')) labels.push('720p');
+                    if (t.includes('HDR')) labels.push('HDR');
+                    if (t.includes('DOVI') || t.includes('DOLBY VISION')) labels.push('DoVi');
+                    if (t.includes('BLU-RAY') || t.includes('BLURAY')) labels.push('Blu-ray');
+                    if (t.includes('REMUX')) labels.push('Remux');
+                    if (t.includes('WEB-DL') || t.includes('WEBDL')) labels.push('WEB-DL');
+
                     results.push({
                         id: guid,
                         name: title,
                         subtitle: '',
-                        link: link,
-                        torrentUrl: link,
+                        link: detailsLink,
+                        torrentUrl: torrentUrl,
                         size: sizeStr,
                         seeders, leechers,
                         date: pubDate ? timeUtils.getLocalDateTimeString(new Date(pubDate)) : timeUtils.getLocalDateTimeString(),
+                        siteId: site.id,
                         siteName: site.name,
                         siteUrl: site.url,
                         siteIcon: site.site_icon,
                         category: siteParsers.normalizeCategory($(el).find('category').text()),
                         isFree: title.toLowerCase().includes('free') || desc.toLowerCase().includes('free'),
-                        freeType: ''
+                        freeType: '',
+                        posterUrl,
+                        imdbRating,
+                        doubanRating,
+                        tmdbRating,
+                        labels
                     });
                 });
 

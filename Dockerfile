@@ -2,8 +2,8 @@
 FROM node:22-slim AS frontend-builder
 WORKDIR /app
 COPY client/package*.json ./
-RUN npm install
 RUN npm config set registry https://registry.npmmirror.com
+RUN npm install
 COPY client ./
 RUN npm run build
 

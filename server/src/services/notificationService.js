@@ -111,6 +111,14 @@ class NotificationService {
 
         const sendResults = (await Promise.all(promises)).filter(r => r !== null);
 
+        // Also send to PWA Push (if any subscriptions exist)
+        try {
+            const pwaPush = require('../utils/pwaPush');
+            await pwaPush.sendToAll(title, message);
+        } catch (e) {
+            console.error('[Notify] PWA Push failed:', e.message);
+        }
+
         const successCount = sendResults.filter(r => r.success).length;
         const failCount = sendResults.length - successCount;
 

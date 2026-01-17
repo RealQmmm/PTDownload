@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../App';
+import { useTheme } from '../contexts/ThemeContext';
 import Card from '../components/ui/Card';
 
 // Format bytes to human readable format
@@ -30,6 +30,29 @@ const formatETA = (seconds) => {
     if (hours > 0) return `${hours}h ${minutes}m`;
     if (minutes > 0) return `${minutes}m ${secs}s`;
     return `${secs}s`;
+};
+
+// Site Favicon Component
+const SiteFavicon = ({ siteName, siteUrl, siteIcon, className = "w-4 h-4" }) => {
+    if (!siteUrl && !siteName) return null;
+    return (
+        <div className={`relative flex items-center justify-center shrink-0 ${className}`} title={siteName}>
+            <span className="text-[10px] opacity-20 italic">🌐</span>
+            <img
+                src={siteIcon || (siteUrl ? `${siteUrl.replace(/\/$/, '')}/favicon.ico` : '')}
+                alt={siteName}
+                className={`w-full h-full object-contain absolute inset-0 m-auto opacity-0 transition-opacity duration-300`}
+                onLoad={(e) => {
+                    e.target.style.opacity = '1';
+                    if (e.target.previousSibling) e.target.previousSibling.style.display = 'none';
+                }}
+                onError={(e) => {
+                    e.target.style.display = 'none';
+                    if (e.target.previousSibling) e.target.previousSibling.style.opacity = '0.5';
+                }}
+            />
+        </div>
+    );
 };
 
 // Sub-component for flow chart
@@ -501,6 +524,12 @@ const DashboardPage = ({ setActiveTab }) => {
                                                 <div className="flex items-center justify-end">分享率 <SortIcon columnKey="ratio" /></div>
                                             </th>
                                             <th
+                                                className="pb-3 px-2 text-right font-bold whitespace-nowrap cursor-pointer hover:text-blue-500 transition-colors"
+                                                onClick={() => requestSort('siteName')}
+                                            >
+                                                <div className="flex items-center justify-end">站点 <SortIcon columnKey="siteName" /></div>
+                                            </th>
+                                            <th
                                                 className="pb-3 pl-2 text-right font-bold whitespace-nowrap cursor-pointer hover:text-blue-500 transition-colors"
                                                 onClick={() => requestSort('clientType')}
                                             >
@@ -555,6 +584,13 @@ const DashboardPage = ({ setActiveTab }) => {
                                                         {(Number(task.ratio) || 0).toFixed(2)}
                                                     </span>
                                                 </td>
+                                                <td className="py-3 px-2 text-right">
+                                                    <div className="flex justify-end">
+                                                        <span className={`${darkMode ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30' : 'bg-indigo-50 text-indigo-600 border-indigo-200'} border px-1.5 py-0.5 rounded text-[9px] font-bold uppercase whitespace-nowrap`}>
+                                                            {task.siteName || 'Unknown'}
+                                                        </span>
+                                                    </div>
+                                                </td>
                                                 <td className="py-3 pl-2 text-right">
                                                     <span className={`inline-block px-1.5 py-0.5 border border-gray-600/30 rounded text-gray-400 text-[9px] uppercase font-mono whitespace-nowrap`}>
                                                         {task.clientName || task.clientType || 'N/A'}
@@ -595,9 +631,16 @@ const DashboardPage = ({ setActiveTab }) => {
                                         {item.item_title || 'Unknown'}
                                     </p>
                                     <div className="flex justify-between items-center text-[10px] text-gray-500">
-                                        <span className="bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded uppercase tracking-tighter truncate max-w-[70%]">
-                                            {item.task_name}
-                                        </span>
+                                        <div className="flex items-center gap-1.5 truncate max-w-[70%]">
+                                            <span className="bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded uppercase tracking-tighter truncate">
+                                                {item.task_name}
+                                            </span>
+                                            {item.site_name && (
+                                                <span className={`${darkMode ? 'text-indigo-400 opacity-80' : 'text-indigo-600'} text-[10px] font-bold`}>
+                                                    @{item.site_name}
+                                                </span>
+                                            )}
+                                        </div>
                                         <span className="font-mono flex-shrink-0">
                                             {item.finish_time ?
                                                 new Date(item.finish_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) :

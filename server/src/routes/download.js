@@ -12,7 +12,7 @@ const torrentFetcher = require('../utils/torrentFetcher');
 // Add torrent to client
 router.post('/', async (req, res) => {
     try {
-        let { clientId, torrentUrl, savePath, category, title } = req.body;
+        let { clientId, siteId, torrentUrl, savePath, category, title, size } = req.body;
 
         // Check if series subfolder creation is enabled
         if (savePath && title) {
@@ -92,26 +92,33 @@ router.post('/', async (req, res) => {
         if (authHeaders) {
             try {
                 const buffer = await torrentFetcher.fetchTorrentData(matchedSite, torrentUrl);
+                console.log(`[Download] Successfully fetched torrent data (${buffer.length} bytes)`);
 
                 try {
                     const parsed = parseTorrent(buffer);
                     torrentHash = parsed.infoHash;
                 } catch (e) {
-                    console.warn('Failed to parse torrent hash from buffer:', e.message);
+                    console.warn('[Download] Failed to parse torrent hash from buffer:', e.message);
                 }
 
                 const torrentBase64 = buffer.toString('base64');
+                console.log(`[Download] Sending torrent to downloader client: ${client.type} (${client.host})...`);
                 result = await downloaderService.addTorrentFromData(client, torrentBase64, options);
             } catch (fetchErr) {
-                console.error('Failed to fetch torrent with auth:', fetchErr.message);
-                // For M-Team errors, don't try fallback (it won't work)
+                console.error('[Download] Failed to process torrent with auth:', fetchErr.message);
+
+                // Detailed error for user
                 const isMTeamV2 = matchedSite && matchedSite.api_key &&
                     (matchedSite.url.includes('m-team.cc') || matchedSite.url.includes('m-team.io'));
 
                 if (isMTeamV2) {
-                    return res.status(500).json({ success: false, message: fetchErr.message });
+                    let friendlyMsg = fetchErr.message;
+                    if (friendlyMsg.includes('timeout')) friendlyMsg = 'M-Team 下载超时，请检查 API 连通性';
+                    return res.status(500).json({ success: false, message: `获取失败: ${friendlyMsg}` });
                 }
+
                 // Fallback: try sending URL directly (only for non-M-Team sites)
+                console.log('[Download] Attempting fallback to direct URL download...');
                 result = await downloaderService.addTorrent(client, torrentUrl, options);
             }
         } else {
@@ -141,8 +148,10 @@ router.post('/', async (req, res) => {
                     const sizeBytes = FormatUtils.parseSizeToBytes(size);
 
                     // For manual downloads, task_id is NULL
-                    db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, download_time, item_hash, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
-                        .run(null, torrentUrl, title, sizeBytes, timeUtils.getLocalISOString(), torrentHash, req.user.id);
+                    // site_id helps dashboard match the site for manual downloads
+                    const finalSiteId = siteId || matchedSite?.id || null;
+                    db.prepare('INSERT INTO task_history (task_id, site_id, item_guid, item_title, item_size, download_time, item_hash, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                        .run(null, finalSiteId, torrentUrl, title, sizeBytes, timeUtils.getLocalISOString(), torrentHash, req.user.id);
 
                     // Send notification
                     const notificationService = require('../services/notificationService');

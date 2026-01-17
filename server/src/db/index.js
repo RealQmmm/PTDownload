@@ -84,10 +84,20 @@ function initDB() {
       db.prepare('ALTER TABLE download_paths ADD COLUMN is_default INTEGER DEFAULT 0').run();
       console.log('Migrated download_paths: added is_default column');
     } catch (e) {
-      // Ignore "duplicate column name" error
       if (!e.message.includes('duplicate column name')) {
         console.error('Migration failed for download_paths:', e.message);
       }
+    }
+
+    // Migration: Add site_id to task_history if not exists
+    try {
+      const columns = db.prepare("PRAGMA table_info(task_history)").all();
+      if (columns.length > 0 && !columns.find(c => c.name === 'site_id')) {
+        db.prepare("ALTER TABLE task_history ADD COLUMN site_id INTEGER").run();
+        console.log("Migrated: Added site_id to task_history table");
+      }
+    } catch (migErr) {
+      console.error("Migration error (task_history):", migErr);
     }
   } catch (err) {
     console.error('Error connecting to database:', err);
@@ -167,6 +177,7 @@ function createTables() {
     CREATE TABLE IF NOT EXISTS task_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       task_id INTEGER,
+      site_id INTEGER,
       item_guid TEXT,
       item_title TEXT,
       item_hash TEXT,
@@ -255,6 +266,7 @@ function createTables() {
        tmdb_id TEXT,
        overview TEXT,
        total_episodes INTEGER DEFAULT 0,
+       check_interval INTEGER DEFAULT 0,
        FOREIGN KEY(rss_source_id) REFERENCES rss_sources(id),
        FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE SET NULL
     );
@@ -283,6 +295,37 @@ function createTables() {
       status TEXT, -- success, failed
       message TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS hot_resources (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      resource_hash TEXT UNIQUE,
+      site_id INTEGER,
+      title TEXT NOT NULL,
+      url TEXT,
+      download_url TEXT,
+      size INTEGER DEFAULT 0,
+      seeders INTEGER DEFAULT 0,
+      leechers INTEGER DEFAULT 0,
+      category TEXT,
+      promotion TEXT,
+      publish_time DATETIME,
+      hot_score INTEGER DEFAULT 0,
+      notified INTEGER DEFAULT 0,
+      downloaded INTEGER DEFAULT 0,
+      user_action TEXT, -- 'ignored', 'downloaded', 'pending'
+      detected_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(site_id) REFERENCES sites(id)
+    );
+    CREATE TABLE IF NOT EXISTS pwa_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      endpoint TEXT UNIQUE NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      device_name TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
   `;
@@ -360,6 +403,26 @@ function createTables() {
         include: ['series', 'tv', '剧集', 'soap', 'show', 'all', '综合', '聚合']
       })
     },
+    { key: 'hot_resources_enabled', value: 'false' },
+    { key: 'hot_resources_check_interval', value: '10' },
+    { key: 'hot_resources_auto_download', value: 'false' },
+    { key: 'hot_resources_default_client', value: '' },
+    {
+      key: 'hot_resources_rules', value: JSON.stringify({
+        minSeeders: 0, // Lowered from 20 since RSS often doesn't provide this
+        minLeechers: 0, // Lowered from 5 since RSS often doesn't provide this
+        minSize: 0,
+        maxSize: 0,
+        scoreThreshold: 30, // Lowered from 40 to account for new scoring
+        minPublishMinutes: 1440, // 24 hours
+        enabledSites: [],
+        categories: [],
+        keywords: [], // Users can add keywords they're interested in
+        excludeKeywords: [],
+        enabledPromotions: ['Free', '2xFree', '2x', '50%', '30%']
+      })
+    },
+    { key: 'notify_on_hot_resource', value: 'true' },
   ];
 
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
@@ -528,6 +591,12 @@ function createTables() {
   try {
     db.prepare("ALTER TABLE series_subscriptions ADD COLUMN douban_rating REAL DEFAULT 0").run();
     console.log('[Migration] Added douban_rating column to series_subscriptions table');
+  } catch (e) { /* Column might already exist */ }
+
+  // Migration for Check Interval (2026-01-16)
+  try {
+    db.prepare("ALTER TABLE series_subscriptions ADD COLUMN check_interval INTEGER DEFAULT 0").run();
+    console.log('[Migration] Added check_interval column to series_subscriptions table');
   } catch (e) { /* Column might already exist */ }
 
   // Final settings to ensure foreign keys

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../App';
+import { useTheme } from '../contexts/ThemeContext';
 import LogsPage from './LogsPage';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -9,7 +9,7 @@ import PathManager from '../components/PathManager';
 import CategoryMapEditor from '../components/CategoryMapEditor';
 
 const SettingsPage = () => {
-    const { darkMode, themeMode, setThemeMode, siteName, setSiteName, authenticatedFetch, user: me } = useTheme();
+    const { darkMode, themeMode, setThemeMode, siteName, setSiteName, authenticatedFetch, user: me, setHotResourcesEnabled } = useTheme();
     const [subTab, setSubTab] = useState('general');
     const [tempSiteName, setTempSiteName] = useState(siteName);
     const [logSettings, setLogSettings] = useState({
@@ -70,9 +70,32 @@ const SettingsPage = () => {
     // Create series subfolder
     const [createSeriesSubfolder, setCreateSeriesSubfolder] = useState(false);
 
-    // User management states
+    // Hot resources settings
+    const [hotResourcesSettings, setHotResourcesSettings] = useState({
+        enabled: false,
+        checkInterval: '10',
+        autoDownload: false,
+        defaultClient: '',
+        notifyEnabled: true,
+        enableSearchIntegration: false,
+        rules: {
+            minSeeders: 20,
+            minLeechers: 5,
+            minSize: 0,
+            maxSize: 0,
+            scoreThreshold: 40,
+            minPublishMinutes: 1440,
+            enabledSites: [],
+            categories: [],
+            keywords: [],
+            excludeKeywords: [],
+            enabledPromotions: ['Free', '2xFree', '50%']
+        }
+    });
+
     const [users, setUsers] = useState([]);
     const [currentUser, setCurrentUser] = useState(null);
+    const [showTmdbDetails, setShowTmdbDetails] = useState(false);
     const [showAddUserModal, setShowAddUserModal] = useState(false);
     const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -83,11 +106,23 @@ const SettingsPage = () => {
     const [showPermissionsModal, setShowPermissionsModal] = useState(false);
     const [selectedPermissions, setSelectedPermissions] = useState({ menus: [], settings: [] });
 
+    // Collapsible sections state
+    const [showLogSettings, setShowLogSettings] = useState(false);
+    const [showDashboardSettings, setShowDashboardSettings] = useState(false);
+    const [showPathManager, setShowPathManager] = useState(false);
+    const [showCategoryMap, setShowCategoryMap] = useState(false);
+    const [showCategoryManagement, setShowCategoryManagement] = useState(false);
+    const [showAutoCleanup, setShowAutoCleanup] = useState(false);
+    const [showThresholdHint, setShowThresholdHint] = useState(false);
+    const [showSearchMode, setShowSearchMode] = useState(false);
+    const [showReceiverSettings, setShowReceiverSettings] = useState(false);
+    const [showUserManagement, setShowUserManagement] = useState(false);
+
     // Handle subTab permission redirection
     useEffect(() => {
         if (me?.role !== 'admin') {
             const permissions = me?.permissions ? (typeof me.permissions === 'string' ? JSON.parse(me.permissions) : me.permissions) : null;
-            const allowedSettings = permissions?.settings || ['general', 'about'];
+            const allowedSettings = permissions?.settings || ['general', 'hot-resources', 'about'];
             if (!allowedSettings.includes(subTab)) {
                 if (allowedSettings.length > 0) {
                     setSubTab(allowedSettings[0]);
@@ -183,6 +218,17 @@ const SettingsPage = () => {
             setDefaultDownloadPath(data.default_download_path || '');
             setEnableMultiPath(data.enable_multi_path === 'true' || data.enable_multi_path === true);
             setCreateSeriesSubfolder(data.create_series_subfolder === 'true' || data.create_series_subfolder === true);
+
+            // Load hot resources settings
+            setHotResourcesSettings({
+                enabled: data.hot_resources_enabled === 'true',
+                checkInterval: data.hot_resources_check_interval || '10',
+                autoDownload: data.hot_resources_auto_download === 'true',
+                defaultClient: data.hot_resources_default_client || '',
+                notifyEnabled: data.notify_on_hot_resource !== 'false',
+                enableSearchIntegration: data.hot_resources_enable_search_integration === 'true' || data.hot_resources_enable_search_integration === true,
+                rules: data.hot_resources_rules ? (typeof data.hot_resources_rules === 'string' ? JSON.parse(data.hot_resources_rules) : data.hot_resources_rules) : hotResourcesSettings.rules
+            });
         } catch (err) {
             console.error('Fetch settings failed:', err);
         }
@@ -206,16 +252,20 @@ const SettingsPage = () => {
                     mteam_api_host: mteamApiHost,
                     dashboard_active_interval: dashboardActiveInterval,
                     dashboard_idle_interval: dashboardIdleInterval,
+                    hot_resources_enable_search_integration: hotResourcesSettings.enableSearchIntegration ? 'true' : 'false',
                     ...logSettings,
                     ...securitySettings,
                     ...tmdbSettings
                 })
             });
+            const data = await res.json();
             if (res.ok) {
+                setMessage({ type: 'success', text: '通用设置保存成功' });
                 setSiteName(tempSiteName);
-                setMessage({ type: 'success', text: '设置已保存' });
+                setHotResourcesEnabled(hotResourcesSettings.enableSearchIntegration);
+                setTimeout(() => setMessage(null), 3000);
             } else {
-                setMessage({ type: 'error', text: '保存失败' });
+                setMessage({ type: 'error', text: data.error || '保存失败' });
             }
         } catch (err) {
             setMessage({ type: 'error', text: '保存出错' });
@@ -244,6 +294,133 @@ const SettingsPage = () => {
             }
         } catch (err) {
             setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const handleSaveHotResources = async () => {
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await authenticatedFetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    hot_resources_enabled: hotResourcesSettings.enabled,
+                    hot_resources_check_interval: hotResourcesSettings.checkInterval,
+                    hot_resources_auto_download: hotResourcesSettings.autoDownload,
+                    hot_resources_default_client: hotResourcesSettings.defaultClient,
+                    notify_on_hot_resource: hotResourcesSettings.notifyEnabled ? 'true' : 'false',
+                    hot_resources_enable_search_integration: hotResourcesSettings.enableSearchIntegration ? 'true' : 'false',
+                    hot_resources_rules: typeof hotResourcesSettings.rules === 'string' ? hotResourcesSettings.rules : JSON.stringify(hotResourcesSettings.rules)
+                })
+            });
+            if (res.ok) {
+                setHotResourcesEnabled(hotResourcesSettings.enableSearchIntegration);
+                setMessage({ type: 'success', text: '热门资源设置已保存' });
+            } else {
+                setMessage({ type: 'error', text: '保存失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const subscribePWA = async () => {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+
+        if (!('serviceWorker' in navigator)) {
+            if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                setMessage({ type: 'error', text: '错误：PWA 推送必须在 HTTPS 安全环境下运行。检测到您正在使用 HTTP 访问，iOS 会禁用 Service Worker。' });
+            } else {
+                setMessage({ type: 'error', text: '您的浏览器不支持 Service Worker，请检查是否处于隐私模式或浏览器版本过低' });
+            }
+            return;
+        }
+
+        if (!('PushManager' in window)) {
+            if (isIOS && !isStandalone) {
+                setMessage({ type: 'error', text: 'iOS 用户请先点击分享按钮“添加到主屏幕”，然后从桌面打开应用再进行设置' });
+            } else if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+                setMessage({ type: 'error', text: '推送通知需要 HTTPS 环境，请检查您的访问方式' });
+            } else {
+                setMessage({ type: 'error', text: '您的浏览器不支持 PushManager，无法启用推送。如果您使用的是 iOS，请确保系统版本 ≥ 16.4' });
+            }
+            return;
+        }
+
+        try {
+            setSaving(true);
+            const registration = await navigator.serviceWorker.ready;
+
+            // Get public key from server
+            const vapidRes = await authenticatedFetch('/api/notifications/vapid-key');
+            const { publicKey } = await vapidRes.json();
+
+            const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(publicKey)
+            });
+
+            // Save to server
+            // Use a better device name detection if possible, or just user agent
+            const deviceName = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ?
+                (navigator.userAgent.match(/\(([^)]+)\)/)?.[1]?.split(';')[0] || 'Mobile Device') :
+                'Browser';
+
+            const res = await authenticatedFetch('/api/notifications/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    subscription,
+                    deviceName
+                })
+            });
+
+            if (res.ok) {
+                setMessage({ type: 'success', text: 'PWA 订阅成功' });
+            } else {
+                setMessage({ type: 'error', text: '订阅保存失败' });
+            }
+        } catch (err) {
+            console.error('PWA Subscription failed:', err);
+            setMessage({ type: 'error', text: '订阅失败: ' + err.message });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const urlBase64ToUint8Array = (base64String) => {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    };
+
+    const handleTestPWANotify = async () => {
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await authenticatedFetch('/api/notifications/test', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: data.message });
+            } else {
+                setMessage({ type: 'error', text: data.message || '发送失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求失败' });
         } finally {
             setSaving(false);
             setTimeout(() => setMessage(null), 3000);
@@ -917,106 +1094,17 @@ const SettingsPage = () => {
                         )}
 
                         <Card className="space-y-6">
-                            <div className="max-w-md">
-                                <Input
-                                    label="站点名称"
-                                    value={tempSiteName}
-                                    onChange={(e) => setTempSiteName(e.target.value)}
-                                    placeholder="PT Manager"
-                                />
-                                <p className={`text-[10px] ${textSecondary} mt-1`}>侧边栏顶部显示的名称</p>
-                            </div>
-
-                            <hr className={borderColor} />
-
-                            <div>
-                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>日志与站点设置</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
                                     <Input
-                                        label="日志保留天数"
-                                        type="number"
-                                        value={logSettings.log_retention_days}
-                                        onChange={(e) => setLogSettings({ ...logSettings, log_retention_days: e.target.value })}
-                                        placeholder="7"
+                                        label="站点名称"
+                                        value={tempSiteName}
+                                        onChange={(e) => setTempSiteName(e.target.value)}
+                                        placeholder="PT Manager"
                                     />
-                                    <Input
-                                        label="最大日志条数/任务"
-                                        type="number"
-                                        value={logSettings.log_max_count}
-                                        onChange={(e) => setLogSettings({ ...logSettings, log_max_count: e.target.value })}
-                                        placeholder="100"
-                                    />
-                                    <Input
-                                        label="站点数据检查间隔 (分钟)"
-                                        type="number"
-                                        min="5"
-                                        value={cookieCheckInterval}
-                                        onChange={(e) => setCookieCheckInterval(e.target.value)}
-                                        placeholder="60"
-                                    />
-                                    <Input
-                                        label="每日自动签到时间"
-                                        type="time"
-                                        value={checkinTime}
-                                        onChange={(e) => setCheckinTime(e.target.value)}
-                                    />
-                                    <Input
-                                        label="RSS 缓存时间 (秒)"
-                                        type="number"
-                                        min="60"
-                                        max="3600"
-                                        value={rssCacheTTL}
-                                        onChange={(e) => setRssCacheTTL(e.target.value)}
-                                    />
-                                    <div>
-                                        <Input
-                                            label="搜索超时重试次数"
-                                            type="number"
-                                            min="0"
-                                            max="3"
-                                            value={searchRetryCount}
-                                            onChange={(e) => setSearchRetryCount(e.target.value)}
-                                        />
-                                        <p className={`text-[10px] ${textSecondary} mt-1`}>
-                                            0=不重试（默认），1-3=重试次数
-                                        </p>
-                                    </div>
+                                    <p className={`text-[10px] ${textSecondary} mt-1`}>侧边栏顶部和页面标题显示的名称</p>
                                 </div>
-                            </div>
-
-                            <hr className={borderColor} />
-
-                            <div>
-                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>仪表盘刷新设置</h3>
-                                <p className={`text-xs ${textSecondary} mb-4`}>根据任务活跃状态智能调整数据刷新频率，减少不必要的请求</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <Input
-                                        label="活跃时刷新间隔 (秒)"
-                                        type="number"
-                                        min="5"
-                                        max="60"
-                                        value={dashboardActiveInterval}
-                                        onChange={(e) => setDashboardActiveInterval(e.target.value)}
-                                        placeholder="10"
-                                    />
-                                    <Input
-                                        label="空闲时刷新间隔 (秒)"
-                                        type="number"
-                                        min="10"
-                                        max="300"
-                                        value={dashboardIdleInterval}
-                                        onChange={(e) => setDashboardIdleInterval(e.target.value)}
-                                        placeholder="30"
-                                    />
-                                </div>
-                                <p className={`text-[10px] ${textSecondary} mt-2`}>活跃时：有任务正在上传或下载时的刷新间隔；空闲时：无活跃任务或无任何任务时的刷新间隔</p>
-                            </div>
-
-                            <hr className={borderColor} />
-
-                            <div>
-                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>安全设置</h3>
-                                <div className="max-w-xs">
+                                <div>
                                     <Input
                                         label="登录限流 (次/分钟)"
                                         type="number"
@@ -1025,90 +1113,291 @@ const SettingsPage = () => {
                                         value={securitySettings?.security_login_limit || '5'}
                                         onChange={(e) => setSecuritySettings({ ...securitySettings, security_login_limit: e.target.value })}
                                     />
+                                    <p className={`text-[10px] ${textSecondary} mt-1`}>防止账户被恶意破解的登录保护机制</p>
                                 </div>
                             </div>
 
                             <hr className={borderColor} />
 
                             <div>
-                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>搜索模式</h3>
-                                <div className="space-y-4">
-                                    <div>
-                                        <Input
-                                            label="搜索结果最大页数 (1-10)"
-                                            type="number"
-                                            min="1"
-                                            max="10"
-                                            value={searchLimit}
-                                            onChange={(e) => setSearchLimit(e.target.value)}
-                                            disabled={searchMode === 'rss'}
-                                            className={searchMode === 'rss' ? 'opacity-50 cursor-not-allowed' : ''}
-                                        />
-                                        {searchMode === 'rss' && <p className="text-xs text-yellow-500 mt-1">RSS 模式下不支持分页限制</p>}
-                                    </div>
+                                <div
+                                    className="flex items-center justify-between cursor-pointer group"
+                                    onClick={() => setShowLogSettings(!showLogSettings)}
+                                >
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                        <span className="mr-2">📋</span> 日志与站点设置
+                                    </h3>
+                                    <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                        {showLogSettings ? '收起配置 ▴' : '展开配置 ▾'}
+                                    </button>
+                                </div>
 
-                                    <div>
-                                        <label className={`block text-xs font-bold ${textSecondary} mb-2`}>搜索模式</label>
-                                        <div className="flex space-x-4">
-                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'browse' ? activeSelectionClass : borderColor} transition-colors flex-1`}>
-                                                <input
-                                                    type="radio"
-                                                    name="search_mode"
-                                                    value="browse"
-                                                    checked={searchMode === 'browse'}
-                                                    onChange={(e) => setSearchMode(e.target.value)}
-                                                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                                {showLogSettings ? (
+                                    <div className="space-y-4 mt-4 animate-in slide-in-from-top-2 duration-200">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <Input
+                                                label="日志保留天数"
+                                                type="number"
+                                                value={logSettings.log_retention_days}
+                                                onChange={(e) => setLogSettings({ ...logSettings, log_retention_days: e.target.value })}
+                                                placeholder="7"
+                                            />
+                                            <Input
+                                                label="最大日志条数/任务"
+                                                type="number"
+                                                value={logSettings.log_max_count}
+                                                onChange={(e) => setLogSettings({ ...logSettings, log_max_count: e.target.value })}
+                                                placeholder="100"
+                                            />
+                                            <Input
+                                                label="站点数据检查间隔 (分钟)"
+                                                type="number"
+                                                min="5"
+                                                value={cookieCheckInterval}
+                                                onChange={(e) => setCookieCheckInterval(e.target.value)}
+                                                placeholder="60"
+                                            />
+                                            <Input
+                                                label="每日自动签到时间"
+                                                type="time"
+                                                value={checkinTime}
+                                                onChange={(e) => setCheckinTime(e.target.value)}
+                                            />
+                                            <Input
+                                                label="RSS 缓存时间 (秒)"
+                                                type="number"
+                                                min="60"
+                                                max="3600"
+                                                value={rssCacheTTL}
+                                                onChange={(e) => setRssCacheTTL(e.target.value)}
+                                            />
+                                            <div>
+                                                <Input
+                                                    label="搜索超时重试次数"
+                                                    type="number"
+                                                    min="0"
+                                                    max="3"
+                                                    value={searchRetryCount}
+                                                    onChange={(e) => setSearchRetryCount(e.target.value)}
                                                 />
-                                                <div>
-                                                    <div className={`font-medium ${textPrimary}`}>网页解析 (默认)</div>
-                                                    <div className="text-xs text-gray-500">模拟浏览器访问搜索页面解析结果</div>
-                                                </div>
-                                            </label>
-                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'rss' ? activeSelectionClass : borderColor} transition-colors flex-1`}>
-                                                <input
-                                                    type="radio"
-                                                    name="search_mode"
-                                                    value="rss"
-                                                    checked={searchMode === 'rss'}
-                                                    onChange={(e) => setSearchMode(e.target.value)}
-                                                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                                                />
-                                                <div>
-                                                    <div className={`font-medium ${textPrimary}`}>RSS 订阅源</div>
-                                                    <div className="text-xs text-gray-500">使用 RSS 接口搜索，兼容性更好</div>
-                                                </div>
-                                            </label>
+                                                <p className={`text-[10px] ${textSecondary} mt-1`}>
+                                                    0=不重试（默认），1-3=重试次数
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            日志保留: {logSettings.log_retention_days}天
+                                        </div>
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            站点检查: {cookieCheckInterval}分钟
+                                        </div>
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            签到时间: {checkinTime}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <hr className={borderColor} />
 
                             <div>
-                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>TMDB 刮削设置</h3>
-                                <div className="space-y-4">
-                                    <Input
-                                        label="API Key"
-                                        value={tmdbSettings.tmdb_api_key}
-                                        onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_api_key: e.target.value })}
-                                        placeholder="例如: 107492d..."
-                                    />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <Input
-                                            label="API Base URL"
-                                            value={tmdbSettings.tmdb_base_url}
-                                            onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_base_url: e.target.value })}
-                                            placeholder="默认: https://api.themoviedb.org/3"
-                                        />
-                                        <Input
-                                            label="Image Base URL"
-                                            value={tmdbSettings.tmdb_image_base_url}
-                                            onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_image_base_url: e.target.value })}
-                                            placeholder="默认: https://image.tmdb.org/t/p/w300"
-                                        />
-                                    </div>
+                                <div
+                                    className="flex items-center justify-between cursor-pointer group"
+                                    onClick={() => setShowDashboardSettings(!showDashboardSettings)}
+                                >
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                        <span className="mr-2">📊</span> 仪表盘刷新设置
+                                    </h3>
+                                    <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                        {showDashboardSettings ? '收起配置 ▴' : '展开配置 ▾'}
+                                    </button>
                                 </div>
+
+                                {showDashboardSettings ? (
+                                    <div className="space-y-4 mt-4 animate-in slide-in-from-top-2 duration-200">
+                                        <p className={`text-xs ${textSecondary}`}>根据任务活跃状态智能调整数据刷新频率，减少不必要的请求</p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <Input
+                                                label="活跃时刷新间隔 (秒)"
+                                                type="number"
+                                                min="5"
+                                                max="60"
+                                                value={dashboardActiveInterval}
+                                                onChange={(e) => setDashboardActiveInterval(e.target.value)}
+                                                placeholder="10"
+                                            />
+                                            <Input
+                                                label="空闲时刷新间隔 (秒)"
+                                                type="number"
+                                                min="10"
+                                                max="300"
+                                                value={dashboardIdleInterval}
+                                                onChange={(e) => setDashboardIdleInterval(e.target.value)}
+                                                placeholder="30"
+                                            />
+                                        </div>
+                                        <p className={`text-[10px] ${textSecondary}`}>活跃时：有任务正在上传或下载时的刷新间隔；空闲时：无活跃任务或无任何任务时的刷新间隔</p>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            活跃: {dashboardActiveInterval}秒
+                                        </div>
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            空闲: {dashboardIdleInterval}秒
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+
+                            <hr className={borderColor} />
+
+                            <div>
+                                <div
+                                    className="flex items-center justify-between cursor-pointer group"
+                                    onClick={() => setShowSearchMode(!showSearchMode)}
+                                >
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                        <span className="mr-2">🔍</span> 搜索模式
+                                    </h3>
+                                    <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                        {showSearchMode ? '收起配置 ▴' : '展开配置 ▾'}
+                                    </button>
+                                </div>
+
+                                {showSearchMode ? (
+                                    <div className="space-y-4 mt-4 animate-in slide-in-from-top-2 duration-200">
+                                        <div>
+                                            <Input
+                                                label="搜索结果最大页数 (1-10)"
+                                                type="number"
+                                                min="1"
+                                                max="10"
+                                                value={searchLimit}
+                                                onChange={(e) => setSearchLimit(e.target.value)}
+                                                disabled={searchMode === 'rss'}
+                                                className={searchMode === 'rss' ? 'opacity-50 cursor-not-allowed' : ''}
+                                            />
+                                            {searchMode === 'rss' && <p className="text-xs text-yellow-500 mt-1">RSS 模式下不支持分页限制</p>}
+                                        </div>
+
+                                        <hr className={`${borderColor} opacity-50`} />
+
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex-1 mr-4">
+                                                <p className={`text-sm font-medium ${textPrimary}`}>显示资源评分</p>
+                                                <p className={`text-xs ${textSecondary}`}>开启后对搜索结果进行智能评分，并显示得分与风险标签</p>
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                checked={hotResourcesSettings.enableSearchIntegration}
+                                                onChange={(e) => setHotResourcesSettings(prev => ({ ...prev, enableSearchIntegration: e.target.checked }))}
+                                                className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500 cursor-pointer"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className={`block text-xs font-bold ${textSecondary} mb-2`}>搜索模式</label>
+                                            <div className="flex space-x-4">
+                                                <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'browse' ? activeSelectionClass : borderColor} transition-colors flex-1`}>
+                                                    <input
+                                                        type="radio"
+                                                        name="search_mode"
+                                                        value="browse"
+                                                        checked={searchMode === 'browse'}
+                                                        onChange={(e) => setSearchMode(e.target.value)}
+                                                        className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    <div>
+                                                        <div className={`font-medium ${textPrimary}`}>网页解析 (默认)</div>
+                                                        <div className="text-xs text-gray-500">模拟浏览器访问搜索页面解析结果</div>
+                                                    </div>
+                                                </label>
+                                                <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'rss' ? activeSelectionClass : borderColor} transition-colors flex-1`}>
+                                                    <input
+                                                        type="radio"
+                                                        name="search_mode"
+                                                        value="rss"
+                                                        checked={searchMode === 'rss'}
+                                                        onChange={(e) => setSearchMode(e.target.value)}
+                                                        className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    <div>
+                                                        <div className={`font-medium ${textPrimary}`}>RSS 订阅源</div>
+                                                        <div className="text-xs text-gray-500">使用 RSS 接口搜索，兼容性更好</div>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            最大页数: {searchLimit}
+                                        </div>
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                                            模式: {searchMode === 'rss' ? 'RSS 订阅' : '网页解析'}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <hr className={borderColor} />
+
+                            <div>
+                                <div
+                                    className="flex items-center justify-between cursor-pointer group"
+                                    onClick={() => setShowTmdbDetails(!showTmdbDetails)}
+                                >
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                        <span className="mr-2">🎬</span> TMDB 刮削设置
+                                    </h3>
+                                    <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                        {showTmdbDetails ? '收起配置 ▴' : '展开配置 ▾'}
+                                    </button>
+                                </div>
+
+                                {showTmdbDetails ? (
+                                    <div className="space-y-4 mt-4 animate-in slide-in-from-top-2 duration-200">
+                                        <Input
+                                            label="API Key"
+                                            value={tmdbSettings.tmdb_api_key}
+                                            onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_api_key: e.target.value })}
+                                            placeholder="例如: 107492d..."
+                                        />
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <Input
+                                                label="API Base URL"
+                                                value={tmdbSettings.tmdb_base_url}
+                                                onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_base_url: e.target.value })}
+                                                placeholder="默认: https://api.themoviedb.org/3"
+                                            />
+                                            <Input
+                                                label="Image Base URL"
+                                                value={tmdbSettings.tmdb_image_base_url}
+                                                onChange={(e) => setTmdbSettings({ ...tmdbSettings, tmdb_image_base_url: e.target.value })}
+                                                placeholder="默认: https://image.tmdb.org/t/p/w300"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 flex items-center space-x-2">
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${tmdbSettings.tmdb_api_key ? (darkMode ? 'bg-green-500/10 text-green-400' : 'bg-green-50 text-green-600') : (darkMode ? 'bg-gray-800 text-gray-500' : 'bg-gray-100 text-gray-400')}`}>
+                                            {tmdbSettings.tmdb_api_key
+                                                ? `KEY: ${tmdbSettings.tmdb_api_key.substring(0, 4)}••••${tmdbSettings.tmdb_api_key.slice(-4)}`
+                                                : '未配置 API Key'}
+                                        </div>
+                                        {tmdbSettings.tmdb_base_url && tmdbSettings.tmdb_base_url !== 'https://api.themoviedb.org/3' && (
+                                            <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                                                自定义代理
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </Card>
 
@@ -1165,7 +1454,17 @@ const SettingsPage = () => {
 
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center mb-2">
-                                    <label className={`block text-xs font-bold ${textSecondary} uppercase tracking-wider`}>通知接收端 ({notifySettings.notification_receivers.length})</label>
+                                    <div
+                                        className="flex items-center space-x-2 cursor-pointer group flex-1"
+                                        onClick={() => setShowReceiverSettings(!showReceiverSettings)}
+                                    >
+                                        <label className={`block text-xs font-bold ${textSecondary} uppercase tracking-wider cursor-pointer`}>
+                                            通知接收端 ({notifySettings.notification_receivers.length})
+                                        </label>
+                                        <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} transition-colors`}>
+                                            {showReceiverSettings ? '收起配置 ▴' : '展开配置 ▾'}
+                                        </button>
+                                    </div>
                                     <Button
                                         size="xs"
                                         onClick={() => {
@@ -1181,94 +1480,162 @@ const SettingsPage = () => {
                                                 ...notifySettings,
                                                 notification_receivers: [...notifySettings.notification_receivers, newReceiver]
                                             });
+                                            setShowReceiverSettings(true);
                                         }}
                                     >
                                         + 添加接收端
                                     </Button>
                                 </div>
 
-                                <div className="space-y-4">
-                                    {notifySettings.notification_receivers.map((receiver, index) => (
-                                        <div key={receiver.id} className={`p-4 rounded-lg border ${borderColor} ${darkMode ? 'bg-gray-800/30' : 'bg-gray-50'}`}>
-                                            {/* 第一行：类型、备注、URL */}
-                                            <div className="flex flex-col lg:flex-row gap-2 mb-3">
-                                                {/* 类型选择 */}
-                                                <Select
-                                                    value={receiver.type}
-                                                    onChange={(e) => {
-                                                        const updated = [...notifySettings.notification_receivers];
-                                                        updated[index].type = e.target.value;
-                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                    }}
-                                                    containerClassName="w-full lg:w-32 flex-shrink-0"
-                                                >
-                                                    <option value="bark">Bark</option>
-                                                    <option value="webhook">Webhook</option>
-                                                </Select>
-
-                                                {/* 备注名称 */}
-                                                <Input
-                                                    value={receiver.name}
-                                                    onChange={(e) => {
-                                                        const updated = [...notifySettings.notification_receivers];
-                                                        updated[index].name = e.target.value;
-                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                    }}
-                                                    placeholder="备注名称"
-                                                    containerClassName="w-full lg:w-48 flex-shrink-0"
-                                                />
-
-                                                {/* URL */}
-                                                <Input
-                                                    value={receiver.url}
-                                                    onChange={(e) => {
-                                                        const updated = [...notifySettings.notification_receivers];
-                                                        updated[index].url = e.target.value;
-                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                    }}
-                                                    placeholder={receiver.type === 'bark' ? "https://api.day.app/Key" : "https://example.com/api"}
-                                                    containerClassName="flex-1 min-w-0"
-                                                />
-
-                                                {/* 删除按钮 */}
-                                                <Button
-                                                    variant="danger"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        const updated = notifySettings.notification_receivers.filter((_, i) => i !== index);
-                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                    }}
-                                                    className="flex-shrink-0"
-                                                >
-                                                    🗑️
-                                                </Button>
-                                            </div>
-
-                                            {/* 第二行：Webhook Method（仅 Webhook 类型显示） */}
-                                            {receiver.type === 'webhook' && (
-                                                <div className="flex items-center space-x-2">
-                                                    <span className={`text-xs ${textSecondary} w-16`}>Method:</span>
+                                {showReceiverSettings ? (
+                                    <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
+                                        {notifySettings.notification_receivers.map((receiver, index) => (
+                                            <div key={receiver.id} className={`p-4 rounded-lg border ${borderColor} ${darkMode ? 'bg-gray-800/30' : 'bg-gray-50'}`}>
+                                                {/* 第一行：类型、备注、URL */}
+                                                <div className="flex flex-col lg:flex-row gap-2 mb-3">
+                                                    {/* 类型选择 */}
                                                     <Select
-                                                        value={receiver.method || 'GET'}
+                                                        value={receiver.type}
                                                         onChange={(e) => {
                                                             const updated = [...notifySettings.notification_receivers];
-                                                            updated[index].method = e.target.value;
+                                                            updated[index].type = e.target.value;
                                                             setNotifySettings({ ...notifySettings, notification_receivers: updated });
                                                         }}
-                                                        className="w-24"
+                                                        containerClassName="w-full lg:w-32 flex-shrink-0"
                                                     >
-                                                        <option value="GET">GET</option>
-                                                        <option value="POST">POST</option>
+                                                        <option value="bark">Bark</option>
+                                                        <option value="webhook">Webhook</option>
                                                     </Select>
+
+                                                    {/* 备注名称 */}
+                                                    <Input
+                                                        value={receiver.name}
+                                                        onChange={(e) => {
+                                                            const updated = [...notifySettings.notification_receivers];
+                                                            updated[index].name = e.target.value;
+                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                        }}
+                                                        placeholder="备注名称"
+                                                        containerClassName="w-full lg:w-48 flex-shrink-0"
+                                                    />
+
+                                                    {/* URL */}
+                                                    <Input
+                                                        value={receiver.url}
+                                                        onChange={(e) => {
+                                                            const updated = [...notifySettings.notification_receivers];
+                                                            updated[index].url = e.target.value;
+                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                        }}
+                                                        placeholder={receiver.type === 'bark' ? "https://api.day.app/Key" : "https://example.com/api"}
+                                                        containerClassName="flex-1 min-w-0"
+                                                    />
+
+                                                    {/* 删除按钮 */}
+                                                    <Button
+                                                        variant="danger"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const updated = notifySettings.notification_receivers.filter((_, i) => i !== index);
+                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                        }}
+                                                        className="flex-shrink-0"
+                                                    >
+                                                        🗑️
+                                                    </Button>
                                                 </div>
-                                            )}
+
+                                                {/* 第二行：Webhook Method（仅 Webhook 类型显示） */}
+                                                {receiver.type === 'webhook' && (
+                                                    <div className="flex items-center space-x-2">
+                                                        <span className={`text-xs ${textSecondary} w-16`}>Method:</span>
+                                                        <Select
+                                                            value={receiver.method || 'GET'}
+                                                            onChange={(e) => {
+                                                                const updated = [...notifySettings.notification_receivers];
+                                                                updated[index].method = e.target.value;
+                                                                setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                            }}
+                                                            className="w-24"
+                                                        >
+                                                            <option value="GET">GET</option>
+                                                            <option value="POST">POST</option>
+                                                        </Select>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                        {notifySettings.notification_receivers.length === 0 && (
+                                            <div className={`text-center py-8 text-xs ${textSecondary} border border-dashed ${borderColor} rounded-lg`}>
+                                                暂无通知接收端，请点击上方“添加”按钮。
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                        {notifySettings.notification_receivers.length > 0 ? (
+                                            notifySettings.notification_receivers.map(r => (
+                                                <div key={r.id} className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                                    [{r.type.toUpperCase()}] {r.name}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className={`text-[10px] ${textSecondary}`}>未配置接收端</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            <hr className={borderColor} />
+
+                            <div className="space-y-4">
+                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                    <span className="mr-2">📱</span> PWA 手机原生通知
+                                </h3>
+                                <div className={`p-4 rounded-lg ${darkMode ? 'bg-indigo-500/10' : 'bg-indigo-50'} border ${darkMode ? 'border-indigo-500/20' : 'border-indigo-200'}`}>
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                        <div className="space-y-1">
+                                            <p className={`text-xs ${textPrimary} font-bold flex items-center gap-2`}>
+                                                浏览器原生推送 (Web Push)
+                                                {/iPhone|iPad|iPod/.test(navigator.userAgent) && !window.navigator.standalone && (
+                                                    <span className="bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded text-[10px] animate-pulse">推荐使用 PWA</span>
+                                                )}
+                                            </p>
+                                            <p className={`text-[11px] ${textSecondary} leading-relaxed max-w-xl`}>
+                                                无需 Bark 或 Webhook，直接在手机浏览器或 PWA 模式下接收系统推送。
+                                                {window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && (
+                                                    <span className="text-red-500 font-bold block mt-1">
+                                                        ⚠️ 警告：当前正在通过 HTTP 访问，iOS 会禁用 Service Worker。必须使用 HTTPS 才能启用推送。
+                                                    </span>
+                                                )}
+                                                {/iPhone|iPad|iPod/.test(navigator.userAgent) ? (
+                                                    <span className="text-amber-500/80 font-medium block mt-1">
+                                                        iOS 提示：请点击 Safari 底部分享按钮“添加到主屏幕”，然后从桌面打开以启用推送。
+                                                    </span>
+                                                ) : (
+                                                    "iOS 用户需先“添加到主屏幕”后开启。"
+                                                )}
+                                            </p>
                                         </div>
-                                    ))}
-                                    {notifySettings.notification_receivers.length === 0 && (
-                                        <div className={`text-center py-8 text-xs ${textSecondary} border border-dashed ${borderColor} rounded-lg`}>
-                                            暂无通知接收端，请点击上方“添加”按钮。
+                                        <div className="flex gap-2 shrink-0">
+                                            <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                onClick={handleTestPWANotify}
+                                                disabled={saving}
+                                            >
+                                                测试推送
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                onClick={subscribePWA}
+                                                disabled={saving}
+                                                className="bg-indigo-600 hover:bg-indigo-700 text-white border-none"
+                                            >
+                                                🔔 立即订阅
+                                            </Button>
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -1393,68 +1760,102 @@ const SettingsPage = () => {
                             <hr className={borderColor} />
 
                             <div className="space-y-4">
-                                <div className="flex items-center justify-between">
+                                <div
+                                    className="flex items-center justify-between cursor-pointer group"
+                                    onClick={() => setShowAutoCleanup(!showAutoCleanup)}
+                                >
                                     <div>
                                         <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
                                             <span className="mr-2">🧹</span> 自动清理 (实验性)
                                         </h3>
                                         <p className={`text-xs ${textSecondary} mt-1`}>
-                                            根据分享率或做种时间自动删除下载器中的任务和文件。
+                                            根据分享率或做种时间自动删除下载器中的任务和文件
                                         </p>
                                     </div>
-                                    <button
-                                        onClick={() => handleSaveCleanup(!cleanupSettings.cleanup_enabled)}
-                                        className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${cleanupSettings.cleanup_enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
-                                    >
-                                        <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${cleanupSettings.cleanup_enabled ? 'left-6.5' : 'left-0.5'}`} />
-                                    </button>
+                                    <div className="flex items-center gap-3">
+                                        <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                            {showAutoCleanup ? '收起配置 ▴' : '展开配置 ▾'}
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleSaveCleanup(!cleanupSettings.cleanup_enabled);
+                                            }}
+                                            className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${cleanupSettings.cleanup_enabled ? 'bg-blue-600' : 'bg-gray-300'}`}
+                                        >
+                                            <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${cleanupSettings.cleanup_enabled ? 'left-6.5' : 'left-0.5'}`} />
+                                        </button>
+                                    </div>
                                 </div>
 
-                                <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-100/50'} border ${borderColor}`}>
-                                    <div>
-                                        <Input
-                                            label="最小分享率"
-                                            type="number"
-                                            step="0.1"
-                                            value={cleanupSettings.cleanup_min_ratio}
-                                            onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_min_ratio: e.target.value })}
-                                        />
-                                        <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此分享率时删除</p>
-                                    </div>
-                                    <div>
-                                        <Input
-                                            label="最长做种时间 (小时)"
-                                            type="number"
-                                            value={cleanupSettings.cleanup_max_seeding_time}
-                                            onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_max_seeding_time: e.target.value })}
-                                        />
-                                        <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此时间时删除 ({(cleanupSettings.cleanup_max_seeding_time / 24).toFixed(1)} 天)</p>
-                                    </div>
-                                    <div className="md:col-span-2 space-y-2">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <label className={`block text-xs font-bold ${textSecondary} uppercase`}>同时删除文件</label>
-                                                <p className={`text-[10px] ${textSecondary}`}>如果关闭，仅移除下载器中的任务，保留硬盘上的文件</p>
+                                {showAutoCleanup ? (
+                                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-lg ${darkMode ? 'bg-gray-900/50' : 'bg-gray-100/50'} border ${borderColor} animate-in slide-in-from-top-2 duration-200`}>
+                                        <div>
+                                            <Input
+                                                label="最小分享率"
+                                                type="number"
+                                                step="0.1"
+                                                value={cleanupSettings.cleanup_min_ratio}
+                                                onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_min_ratio: e.target.value })}
+                                            />
+                                            <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此分享率时删除</p>
+                                        </div>
+                                        <div>
+                                            <Input
+                                                label="最长做种时间 (小时)"
+                                                type="number"
+                                                value={cleanupSettings.cleanup_max_seeding_time}
+                                                onChange={(e) => setCleanupSettings({ ...cleanupSettings, cleanup_max_seeding_time: e.target.value })}
+                                            />
+                                            <p className={`text-[10px] ${textSecondary} mt-1`}>大于等于此时间时删除 ({(cleanupSettings.cleanup_max_seeding_time / 24).toFixed(1)} 天)</p>
+                                        </div>
+                                        <div className="md:col-span-2 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <label className={`block text-xs font-bold ${textSecondary} uppercase`}>同时删除文件</label>
+                                                    <p className={`text-[10px] ${textSecondary}`}>如果关闭，仅移除下载器中的任务，保留硬盘上的文件</p>
+                                                </div>
+                                                <button
+                                                    onClick={() => setCleanupSettings({ ...cleanupSettings, cleanup_delete_files: !cleanupSettings.cleanup_delete_files })}
+                                                    className={`relative inline-block w-10 h-5 transition duration-200 ease-in-out rounded-full cursor-pointer ${cleanupSettings.cleanup_delete_files ? 'bg-red-500' : 'bg-gray-300'}`}
+                                                >
+                                                    <span className={`absolute top-0.5 inline-block w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${cleanupSettings.cleanup_delete_files ? 'left-5.5' : 'left-0.5'}`} />
+                                                </button>
                                             </div>
-                                            <button
-                                                onClick={() => setCleanupSettings({ ...cleanupSettings, cleanup_delete_files: !cleanupSettings.cleanup_delete_files })}
-                                                className={`relative inline-block w-10 h-5 transition duration-200 ease-in-out rounded-full cursor-pointer ${cleanupSettings.cleanup_delete_files ? 'bg-red-500' : 'bg-gray-300'}`}
+                                        </div>
+                                        <div className="md:col-span-2 pt-2">
+                                            <Button
+                                                variant="secondary"
+                                                onClick={handleSaveCleanupConfig}
+                                                disabled={saving}
+                                                className="w-full text-blue-600 dark:text-blue-400"
                                             >
-                                                <span className={`absolute top-0.5 inline-block w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${cleanupSettings.cleanup_delete_files ? 'left-5.5' : 'left-0.5'}`} />
-                                            </button>
+                                                保存清理策略
+                                            </Button>
                                         </div>
                                     </div>
-                                    <div className="md:col-span-2 pt-2">
-                                        <Button
-                                            variant="secondary"
-                                            onClick={handleSaveCleanupConfig}
-                                            disabled={saving}
-                                            className="w-full text-blue-600 dark:text-blue-400"
-                                        >
-                                            保存清理策略
-                                        </Button>
+                                ) : (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            状态: {cleanupSettings.cleanup_enabled ? '已启用' : '已禁用'}
+                                        </div>
+                                        {cleanupSettings.cleanup_enabled && (
+                                            <>
+                                                <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                                    分享率 ≥ {cleanupSettings.cleanup_min_ratio}
+                                                </div>
+                                                <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                                    时间 ≥ {(cleanupSettings.cleanup_max_seeding_time / 24).toFixed(1)}天
+                                                </div>
+                                                {cleanupSettings.cleanup_delete_files && (
+                                                    <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-red-500/10 text-red-400' : 'bg-red-50 text-red-600'}`}>
+                                                        删除文件
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
                                     </div>
-                                </div>
+                                )}
                             </div>
 
                             <hr className={borderColor} />
@@ -1581,110 +1982,130 @@ const SettingsPage = () => {
                         {/* User Management - Admin Only */}
                         {currentUser?.role === 'admin' && (
                             <Card className="space-y-4">
-                                <div className="flex items-center justify-between">
+                                <div
+                                    className="flex items-center justify-between cursor-pointer group"
+                                    onClick={() => setShowUserManagement(!showUserManagement)}
+                                >
                                     <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
                                         <span className="mr-2">👥</span> 用户管理
                                     </h3>
-                                    <Button size="sm" onClick={() => setShowAddUserModal(true)}>
-                                        + 添加用户
-                                    </Button>
+                                    <div className="flex items-center gap-3">
+                                        <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                            {showUserManagement ? '收起配置 ▴' : '展开配置 ▾'}
+                                        </button>
+                                        <Button
+                                            size="sm"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setShowAddUserModal(true);
+                                            }}
+                                        >
+                                            + 添加用户
+                                        </Button>
+                                    </div>
                                 </div>
 
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className={`border-b ${borderColor}`}>
-                                                <th className={`text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>用户名</th>
-                                                <th className={`text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>角色</th>
-                                                <th className={`hidden sm:table-cell text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>创建时间</th>
-                                                <th className={`text-right py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>操作</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {users.map(user => (
-                                                <tr key={user.id} className={`border-b ${borderColor} ${darkMode ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50'}`}>
-                                                    <td className={`py-3 px-2 ${textPrimary} whitespace-nowrap md:whitespace-normal`}>
-                                                        <div className="flex items-center space-x-2">
-                                                            <div className={`w-8 h-8 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center text-xs shrink-0`}>
-                                                                {user.username.charAt(0).toUpperCase()}
-                                                            </div>
-                                                            <span className="truncate max-w-[100px] sm:max-w-none">{user.username}</span>
-                                                            {user.id === me?.id && (
-                                                                <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 shrink-0">当前</span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-3 px-2">
-                                                        <div className="flex flex-col space-y-1">
-                                                            <span className={`px-2 py-0.5 rounded text-xs w-fit ${user.role === 'admin'
-                                                                ? 'bg-purple-500/20 text-purple-400'
-                                                                : 'bg-gray-500/20 text-gray-400'
-                                                                }`}>
-                                                                {user.role === 'admin' ? '管理员' : '普通用户'}
-                                                            </span>
-                                                            {user.enabled === 0 && (
-                                                                <span className="px-2 py-0.5 rounded text-[10px] w-fit bg-rose-500/20 text-rose-500">
-                                                                    已禁用
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className={`hidden sm:table-cell py-3 px-2 ${textSecondary} text-xs whitespace-nowrap`}>
-                                                        {(() => {
-                                                            if (!user.created_at) return '-';
-                                                            const date = new Date(user.created_at);
-                                                            return isNaN(date.getTime()) ? user.created_at : date.toLocaleString();
-                                                        })()}
-                                                    </td>
-                                                    <td className="py-3 px-2 text-right whitespace-nowrap">
-                                                        {user.id !== currentUser?.id && (
-                                                            <div className="flex items-center justify-end space-x-2">
-                                                                <button
-                                                                    onClick={() => handleOpenPermissions(user)}
-                                                                    className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-blue-900/30 hover:bg-blue-900/50' : 'bg-blue-100 hover:bg-blue-200'} text-blue-500`}
-                                                                    disabled={saving}
-                                                                >
-                                                                    权限
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleToggleRole(user.id, user.role)}
-                                                                    className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'} ${textSecondary}`}
-                                                                    disabled={saving}
-                                                                >
-                                                                    {user.role === 'admin' ? '降为用户' : '升为管理员'}
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleToggleUserStatus(user.id, user.enabled)}
-                                                                    className={`text-xs px-2 py-1 rounded ${user.enabled === 1 ? 'bg-orange-900/10 text-orange-500 hover:bg-orange-900/20' : 'bg-emerald-900/10 text-emerald-500 hover:bg-emerald-900/20'}`}
-                                                                    disabled={saving || user.id === me?.id}
-                                                                >
-                                                                    {user.enabled === 1 ? '禁用' : '启用'}
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setSelectedUser(user);
-                                                                        setShowResetPasswordModal(true);
-                                                                    }}
-                                                                    className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-yellow-900/30 hover:bg-yellow-900/50' : 'bg-yellow-100 hover:bg-yellow-200'} text-yellow-500`}
-                                                                    disabled={saving}
-                                                                >
-                                                                    重置密码
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleDeleteUser(user.id, user.username)}
-                                                                    className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-red-900/30 hover:bg-red-900/50' : 'bg-red-100 hover:bg-red-200'} text-red-500`}
-                                                                    disabled={saving}
-                                                                >
-                                                                    删除
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </td>
+                                {showUserManagement ? (
+                                    <div className="overflow-x-auto animate-in slide-in-from-top-2 duration-200">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className={`border-b ${borderColor}`}>
+                                                    <th className={`text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>用户名</th>
+                                                    <th className={`text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>角色</th>
+                                                    <th className={`hidden sm:table-cell text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>创建时间</th>
+                                                    <th className={`text-right py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>操作</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                            </thead>
+                                            <tbody>
+                                                {users.map(user => (
+                                                    <tr key={user.id} className={`border-b ${borderColor} ${darkMode ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50'}`}>
+                                                        <td className={`py-3 px-2 ${textPrimary} whitespace-nowrap md:whitespace-normal`}>
+                                                            <div className="flex items-center space-x-2">
+                                                                <div className={`w-8 h-8 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center text-xs shrink-0`}>
+                                                                    {user.username.charAt(0).toUpperCase()}
+                                                                </div>
+                                                                <span className="truncate max-w-[100px] sm:max-w-none">{user.username}</span>
+                                                                {user.id === me?.id && (
+                                                                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 shrink-0">当前</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-2">
+                                                            <div className="flex flex-col space-y-1">
+                                                                <span className={`px-2 py-0.5 rounded text-xs w-fit ${user.role === 'admin'
+                                                                    ? 'bg-purple-500/20 text-purple-400'
+                                                                    : 'bg-gray-500/20 text-gray-400'
+                                                                    }`}>
+                                                                    {user.role === 'admin' ? '管理员' : '普通用户'}
+                                                                </span>
+                                                                {user.enabled === 0 && (
+                                                                    <span className="px-2 py-0.5 rounded text-[10px] w-fit bg-rose-500/20 text-rose-500">
+                                                                        已禁用
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className={`hidden sm:table-cell py-3 px-2 ${textSecondary} text-xs whitespace-nowrap`}>
+                                                            {(() => {
+                                                                if (!user.created_at) return '-';
+                                                                const date = new Date(user.created_at);
+                                                                return isNaN(date.getTime()) ? user.created_at : date.toLocaleString();
+                                                            })()}
+                                                        </td>
+                                                        <td className="py-3 px-2 text-right whitespace-nowrap">
+                                                            {user.id !== currentUser?.id && (
+                                                                <div className="flex items-center justify-end space-x-2">
+                                                                    <button
+                                                                        onClick={() => handleOpenPermissions(user)}
+                                                                        className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-blue-900/30 hover:bg-blue-900/50' : 'bg-blue-100 hover:bg-blue-200'} text-blue-500`}
+                                                                        disabled={saving}
+                                                                    >
+                                                                        权限
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleToggleRole(user.id, user.role)}
+                                                                        className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'} ${textSecondary}`}
+                                                                        disabled={saving}
+                                                                    >
+                                                                        {user.role === 'admin' ? '降为用户' : '升为管理员'}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleToggleUserStatus(user.id, user.enabled)}
+                                                                        className={`text-xs px-2 py-1 rounded ${user.enabled === 1 ? 'bg-orange-900/10 text-orange-500 hover:bg-orange-900/20' : 'bg-emerald-900/10 text-emerald-500 hover:bg-emerald-900/20'}`}
+                                                                        disabled={saving || user.id === me?.id}
+                                                                    >
+                                                                        {user.enabled === 1 ? '禁用' : '启用'}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setSelectedUser(user);
+                                                                            setShowResetPasswordModal(true);
+                                                                        }}
+                                                                        className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-yellow-900/30 hover:bg-yellow-900/50' : 'bg-yellow-100 hover:bg-yellow-200'} text-yellow-500`}
+                                                                        disabled={saving}
+                                                                    >
+                                                                        重置密码
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDeleteUser(user.id, user.username)}
+                                                                        className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-red-900/30 hover:bg-red-900/50' : 'bg-red-100 hover:bg-red-200'} text-red-500`}
+                                                                        disabled={saving}
+                                                                    >
+                                                                        删除
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 text-xs text-gray-400">
+                                        共有 {users.length} 名注册用户
+                                    </div>
+                                )}
                             </Card>
                         )}
 
@@ -2007,7 +2428,27 @@ const SettingsPage = () => {
                             <>
                                 {/* 2. 路径管理 */}
                                 <Card>
-                                    <PathManager />
+                                    <div
+                                        className="flex items-center justify-between cursor-pointer group mb-4"
+                                        onClick={() => setShowPathManager(!showPathManager)}
+                                    >
+                                        <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                            <span className="mr-2">📁</span> 路径管理
+                                        </h3>
+                                        <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                            {showPathManager ? '收起配置 ▴' : '展开配置 ▾'}
+                                        </button>
+                                    </div>
+
+                                    {showPathManager ? (
+                                        <div className="animate-in slide-in-from-top-2 duration-200">
+                                            <PathManager />
+                                        </div>
+                                    ) : (
+                                        <div className={`text-xs ${textSecondary}`}>
+                                            点击展开以管理下载路径
+                                        </div>
+                                    )}
                                 </Card>
 
                                 {/* 3. 智能分类管理开关 */}
@@ -2034,77 +2475,101 @@ const SettingsPage = () => {
 
                                     {/* 智能分类管理的子选项 */}
                                     {enableCategoryManagement && (
-                                        <div className={`mt-4 pt-4 border-t ${borderColor} space-y-3`}>
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className={`text-sm ${textPrimary}`}>类型精确匹配</p>
-                                                    <p className={`text-xs ${textSecondary}`}>优先使用 PT 站点提供的类型字段匹配</p>
-                                                </div>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={matchByCategory}
-                                                    onChange={(e) => handleToggleAutoDownloadOption('match_by_category', e.target.checked)}
-                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                                    disabled={saving}
-                                                />
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className={`text-sm ${textPrimary}`}>关键词评分匹配</p>
-                                                    <p className={`text-xs ${textSecondary}`}>根据标题关键词模糊匹配</p>
-                                                </div>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={matchByKeyword}
-                                                    onChange={(e) => handleToggleAutoDownloadOption('match_by_keyword', e.target.checked)}
-                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                                    disabled={saving}
-                                                />
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className={`text-sm ${textPrimary}`}>使用默认路径兜底</p>
-                                                    <p className={`text-xs ${textSecondary}`}>如果未匹配到类型，使用标记为默认的路径</p>
-                                                </div>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={fallbackToDefaultPath}
-                                                    onChange={(e) => handleToggleAutoDownloadOption('fallback_to_default_path', e.target.checked)}
-                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                                    disabled={saving}
-                                                />
-                                            </div>
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className={`text-sm ${textPrimary}`}>使用下载器默认路径</p>
-                                                    <p className={`text-xs ${textSecondary}`}>当所有规则都不匹配时，不指定路径</p>
-                                                </div>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={useDownloaderDefault}
-                                                    onChange={(e) => handleToggleAutoDownloadOption('use_downloader_default', e.target.checked)}
-                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                                                    disabled={saving}
-                                                />
-                                            </div>
-
-                                            {/* 一键下载 */}
-                                            <div className="flex items-center justify-between">
-                                                <div>
-                                                    <p className={`text-sm ${textPrimary} font-bold`}>⚡ 一键下载</p>
-                                                    <p className={`text-xs ${textSecondary}`}>开启后，点击下载将无需弹出多路劲选择框</p>
-                                                </div>
-                                                <button
-                                                    onClick={() => handleToggleAutoDownload(!autoDownloadEnabled)}
-                                                    disabled={saving}
-                                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${autoDownloadEnabled ? 'bg-blue-600' : 'bg-gray-300'
-                                                        } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        <>
+                                            <div className={`mt-4 pt-4 border-t ${borderColor}`}>
+                                                <div
+                                                    className="flex items-center justify-between cursor-pointer group mb-3"
+                                                    onClick={() => setShowCategoryManagement(!showCategoryManagement)}
                                                 >
-                                                    <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${autoDownloadEnabled ? 'left-6.5' : 'left-0.5'
-                                                        }`} />
-                                                </button>
+                                                    <h4 className={`text-sm font-bold ${textPrimary} flex items-center`}>
+                                                        <span className="mr-2">⚙️</span> 高级选项
+                                                    </h4>
+                                                    <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                                        {showCategoryManagement ? '收起配置 ▴' : '展开配置 ▾'}
+                                                    </button>
+                                                </div>
+
+                                                {showCategoryManagement ? (
+                                                    <div className="space-y-3 animate-in slide-in-from-top-2 duration-200">
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className={`text-sm ${textPrimary}`}>类型精确匹配</p>
+                                                                <p className={`text-xs ${textSecondary}`}>优先使用 PT 站点提供的类型字段匹配</p>
+                                                            </div>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={matchByCategory}
+                                                                onChange={(e) => handleToggleAutoDownloadOption('match_by_category', e.target.checked)}
+                                                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                                disabled={saving}
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className={`text-sm ${textPrimary}`}>关键词评分匹配</p>
+                                                                <p className={`text-xs ${textSecondary}`}>根据标题关键词模糊匹配</p>
+                                                            </div>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={matchByKeyword}
+                                                                onChange={(e) => handleToggleAutoDownloadOption('match_by_keyword', e.target.checked)}
+                                                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                                disabled={saving}
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className={`text-sm ${textPrimary}`}>使用默认路径兜底</p>
+                                                                <p className={`text-xs ${textSecondary}`}>如果未匹配到类型，使用标记为默认的路径</p>
+                                                            </div>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={fallbackToDefaultPath}
+                                                                onChange={(e) => handleToggleAutoDownloadOption('fallback_to_default_path', e.target.checked)}
+                                                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                                disabled={saving}
+                                                            />
+                                                        </div>
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className={`text-sm ${textPrimary}`}>使用下载器默认路径</p>
+                                                                <p className={`text-xs ${textSecondary}`}>当所有规则都不匹配时，不指定路径</p>
+                                                            </div>
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={useDownloaderDefault}
+                                                                onChange={(e) => handleToggleAutoDownloadOption('use_downloader_default', e.target.checked)}
+                                                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                                disabled={saving}
+                                                            />
+                                                        </div>
+
+                                                        {/* 一键下载 */}
+                                                        <div className="flex items-center justify-between">
+                                                            <div>
+                                                                <p className={`text-sm ${textPrimary} font-bold`}>⚡ 一键下载</p>
+                                                                <p className={`text-xs ${textSecondary}`}>开启后，点击下载将无需弹出多路劲选择框</p>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleToggleAutoDownload(!autoDownloadEnabled)}
+                                                                disabled={saving}
+                                                                className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${autoDownloadEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                                                                    } ${saving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                            >
+                                                                <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${autoDownloadEnabled ? 'left-6.5' : 'left-0.5'
+                                                                    }`} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                        {matchByCategory && <div className={`px-2 py-1 rounded text-[10px] ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>类型匹配</div>}
+                                                        {matchByKeyword && <div className={`px-2 py-1 rounded text-[10px] ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>关键词匹配</div>}
+                                                        {autoDownloadEnabled && <div className={`px-2 py-1 rounded text-[10px] ${darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>⚡ 一键下载</div>}
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
+                                        </>
                                     )}
                                 </Card>
 
@@ -2114,20 +2579,37 @@ const SettingsPage = () => {
                                 <div className={`transition-opacity duration-300 ${enableCategoryManagement ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale'}`}>
                                     <Card className="space-y-4 relative">
                                         {!enableCategoryManagement && <div className="absolute inset-0 z-10 bg-gray-100/10 dark:bg-black/10 cursor-not-allowed"></div>}
-                                        <div>
-                                            <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-2`}>
-                                                类型映射配置
-                                            </h3>
-                                            <p className={`text-xs ${textSecondary} mb-4`}>
-                                                配置资源类型的识别规则。添加"类型"并为其指定多个"别名"（如 movie, film）。
-                                            </p>
+
+                                        <div
+                                            className="flex items-center justify-between cursor-pointer group"
+                                            onClick={() => enableCategoryManagement && setShowCategoryMap(!showCategoryMap)}
+                                        >
+                                            <div>
+                                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                                    <span className="mr-2">🗂️</span> 类型映射配置
+                                                </h3>
+                                                <p className={`text-xs ${textSecondary} mt-1`}>
+                                                    配置资源类型的识别规则
+                                                </p>
+                                            </div>
+                                            {enableCategoryManagement && (
+                                                <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                                    {showCategoryMap ? '收起配置 ▴' : '展开配置 ▾'}
+                                                </button>
+                                            )}
                                         </div>
 
-                                        <div>
-                                            <CategoryMapEditor
-                                                disabled={!enableCategoryManagement}
-                                            />
-                                        </div>
+                                        {showCategoryMap ? (
+                                            <div className="animate-in slide-in-from-top-2 duration-200 pt-4">
+                                                <CategoryMapEditor
+                                                    disabled={!enableCategoryManagement}
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div className={`text-xs ${textSecondary} pt-2`}>
+                                                {enableCategoryManagement ? '点击展开以配置类型映射规则' : '请先启用智能分类管理功能'}
+                                            </div>
+                                        )}
                                     </Card>
                                 </div>
                             </>
@@ -2138,6 +2620,202 @@ const SettingsPage = () => {
             case 'logs':
                 return (
                     <div key="logs"><LogsPage /></div>
+                );
+
+            case 'hot-resources':
+                return (
+                    <div className="space-y-6 animate-fade-in" key="hot-resources">
+                        {message && (
+                            <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                                {message.text}
+                            </div>
+                        )}
+
+                        <Card className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <div>
+                                    <h3 className={`text-lg font-bold ${textPrimary}`}>🔥 热门资源检测</h3>
+                                    <p className={`text-sm ${textSecondary}`}>
+                                        系统将定期通过站点的 RSS 订阅链接自动发现高热度资源。
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => setHotResourcesSettings(prev => ({ ...prev, enabled: !prev.enabled }))}
+                                    className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer ${hotResourcesSettings.enabled ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'
+                                        }`}
+                                >
+                                    <span className={`absolute top-0.5 inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out ${hotResourcesSettings.enabled ? 'left-6.5' : 'left-0.5'
+                                        }`} />
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <Input
+                                        label="检测间隔 (分钟)"
+                                        type="number"
+                                        value={hotResourcesSettings.checkInterval}
+                                        onChange={(e) => setHotResourcesSettings(prev => ({ ...prev, checkInterval: e.target.value }))}
+                                        placeholder="建议 10-60 分钟"
+                                    />
+
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1 mr-4">
+                                            <p className={`text-sm font-medium ${textPrimary}`}>自动开启下载</p>
+                                            <p className={`text-xs ${textSecondary}`}>匹配成功后自动添加到下载器 (需谨慎开启)</p>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={hotResourcesSettings.autoDownload}
+                                            onChange={(e) => setHotResourcesSettings(prev => ({ ...prev, autoDownload: e.target.checked }))}
+                                            className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex-1 mr-4">
+                                            <p className={`text-sm font-medium ${textPrimary}`}>推送通知</p>
+                                            <p className={`text-xs ${textSecondary}`}>发现热门资源时通过已配置的渠道通知您</p>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={hotResourcesSettings.notifyEnabled}
+                                            onChange={(e) => setHotResourcesSettings(prev => ({ ...prev, notifyEnabled: e.target.checked }))}
+                                            className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <Input
+                                            label="最低种子数"
+                                            type="number"
+                                            value={hotResourcesSettings.rules.minSeeders}
+                                            onChange={(e) => setHotResourcesSettings(prev => ({
+                                                ...prev,
+                                                rules: { ...prev.rules, minSeeders: parseInt(e.target.value) || 0 }
+                                            }))}
+                                        />
+                                        <div className="flex flex-col gap-1.5">
+                                            <div className="flex items-center gap-2">
+                                                <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>热度阈值</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowThresholdHint(true)}
+                                                    className="text-gray-400 hover:text-blue-500 transition-colors"
+                                                    title="查看分数说明"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                                        <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm11.378-3.917c-.89-.777-2.366-.777-3.255 0a.75.75 0 01-.988-1.129c1.454-1.272 3.776-1.272 5.23 0 1.513 1.324 1.513 3.518 0 4.842a3.75 3.75 0 01-.837.552c-.676.328-1.028.774-1.028 1.152v.202a.75.75 0 01-1.5 0v-.202c0-.944.606-1.657 1.336-1.996.342-.158.656-.372.936-.617 1.256-1.099 1.256-2.587 0-3.686z" clipRule="evenodd" />
+                                                        <path d="M12 18a.75.75 0 100-1.5.75.75 0 000 1.5z" />
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                            <Input
+                                                type="number"
+                                                value={hotResourcesSettings.rules.scoreThreshold}
+                                                onChange={(e) => setHotResourcesSettings(prev => ({
+                                                    ...prev,
+                                                    rules: { ...prev.rules, scoreThreshold: parseInt(e.target.value) || 0 }
+                                                }))}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className={`block text-sm font-medium ${textSecondary} mb-1`}>排除关键字 (逗号分隔)</label>
+                                        <textarea
+                                            className={`w-full px-3 py-2 rounded-lg text-sm border ${borderColor} ${darkMode ? 'bg-gray-700 text-white' : 'bg-white text-gray-900'} focus:ring-2 focus:ring-primary-500`}
+                                            rows="2"
+                                            value={hotResourcesSettings.rules.excludeKeywords?.join(', ')}
+                                            onChange={(e) => setHotResourcesSettings(prev => ({
+                                                ...prev,
+                                                rules: { ...prev.rules, excludeKeywords: e.target.value.split(',').map(k => k.trim()).filter(k => k) }
+                                            }))}
+                                            placeholder="例如: 官推, 广告, 求种"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-8 flex justify-end">
+                                <Button
+                                    variant="primary"
+                                    onClick={handleSaveHotResources}
+                                    disabled={saving}
+                                >
+                                    {saving ? '正在保存...' : '💾 保存配置'}
+                                </Button>
+                            </div>
+                        </Card>
+
+                        <div className={`p-4 rounded-xl border ${darkMode ? 'bg-blue-900/10 border-blue-800/50' : 'bg-blue-50 border-blue-200'} flex items-start`}>
+                            <span className="text-xl mr-3">💡</span>
+                            <div className="text-sm">
+                                <p className={`font-bold ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>什么是热门资源？</p>
+                                <p className={`mt-1 ${darkMode ? 'text-blue-300' : 'text-blue-600'}`}>
+                                    系统会根据做种数、下载数、发布时间以及优惠促销（如 Free）进行综合评分。
+                                    <br />
+                                    请确保在站点管理中为各站点配置了正确的 <b>RSS 链接</b>，否则系统无法获取数据。
+                                </p>
+                            </div>
+                        </div>
+
+                        {showThresholdHint && (
+                            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200" onClick={() => setShowThresholdHint(false)}>
+                                <div className={`${bgMain} rounded-xl p-6 w-full max-w-lg shadow-2xl relative`} onClick={e => e.stopPropagation()}>
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className={`text-lg font-bold ${textPrimary}`}>评分阈值参考 (TDI 2.0)</h3>
+                                        <button onClick={() => setShowThresholdHint(false)} className="text-gray-400 hover:text-gray-500">
+                                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div className={`p-3 rounded-lg border ${darkMode ? 'bg-blue-900/20 border-blue-800' : 'bg-blue-50 border-blue-200'}`}>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-lg">💰</span>
+                                                <span className={`font-bold ${darkMode ? 'text-blue-400' : 'text-blue-700'}`}>30分 (激进)</span>
+                                            </div>
+                                            <p className={`text-sm ${textSecondary} mb-1`}><strong>适合：</strong>刮地皮策略</p>
+                                            <p className={`text-xs ${textSecondary}`}>
+                                                收取所有 Free 资源 (最差约30分) 以及优质的 50% Off 资源。
+                                                <br />逻辑：只要不亏（Free），或者大概率能赚（优质 50% Off），我都收。
+                                            </p>
+                                        </div>
+
+                                        <div className={`p-3 rounded-lg border ${darkMode ? 'bg-green-900/20 border-green-800' : 'bg-green-50 border-green-200'}`}>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-lg">🛡️</span>
+                                                <span className={`font-bold ${darkMode ? 'text-green-400' : 'text-green-700'}`}>50分 (推荐)</span>
+                                            </div>
+                                            <p className={`text-sm ${textSecondary} mb-1`}><strong>适合：</strong>安全理财策略</p>
+                                            <p className={`text-xs ${textSecondary}`}>
+                                                收取绝大部分合格的 Free 资源 (基础分 &gt; 20) + 极品 50% Off 资源。
+                                                <br />逻辑：彻底过滤掉平庸的 50% Off 资源。这是最安全的“无脑挂机”线。
+                                            </p>
+                                        </div>
+
+                                        <div className={`p-3 rounded-lg border ${darkMode ? 'bg-red-900/20 border-red-800' : 'bg-red-50 border-red-200'}`}>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="text-lg">🚀</span>
+                                                <span className={`font-bold ${darkMode ? 'text-red-400' : 'text-red-700'}`}>90分 (精英)</span>
+                                            </div>
+                                            <p className={`text-sm ${textSecondary} mb-1`}><strong>适合：</strong>只玩精品策略</p>
+                                            <p className={`text-xs ${textSecondary}`}>
+                                                只收 2xFree + 顶级 Free 资源。
+                                                <br />逻辑：只做必赚的生意。
+                                            </p>
+                                        </div>
+
+                                        <div className="flex justify-end mt-4">
+                                            <Button onClick={() => setShowThresholdHint(false)}>我知道了</Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 );
 
             default:
@@ -2158,6 +2836,7 @@ const SettingsPage = () => {
                             { id: 'category', name: '下载', icon: '⚡' },
                             { id: 'notifications', name: '通知', icon: '🔔' },
                             { id: 'backup', name: '备份', icon: '💾' },
+                            { id: 'hot-resources', name: '热门资源', icon: '🔥' },
                             { id: 'maintenance', name: '维护', icon: '🛠️' },
 
                             { id: 'logs', name: '日志', icon: '📜' },
@@ -2166,7 +2845,7 @@ const SettingsPage = () => {
                         ].filter(item => {
                             if (me?.role === 'admin') return true;
                             const permissions = me?.permissions ? (typeof me.permissions === 'string' ? JSON.parse(me.permissions) : me.permissions) : null;
-                            const allowedSettings = permissions?.settings || ['general', 'about'];
+                            const allowedSettings = permissions?.settings || ['general', 'hot-resources', 'about'];
                             return allowedSettings.includes(item.id);
                         }).map(item => (
                             <button

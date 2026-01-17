@@ -3,6 +3,20 @@ const router = express.Router();
 const { getDB } = require('../db');
 const { requireAdmin } = require('../middleware/auth');
 const notificationService = require('../services/notificationService');
+const hotResourcesService = require('../services/hotResourcesService'); // Import service
+
+// Manual Trigger for Hot Resources Detection
+router.post('/hot-resources/detect', requireAdmin, async (req, res) => {
+    try {
+        console.log('[ManualTrigger] User requested hot resources detection');
+        // manual=true bypasses enabled check
+        const result = await hotResourcesService.detectHotResources(true);
+        res.json(result);
+    } catch (err) {
+        console.error('Manual detection failed:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
 
 // Get public settings (no auth required)
 router.get('/public', (req, res) => {
@@ -49,17 +63,25 @@ router.post('/', (req, res) => {
         transaction(settings);
 
         // If scheduling settings were updated, restart the jobs
-        if (settings.cookie_check_interval || settings.checkin_time || settings.cleanup_enabled !== undefined) {
+        if (settings.cookie_check_interval || settings.checkin_time || settings.cleanup_enabled !== undefined ||
+            settings.hot_resources_enabled !== undefined || settings.hot_resources_check_interval) {
             const schedulerService = require('../services/schedulerService');
             if (settings.cookie_check_interval) schedulerService.startCookieCheckJob();
             if (settings.checkin_time) schedulerService.startCheckinJob();
             if (settings.cleanup_enabled !== undefined) schedulerService.startAutoCleanupJob();
+            if (settings.hot_resources_enabled !== undefined || settings.hot_resources_check_interval) schedulerService.restartHotResourcesJob();
         }
 
         // If enable_system_logs was updated, sync to appConfig
         if (settings.enable_system_logs !== undefined) {
             const appConfig = require('../utils/appConfig');
             appConfig.setSystemLogsEnabled(settings.enable_system_logs === 'true' || settings.enable_system_logs === true);
+        }
+
+        // If hot_resources_enable_search_integration was updated, sync to appConfig
+        if (settings.hot_resources_enable_search_integration !== undefined) {
+            const appConfig = require('../utils/appConfig');
+            appConfig.setHotResourcesSearchIntegrationEnabled(settings.hot_resources_enable_search_integration === 'true' || settings.hot_resources_enable_search_integration === true);
         }
 
         res.json({ success: true });

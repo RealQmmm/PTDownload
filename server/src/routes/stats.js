@@ -4,6 +4,7 @@ const clientService = require('../services/clientService');
 const downloaderService = require('../services/downloaderService');
 
 const statsService = require('../services/statsService');
+const siteService = require('../services/siteService');
 
 // Get download statistics from all clients
 router.get('/', async (req, res) => {
@@ -185,6 +186,60 @@ router.get('/dashboard', async (req, res) => {
         );
         const validClientStats = clientStats.filter(s => s !== null);
 
+        // 3. Map Torrent sites
+        const allSites = siteService.getAllSites();
+        const siteDomainMap = {};
+        allSites.forEach(s => {
+            try {
+                const domain = new URL(s.url).hostname;
+                siteDomainMap[domain] = { name: s.name, url: s.url, icon: s.site_icon };
+            } catch (e) { }
+        });
+
+        // Get hash-to-site mapping from task history (more accurate for RSS/Series tasks)
+        const hashToSiteQuery = db.prepare(`
+            SELECT th.item_hash, s.name as site_name, s.url as site_url, s.site_icon
+            FROM task_history th
+            LEFT JOIN tasks t ON th.task_id = t.id
+            LEFT JOIN sites s ON (t.site_id = s.id OR th.site_id = s.id)
+            WHERE th.item_hash IS NOT NULL AND s.name IS NOT NULL
+        `).all();
+        const hashToSiteMap = {};
+        hashToSiteQuery.forEach(row => {
+            hashToSiteMap[row.item_hash] = { name: row.site_name, url: row.site_url, icon: row.site_icon };
+        });
+
+        // Update torrents with site name
+        validClientStats.forEach(client => {
+            client.torrents.forEach(torrent => {
+                let siteInfo = null;
+                // Priority 1: Task History
+                if (hashToSiteMap[torrent.hash]) {
+                    siteInfo = hashToSiteMap[torrent.hash];
+                }
+                // Priority 2: Tracker domain matching
+                else if (torrent.tracker) {
+                    try {
+                        const trackerDomain = new URL(torrent.tracker).hostname;
+                        for (const domain in siteDomainMap) {
+                            if (trackerDomain.includes(domain)) {
+                                siteInfo = siteDomainMap[domain];
+                                break;
+                            }
+                        }
+                    } catch (e) { }
+                }
+
+                if (siteInfo) {
+                    torrent.siteName = siteInfo.name;
+                    torrent.siteUrl = siteInfo.url;
+                    torrent.siteIcon = siteInfo.icon;
+                } else {
+                    torrent.siteName = '未知站点';
+                }
+            });
+        });
+
         // Calculate speed stats from actual torrent list instead of client global stats
         // This ensures the instant speed card matches the sum of speeds in the active tasks list
         const aggregatedStats = validClientStats.reduce(
@@ -235,9 +290,10 @@ router.get('/dashboard', async (req, res) => {
         const todayLocalStr = timeUtils.getLocalDateString();
 
         let historyQuery = `
-            SELECT th.*, IFNULL(t.name, '手动下载') as task_name 
+            SELECT th.*, IFNULL(t.name, '手动下载') as task_name, s.name as site_name, s.url as site_url, s.site_icon
             FROM task_history th
             LEFT JOIN tasks t ON th.task_id = t.id
+            LEFT JOIN sites s ON t.site_id = s.id
             WHERE th.is_finished = 1 AND th.finish_time IS NOT NULL
         `;
 
