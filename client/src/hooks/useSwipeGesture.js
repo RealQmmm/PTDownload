@@ -23,21 +23,29 @@ export const useSwipeGesture = (onSwipeRight, onSwipeLeft, enabled = true) => {
         const handleTouchStart = (e) => {
             touchStartX.current = e.touches[0].clientX;
             touchStartY.current = e.touches[0].clientY;
+            touchEndX.current = touchStartX.current;
+            touchEndY.current = touchStartY.current;
 
-            // 只在屏幕左边缘开始滑动时才触发打开侧边栏
+            // 只在屏幕左边缘开始触摸时才标记为潜在的滑动
             if (touchStartX.current <= edgeThreshold) {
                 isSwiping.current = true;
             } else {
-                // 在其他位置开始滑动也允许，用于关闭侧边栏
-                isSwiping.current = true;
+                isSwiping.current = false;
             }
         };
 
         const handleTouchMove = (e) => {
-            if (!isSwiping.current) return;
-
             touchEndX.current = e.touches[0].clientX;
             touchEndY.current = e.touches[0].clientY;
+
+            // 如果不是从边缘开始的，检查是否有明显的向左滑动（用于关闭侧边栏）
+            if (!isSwiping.current) {
+                const deltaX = touchEndX.current - touchStartX.current;
+                // 只有明显向左滑动时才标记为滑动（用于关闭侧边栏）
+                if (deltaX < -minSwipeDistance) {
+                    isSwiping.current = true;
+                }
+            }
         };
 
         const handleTouchEnd = () => {
@@ -66,7 +74,7 @@ export const useSwipeGesture = (onSwipeRight, onSwipeLeft, enabled = true) => {
 
         // 添加事件监听器
         document.addEventListener('touchstart', handleTouchStart, { passive: true });
-        document.addEventListener('touchmove', handleTouchMove, { passive: true });
+        document.addEventListener('touchmove', handleTouchMove, { passive: false });
         document.addEventListener('touchend', handleTouchEnd, { passive: true });
 
         // 清理

@@ -105,17 +105,58 @@ router.post('/:id/download', async (req, res) => {
             client = clients.find(c => c.is_default) || clients[0];
         }
 
-        // Download torrent
-        const downloadResult = await downloaderService.addTorrent(client, {
-            url: resource.download_url,
-            savePath: savePath || undefined
-        });
+        // Use robust download logic (similar to download.js)
+        const siteService = require('../services/siteService');
+        const torrentFetcher = require('../utils/torrentFetcher');
+        const timeUtils = require('../utils/timeUtils');
+        const parseTorrent = require('parse-torrent');
+        const site = siteService.getSiteById(resource.site_id);
 
-        if (downloadResult.success) {
-            hotResourcesService.markAsDownloaded(id);
-            res.json({ success: true, message: 'Download started successfully' });
-        } else {
-            res.status(500).json({ success: false, message: downloadResult.message || 'Download failed' });
+        let result;
+        let torrentHash = null;
+
+        try {
+            // Check if site needs auth (M-Team V2, etc.)
+            const authHeaders = siteService.getAuthHeaders(site);
+            if (authHeaders) {
+                console.log(`[Hot-Download] Fetching torrent data for ${resource.title}...`);
+                const buffer = await torrentFetcher.fetchTorrentData(site, resource.download_url);
+                try {
+                    const parsed = parseTorrent(buffer);
+                    torrentHash = parsed.infoHash;
+                } catch (e) {
+                    console.warn('[Hot-Download] Failed to parse hash:', e.message);
+                }
+                const torrentBase64 = buffer.toString('base64');
+                result = await downloaderService.addTorrentFromData(client, torrentBase64, { savePath });
+            } else {
+                // No auth, direct URL
+                result = await downloaderService.addTorrent(client, resource.download_url, { savePath });
+            }
+
+            if (result.success) {
+                // Mark as downloaded
+                hotResourcesService.markAsDownloaded(id);
+
+                // Record in task_history
+                try {
+                    db.prepare('INSERT INTO task_history (task_id, site_id, item_guid, item_title, item_size, download_time, item_hash, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                        .run(null, resource.site_id, resource.url, resource.title, resource.size, timeUtils.getLocalISOString(), torrentHash, req.user.id);
+
+                    // Send notification
+                    const notificationService = require('../services/notificationService');
+                    notificationService.notifyDownloadStart(resource.title, require('../utils/formatUtils').formatBytes(resource.size));
+                } catch (e) {
+                    console.error('[Hot-Download] Record/Notify error:', e.message);
+                }
+
+                res.json({ success: true, message: 'Download started successfully' });
+            } else {
+                res.status(500).json({ success: false, message: result.message || 'Download failed' });
+            }
+        } catch (downloadErr) {
+            console.error('[Hot-Download] Error:', downloadErr.message);
+            res.status(500).json({ success: false, message: downloadErr.message });
         }
     } catch (err) {
         console.error('Download hot resource error:', err);

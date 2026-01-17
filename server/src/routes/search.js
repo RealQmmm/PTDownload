@@ -14,15 +14,32 @@ router.get('/', async (req, res) => {
         // Perform search
         const results = await searchService.search(query, days, page, site);
 
-        // If no keyword (recent search), check if hot resources search integration is enabled
-        if (!query.trim()) {
-            // Only apply hot resources logic if search integration is enabled (checked via cache)
-            if (appConfig.isHotResourcesEnabled()) {
-                const config = hotResourcesService.getConfig();
-                const rules = config.rules || {};
+        // If hot resources integration is enabled, calculate scores for all results
+        if (appConfig.isHotResourcesEnabled()) {
+            const config = hotResourcesService.getConfig();
+            const rules = config.rules || {};
 
-                // Convert search results to hot resource format
-                const resources = results.map(result => ({
+            // --- 动态计算站点基准能力 ---
+            const siteBaselines = {};
+            const siteStats = {};
+            results.forEach(r => {
+                const sName = r.siteName || 'unknown';
+                if (!siteStats[sName]) siteStats[sName] = { total: 0, count: 0 };
+                siteStats[sName].total += (r.seeders || 0);
+                siteStats[sName].count++;
+            });
+            Object.keys(siteStats).forEach(sName => {
+                const avg = siteStats[sName].total / siteStats[sName].count;
+                // 限制基准在 3-10 之间，防止过极端
+                siteBaselines[sName] = Math.max(3, Math.min(10, avg));
+            });
+
+            const resultsWithScores = results.map(result => {
+                const sName = result.siteName || 'unknown';
+                const baseline = siteBaselines[sName] || 5;
+
+                // Convert search result to the format expected by calculateHotScore
+                const resource = {
                     title: result.name,
                     seeders: result.seeders || 0,
                     leechers: result.leechers || 0,
@@ -32,41 +49,29 @@ router.get('/', async (req, res) => {
                     category: result.category,
                     siteId: result.siteId,
                     site_id: result.siteId,
-                    originalResult: result
-                }));
+                };
 
-                // Apply hot resources filters
-                const filtered = hotResourcesService.applyFilters(resources, rules);
+                const scoreResult = hotResourcesService.calculateHotScore(resource, rules, true, baseline);
 
-                // Calculate hot score for filtered results
-                const resultsWithScores = filtered.map(resource => {
-                    const scoreResult = hotResourcesService.calculateHotScore(resource, rules, true);
+                return {
+                    ...result,
+                    hotScore: scoreResult.total,
+                    scoreBreakdown: scoreResult.breakdown,
+                    riskLabel: scoreResult.riskLabel,
+                    riskLevel: scoreResult.riskLevel
+                };
+            });
 
-                    return {
-                        ...resource.originalResult,
-                        hotScore: scoreResult.total,
-                        scoreBreakdown: scoreResult.breakdown,
-                        riskLabel: scoreResult.riskLabel,
-                        riskLevel: scoreResult.riskLevel
-                    };
-                });
-
-                // Filter by hot score threshold
-                const scoreThreshold = rules.scoreThreshold || 30;
-                const filteredByScore = resultsWithScores.filter(r => (r.hotScore || 0) >= scoreThreshold);
-
-                // Sort by hot score (highest first)
-                filteredByScore.sort((a, b) => (b.hotScore || 0) - (a.hotScore || 0));
-
-                res.json(filteredByScore);
-            } else {
-                // Hot resources search integration disabled - return results as is
-                res.json(results);
+            // If it's a recent search (no keyword), sort by hot score (highest first)
+            if (!query.trim()) {
+                resultsWithScores.sort((a, b) => (b.hotScore || 0) - (a.hotScore || 0));
             }
-        } else {
-            // Keyword search - return as is
-            res.json(results);
+
+            return res.json(resultsWithScores);
         }
+
+        // Return results as is if hot resources integration is disabled
+        res.json(results);
     } catch (err) {
         console.error('Search error:', err);
         res.status(500).json({ error: 'Internal server error during search' });

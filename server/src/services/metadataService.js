@@ -71,6 +71,25 @@ class MetadataService {
         return null;
     }
 
+    /**
+     * Get poster URL by resource name
+     * @param {string} name - Resource name (TV series or movie)
+     * @returns {Promise<string|null>} - Poster URL or null if not found
+     */
+    async getPosterByName(name) {
+        if (!name) return null;
+
+        try {
+            const metadata = await this.searchSeries(name);
+            if (metadata && metadata.poster_path) {
+                return metadata.poster_path;
+            }
+        } catch (err) {
+            console.error(`[Metadata] Get poster failed for ${name}:`, err.message);
+        }
+        return null;
+    }
+
     async getSeasonDetails(tmdbId, seasonNumber) {
         if (!tmdbId) return null;
 

@@ -25,6 +25,7 @@ class SchedulerService {
             this.startCookieCheckJob();
             this.startCheckinJob();
             this.startAutoCleanupJob();
+            this.startHotResourcesJob();
 
             console.log('[Scheduler] Scheduler initialization completed');
         } catch (err) {
@@ -45,6 +46,7 @@ class SchedulerService {
             this.startCookieCheckJob();
             this.startCheckinJob();
             this.startAutoCleanupJob();
+            this.startHotResourcesJob();
         } catch (err) {
             console.error('[Scheduler] Failed to reload scheduler:', err.message);
             console.error('[Scheduler] Stack trace:', err.stack);
@@ -319,9 +321,47 @@ class SchedulerService {
         }
     }
 
+    startHotResourcesJob() {
+        try {
+            if (this.hotResourcesJob) {
+                this.hotResourcesJob.cancel();
+                this.hotResourcesJob = null;
+            }
+
+            const { getDB } = require('../db');
+            const db = getDB();
+
+            // Get enabled status and interval
+            const enabledSetting = db.prepare("SELECT value FROM settings WHERE key = 'hot_resources_enabled'").get();
+            const enabled = enabledSetting?.value === 'true';
+
+            const intervalSetting = db.prepare("SELECT value FROM settings WHERE key = 'hot_resources_check_interval'").get();
+            const interval = parseInt(intervalSetting?.value || '10'); // Default 10 minutes
+
+            if (!enabled) {
+                if (this._isLogEnabled()) console.log('[Scheduler] Hot resources detection is disabled, skipping job.');
+                return;
+            }
+
+            if (this._isLogEnabled()) console.log(`[Scheduler] Starting hot resources detection job with interval: ${interval} minutes`);
+
+            // Schedule job
+            const cronStr = `*/${interval} * * * *`;
+            this.hotResourcesJob = schedule.scheduleJob(cronStr, async () => {
+                if (this._isLogEnabled()) console.log('[Scheduler] Automatically triggering hot resources detection...');
+                const hotResourcesService = require('./hotResourcesService');
+                await hotResourcesService.detectHotResources(false); // manual=false
+            });
+
+            console.log(`[Scheduler] Hot resources job scheduled every ${interval} minutes (cron: ${cronStr})`);
+        } catch (err) {
+            console.error('[Scheduler] Failed to start hot resources job:', err.message);
+        }
+    }
+
     restartHotResourcesJob() {
-        // Stub for now, will be implemented when timing function is added
-        if (this._isLogEnabled()) console.log('[Scheduler] Hot resources job restart requested (not implemented yet)');
+        if (this._isLogEnabled()) console.log('[Scheduler] Restarting hot resources job...');
+        this.startHotResourcesJob();
     }
 }
 

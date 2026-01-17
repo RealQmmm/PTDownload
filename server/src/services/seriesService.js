@@ -96,9 +96,9 @@ class SeriesService {
 
         db.prepare(`
             UPDATE series_subscriptions 
-            SET name = ?, alias = ?, season = ?, quality = ?, smart_regex = ?, rss_source_id = ?, total_episodes = ?, smart_switch = ?
+            SET name = ?, alias = ?, season = ?, quality = ?, smart_regex = ?, rss_source_id = ?, total_episodes = ?, smart_switch = ?, check_interval = ?
             WHERE id = ?
-        `).run(name, alias || null, season, quality, smartRegex, rss_source_id, totalEpisodes, smartSwitchVal, id);
+        `).run(name, alias || null, season, quality, smartRegex, rss_source_id, totalEpisodes, smartSwitchVal, data.check_interval || 0, id);
 
         // 4. Update associated task configuration
         const filterConfig = {
@@ -153,7 +153,7 @@ class SeriesService {
      * 3. Save Subscription
      */
     async createSubscription(data, userId = null) {
-        const { name, season, quality, rss_source_id, save_path, client_id, category = 'Series' } = data;
+        const { name, season, quality, rss_source_id, save_path, client_id, category = 'Series', check_interval = 0 } = data;
 
         // Auto-fetch metadata
         let metadata = null;
@@ -244,8 +244,8 @@ class SeriesService {
 
         // 3. Save Subscription with Metadata
         const info = this._getDB().prepare(`
-            INSERT INTO series_subscriptions(name, alias, season, quality, smart_regex, rss_source_id, task_id, poster_path, tmdb_id, overview, vote_average, total_episodes, user_id, smart_switch)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO series_subscriptions(name, alias, season, quality, smart_regex, rss_source_id, task_id, poster_path, tmdb_id, overview, vote_average, total_episodes, user_id, smart_switch, check_interval)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             name,
             metadata ? metadata.original_name : null, // Save alias
@@ -256,7 +256,8 @@ class SeriesService {
             metadata ? metadata.vote_average : 0,
             totalEpisodes,
             userId,
-            smartSwitchVal
+            smartSwitchVal,
+            check_interval
         );
 
         return info.lastInsertRowid;

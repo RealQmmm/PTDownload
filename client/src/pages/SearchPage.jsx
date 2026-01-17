@@ -7,6 +7,8 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import Input from '../components/ui/Input';
 import Select from '../components/ui/Select';
+import SiteSelector from '../components/ui/SiteSelector';
+import PromotionTimeCapsule from '../components/ui/PromotionTimeCapsule';
 
 // Helper function to get category color
 const getCategoryColor = (category, darkMode) => {
@@ -55,12 +57,57 @@ const getHotScoreColor = (score) => {
 // Helper function to get risk label style
 const getRiskLabelStyle = (level, darkMode) => {
     switch (level) {
-        case 'GREAT': return darkMode ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-red-50 text-red-600 border-red-200';
-        case 'SAFE': return darkMode ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-green-50 text-green-600 border-green-200';
-        case 'RISKY': return darkMode ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-yellow-50 text-yellow-600 border-yellow-200';
-        case 'TRASH': return darkMode ? 'bg-gray-500/20 text-gray-400 border-gray-500/30' : 'bg-gray-100 text-gray-600 border-gray-200';
+        case 'GREAT': return darkMode ? 'bg-red-500/20 text-red-400' : 'bg-red-100 text-red-700';
+        case 'SAFE': return darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700';
+        case 'RISKY': return darkMode ? 'bg-yellow-500/20 text-yellow-400' : 'bg-yellow-100 text-yellow-700';
+        case 'TRASH': return darkMode ? 'bg-gray-500/20 text-gray-400' : 'bg-gray-100 text-gray-600';
         default: return '';
     }
+};
+
+// Helper function to get label color based on label type
+const getLabelColor = (label, darkMode) => {
+    const upperLabel = label.toUpperCase();
+
+    // Quality/Format labels (technical specs)
+    const qualityColors = {
+        '4K': darkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700',
+        '2160P': darkMode ? 'bg-purple-500/20 text-purple-400' : 'bg-purple-100 text-purple-700',
+        '1080P': darkMode ? 'bg-blue-500/20 text-blue-400' : 'bg-blue-100 text-blue-700',
+        '720P': darkMode ? 'bg-cyan-500/20 text-cyan-400' : 'bg-cyan-100 text-cyan-700',
+        'HDR': darkMode ? 'bg-orange-500/20 text-orange-400' : 'bg-orange-100 text-orange-700',
+        'DOVI': darkMode ? 'bg-pink-500/20 text-pink-400' : 'bg-pink-100 text-pink-700',
+        'BLU-RAY': darkMode ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-700',
+        'BLURAY': darkMode ? 'bg-indigo-500/20 text-indigo-400' : 'bg-indigo-100 text-indigo-700',
+        'REMUX': darkMode ? 'bg-green-500/20 text-green-400' : 'bg-green-100 text-green-700',
+        'WEB-DL': darkMode ? 'bg-teal-500/20 text-teal-400' : 'bg-teal-100 text-teal-700',
+        'WEBDL': darkMode ? 'bg-teal-500/20 text-teal-400' : 'bg-teal-100 text-teal-700'
+    };
+
+    // Check if it's a quality label
+    if (qualityColors[upperLabel]) {
+        return qualityColors[upperLabel];
+    }
+
+    // Custom site labels (Chinese characters, like "分集")
+    // Use a hash-based color assignment for consistency
+    const customLabelColors = [
+        darkMode ? 'bg-rose-500/20 text-rose-400' : 'bg-rose-100 text-rose-700',
+        darkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-700',
+        darkMode ? 'bg-lime-500/20 text-lime-400' : 'bg-lime-100 text-lime-700',
+        darkMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-emerald-100 text-emerald-700',
+        darkMode ? 'bg-sky-500/20 text-sky-400' : 'bg-sky-100 text-sky-700',
+        darkMode ? 'bg-violet-500/20 text-violet-400' : 'bg-violet-100 text-violet-700',
+        darkMode ? 'bg-fuchsia-500/20 text-fuchsia-400' : 'bg-fuchsia-100 text-fuchsia-700'
+    ];
+
+    // Simple hash function for consistent color assignment
+    let hash = 0;
+    for (let i = 0; i < label.length; i++) {
+        hash = label.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const colorIndex = Math.abs(hash) % customLabelColors.length;
+    return customLabelColors[colorIndex];
 };
 
 const SearchPage = ({ searchState, setSearchState }) => {
@@ -97,7 +144,44 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const [defaultDownloadPath, setDefaultDownloadPath] = useState('');
     const [enableMultiPath, setEnableMultiPath] = useState(false);
 
-    // Theme-aware classes
+    // Hot Resources State
+    const [viewMode, setViewMode] = useState('search'); // 'search' | 'hot-resources'
+    const [hotResourcesMasterEnabled, setHotResourcesMasterEnabled] = useState(false);
+    const [hotResources, setHotResources] = useState([]);
+    const [hotResourcesStats, setHotResourcesStats] = useState({ total: 0, pending: 0, notified: 0 });
+    const [minHotScore, setMinHotScore] = useState(30);
+    const [showUnreadOnly, setShowUnreadOnly] = useState(true);
+
+    // Mobile swipe state
+    const [touchStartX, setTouchStartX] = useState(null);
+    const [swipedLinkId, setSwipedLinkId] = useState(null);
+
+    // Poster preview state
+    const [posterPreview, setPosterPreview] = useState(null);
+
+    // Category filter state
+    const [selectedCategory, setSelectedCategory] = useState(null);
+
+    // Label filter state
+    const [selectedLabel, setSelectedLabel] = useState(null);
+
+    const handleTouchStart = (e) => {
+        setTouchStartX(e.touches[0].clientX);
+    };
+
+    const handleTouchEnd = (e, linkId) => {
+        if (touchStartX === null) return;
+        const touchEndX = e.changedTouches[0].clientX;
+        const deltaX = touchEndX - touchStartX;
+
+        // Threshold of 50px for swipe detection
+        if (deltaX < -50) {
+            setSwipedLinkId(linkId);
+        } else if (deltaX > 50) {
+            setSwipedLinkId(null);
+        }
+        setTouchStartX(null);
+    };
     const textPrimary = darkMode ? 'text-white' : 'text-gray-900';
     const textSecondary = darkMode ? 'text-gray-400' : 'text-gray-600';
     const borderColor = darkMode ? 'border-gray-700' : 'border-gray-200';
@@ -141,6 +225,24 @@ const SearchPage = ({ searchState, setSearchState }) => {
                 setEnableMultiPath(settingsData.enable_multi_path === 'true' || settingsData.enable_multi_path === true);
                 setCreateSeriesSubfolder(settingsData.create_series_subfolder === 'true' || settingsData.create_series_subfolder === true);
 
+                // Load master enabled status for hot resources
+                const masterEnabled = settingsData.hot_resources_enabled === 'true';
+                setHotResourcesMasterEnabled(masterEnabled);
+                if (!masterEnabled && viewMode === 'hot-resources') {
+                    setViewMode('search');
+                }
+
+                if (settingsData.hot_resources_rules) {
+                    try {
+                        const rules = JSON.parse(settingsData.hot_resources_rules);
+                        if (rules.scoreThreshold) {
+                            setMinHotScore(parseInt(rules.scoreThreshold) || 30);
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse hot resources rules:', e);
+                    }
+                }
+
                 if (settingsData.category_map) {
                     try {
                         setCategoryMap(JSON.parse(settingsData.category_map));
@@ -153,7 +255,97 @@ const SearchPage = ({ searchState, setSearchState }) => {
             }
         };
         fetchData();
-    }, []);
+
+        // Fetch hot resources stats
+        if (hotResourcesMasterEnabled) {
+            fetchHotResourcesStats();
+        }
+    }, [authenticatedFetch, hotResourcesMasterEnabled, viewMode]);
+
+    const fetchHotResourcesStats = async () => {
+        try {
+            const res = await authenticatedFetch('/api/hot-resources/stats');
+            const data = await res.json();
+            if (data.success) {
+                setHotResourcesStats(data.stats);
+            }
+        } catch (err) {
+            console.error('Failed to fetch hot resources stats:', err);
+        }
+    };
+
+    const fetchHotResources = async () => {
+        setLoading(true);
+        try {
+            let url = `/api/hot-resources?limit=50&minScore=${minHotScore}`;
+            // If showing unread only, filter by notified=true (meaning new/notified ones) 
+            // BUT actually 'pending' action usually means user hasn't handled it. 
+            // The API supports 'notified' filter. Let's assume 'pending' items are what we want to highlight.
+            // Let's just fetch all for now and filter client side or use default sort.
+            // Actually, let's fetch based on user preference if we had one.
+            // For now, let's just fetch recent ones.
+
+            const res = await authenticatedFetch(url);
+            const data = await res.json();
+            if (data.success) {
+                // Map to compatible format for the table
+                const mapped = data.resources.map(r => ({
+                    ...r,
+                    name: r.title,
+                    link: r.url, // Original link
+                    date: r.detected_time || r.publish_time,
+                    siteId: r.site_id,
+                    siteName: r.site_name,
+                    isHot: true,
+                    hotScore: r.hot_score,
+                    riskLabel: (() => {
+                        if (r.risk_level === 'GREAT' || r.hot_score >= 90) return '绝佳机会';
+                        if (r.risk_level === 'SAFE' || r.hot_score >= 70) return '安全理财';
+                        if (r.risk_level === 'RISKY' || r.hot_score >= 40) return '高能博弈';
+                        return '风险极大';
+                    })(),
+                    riskLevel: (() => {
+                        if (r.risk_level) return r.risk_level;
+                        if (r.hot_score >= 90) return 'GREAT';
+                        if (r.hot_score >= 70) return 'SAFE';
+                        if (r.hot_score >= 40) return 'RISKY';
+                        return 'TRASH';
+                    })(),
+                    torrentUrl: r.download_url,
+                    size: FormatUtils.formatBytes(r.size),
+                    seeders: parseInt(r.seeders) || 0,
+                    leechers: parseInt(r.leechers) || 0,
+                    isFree: r.promotion && (r.promotion.includes('Free') || r.promotion.includes('2x')),
+                    freeType: r.promotion
+                }));
+                // Sort by hotScore descending
+                mapped.sort((a, b) => (b.hotScore || 0) - (a.hotScore || 0));
+                setHotResources(mapped);
+            }
+        } catch (err) {
+            console.error('Failed to fetch hot resources:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSwitchMode = (mode) => {
+        setViewMode(mode);
+        if (mode === 'hot-resources') {
+            fetchHotResources();
+            // Clear search query to avoid confusion
+            // setQuery(''); 
+        }
+    };
+
+    const markAsRead = async () => {
+        try {
+            // We don't have a bulk mark-read API yet, but let's assume visiting the page is enough 
+            // or we add a button. 
+            // For now, let's just refresh stats.
+            fetchHotResourcesStats();
+        } catch (e) { }
+    };
 
     // Save state to parent when it changes
     useEffect(() => {
@@ -350,21 +542,39 @@ const SearchPage = ({ searchState, setSearchState }) => {
     const executeDownload = async (item, clientId, savePath = null) => {
         setDownloading(item.link);
         try {
-            const res = await authenticatedFetch('/api/download', {
+            let url = '/api/download';
+            let body = {
+                torrentUrl: item.torrentUrl,
+                clientId: clientId,
+                title: item.name,
+                size: item.size,
+                siteId: item.siteId,
+                savePath: savePath
+            };
+
+            // Enhanced logic for hot resources
+            if (item.isHot && item.id) {
+                url = `/api/hot-resources/${item.id}/download`;
+                body = {
+                    clientId: clientId,
+                    savePath: savePath
+                };
+            }
+
+            const res = await authenticatedFetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    torrentUrl: item.torrentUrl,
-                    clientId: clientId,
-                    title: item.name,
-                    size: item.size,
-                    savePath: savePath
-                })
+                body: JSON.stringify(body)
             });
             const data = await res.json();
 
             if (res.ok && data.success) {
                 alert(data.message || '添加下载成功');
+                // Refresh hot resources if needed
+                if (viewMode === 'hot-resources') {
+                    fetchHotResources();
+                    fetchHotResourcesStats();
+                }
             } else {
                 alert(data.message || data.error || '添加下载失败');
             }
@@ -409,10 +619,23 @@ const SearchPage = ({ searchState, setSearchState }) => {
         }
     };
 
-    // Sorting Logic
+    // Sorting and Filtering Logic
     const sortedResults = useMemo(() => {
-        if (!sortConfig.key) return results;
-        return [...results].sort((a, b) => {
+        let items = [...(viewMode === 'search' ? results : hotResources)];
+
+        // Apply category filter
+        if (selectedCategory) {
+            items = items.filter(item => item.category === selectedCategory);
+        }
+
+        // Apply label filter
+        if (selectedLabel) {
+            items = items.filter(item => item.labels && item.labels.includes(selectedLabel));
+        }
+
+        if (!sortConfig.key) return items;
+
+        return items.sort((a, b) => {
             let valA = a[sortConfig.key];
             let valB = b[sortConfig.key];
 
@@ -480,7 +703,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
             if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [results, sortConfig]);
+    }, [results, hotResources, viewMode, sortConfig, selectedCategory, selectedLabel]);
 
     const requestSort = (key) => {
         let direction = 'asc';
@@ -495,17 +718,92 @@ const SearchPage = ({ searchState, setSearchState }) => {
         return <span className="ml-1 text-blue-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>;
     };
 
+    // Extract available categories from current results
+    const availableCategories = useMemo(() => {
+        const items = viewMode === 'search' ? results : hotResources;
+        const categories = new Set();
+        items.forEach(item => {
+            if (item.category) {
+                categories.add(item.category);
+            }
+        });
+        return Array.from(categories).sort();
+    }, [results, hotResources, viewMode]);
+
+    // Extract available labels from current results
+    const availableLabels = useMemo(() => {
+        const items = viewMode === 'search' ? results : hotResources;
+        const labels = new Set();
+        items.forEach(item => {
+            if (item.labels && Array.isArray(item.labels)) {
+                item.labels.forEach(label => labels.add(label));
+            }
+        });
+        return Array.from(labels).sort();
+    }, [results, hotResources, viewMode]);
+
+    const handleManualDetect = async () => {
+        setLoading(true);
+        try {
+            const res = await authenticatedFetch('/api/settings/hot-resources/detect', {
+                method: 'POST'
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Refresh list after detection
+                fetchHotResources();
+                fetchHotResourcesStats();
+                alert(`检测完成：发现 ${data.totalNew} 个新资源`);
+            } else {
+                alert('检测失败: ' + data.message);
+            }
+        } catch (err) {
+            console.error('Detection failed:', err);
+            alert('检测请求失败');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="p-2 sm:p-4 md:p-8 flex flex-col">
-            <div className="mb-2 sm:mb-4 md:mb-8">
-                <h1 className={`hidden sm:block text-2xl md:text-3xl font-bold mb-4 md:mb-6 ${textPrimary} flex items-center`}>
-                    资源搜索
-                    {hotResourcesEnabled && searchMode === 'recent' && (
-                        <span className="ml-3 text-2xl" title="热门资源模式已启用">🔥</span>
-                    )}
+            <div className="flex justify-between items-center mb-4 md:mb-6">
+                <h1 className={`hidden sm:block text-2xl md:text-3xl font-bold ${textPrimary} flex items-center`}>
+                    {viewMode === 'search' ? '资源搜索' : '🔥 热门资源'}
                 </h1>
 
-                <form onSubmit={handleSearch} className="flex gap-1 sm:gap-2">
+                {hotResourcesMasterEnabled && (
+                    <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                        <button
+                            onClick={() => handleSwitchMode('search')}
+                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${viewMode === 'search'
+                                ? 'bg-white dark:bg-gray-700 shadow-sm ' + textPrimary
+                                : textSecondary + ' hover:text-gray-900 dark:hover:text-gray-200'
+                                }`}
+                        >
+                            搜索
+                        </button>
+                        <button
+                            onClick={() => handleSwitchMode('hot-resources')}
+                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-2 ${viewMode === 'hot-resources'
+                                ? 'bg-white dark:bg-gray-700 shadow-sm text-red-500'
+                                : textSecondary + ' hover:text-red-500'
+                                }`}
+                        >
+                            热门
+                            {(hotResourcesStats.pending > 0 || hotResourcesStats.notified > 0) && (
+                                <span className="flex h-2 w-2 relative">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                </span>
+                            )}
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {viewMode === 'search' && (
+                <form onSubmit={handleSearch} className="flex gap-2">
                     <div className="flex-1 min-w-0">
                         <Input
                             placeholder="输入关键词..."
@@ -514,23 +812,110 @@ const SearchPage = ({ searchState, setSearchState }) => {
                             className="text-base sm:text-sm"
                         />
                     </div>
-                    <div className="w-24 sm:w-32 shrink-0">
-                        <Select
+                    <div className="w-28 shrink-0 min-w-[110px]">
+                        <SiteSelector
+                            sites={sites}
                             value={selectedSite}
-                            onChange={(e) => setSelectedSite(e.target.value)}
+                            onChange={setSelectedSite}
                             className="text-base sm:text-sm"
-                        >
-                            <option value="">全部站点</option>
-                            {sites.filter(s => s.enabled === 1 || s.enabled === true || s.enabled === '1').map(site => (
-                                <option key={site.id} value={site.name}>{site.name}</option>
-                            ))}
-                        </Select>
+                        />
                     </div>
                     <Button type="submit" loading={loading} className="px-3 sm:px-4 shrink-0 text-xs sm:text-sm whitespace-nowrap">
                         搜索
                     </Button>
                 </form>
-            </div>
+            )}
+
+
+            {viewMode === 'hot-resources' && (
+                <div className="flex justify-between items-center bg-red-50 dark:bg-red-900/10 p-3 rounded-lg border border-red-100 dark:border-red-900/30">
+                    <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                        <span>🔥 发现 {hotResourcesStats.total} 个热门资源</span>
+                        {/* <span className="text-xs opacity-75">({hotResourcesStats.notified} 个新发现)</span> */}
+                    </div>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={handleManualDetect}
+                            loading={loading}
+                            className="bg-red-600 hover:bg-red-700 text-white border-transparent"
+                        >
+                            ⚡ 立即检测
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            {/* Category Filter Tags */}
+            {availableCategories.length > 0 && (viewMode === 'search' ? results.length > 0 : hotResources.length > 0) && (
+                <div className="flex items-center gap-2 flex-wrap py-2">
+                    <span className={`${textSecondary} text-xs font-medium`}>分类筛选:</span>
+                    <button
+                        onClick={() => setSelectedCategory(null)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selectedCategory === null
+                            ? 'bg-blue-500 text-white shadow-md'
+                            : darkMode
+                                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            }`}
+                    >
+                        全部 ({viewMode === 'search' ? results.length : hotResources.length})
+                    </button>
+                    {availableCategories.map(category => {
+                        const count = (viewMode === 'search' ? results : hotResources).filter(
+                            item => item.category === category
+                        ).length;
+                        return (
+                            <button
+                                key={category}
+                                onClick={() => setSelectedCategory(category)}
+                                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selectedCategory === category
+                                    ? 'bg-blue-500 text-white shadow-md'
+                                    : getCategoryColor(category, darkMode)
+                                    } hover:shadow-md`}
+                            >
+                                {getCategoryIcon(category)} {category} ({count})
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Label Filter Tags - PC Only */}
+            {availableLabels.length > 0 && (viewMode === 'search' ? results.length > 0 : hotResources.length > 0) && (
+                <div className="hidden lg:flex items-center gap-2 flex-wrap py-2">
+                    <span className={`${textSecondary} text-xs font-medium`}>标签筛选:</span>
+                    <button
+                        onClick={() => setSelectedLabel(null)}
+                        className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selectedLabel === null
+                            ? 'bg-blue-500 text-white shadow-md'
+                            : darkMode
+                                ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            }`}
+                    >
+                        全部
+                    </button>
+                    {availableLabels.map(label => {
+                        const count = (viewMode === 'search' ? results : hotResources).filter(
+                            item => item.labels && item.labels.includes(label)
+                        ).length;
+                        return (
+                            <button
+                                key={label}
+                                onClick={() => setSelectedLabel(label)}
+                                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selectedLabel === label
+                                    ? 'bg-blue-500 text-white shadow-md'
+                                    : getLabelColor(label, darkMode)
+                                    } hover:shadow-md`}
+                            >
+                                {label} ({count})
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
 
             <div className="flex-1 flex flex-col lg:overflow-hidden">
                 {loading ? (
@@ -540,7 +925,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                             <p>正在搜索各大站点...</p>
                         </div>
                     </div>
-                ) : results.length > 0 ? (
+                ) : (viewMode === 'search' ? results.length > 0 : hotResources.length > 0) ? (
                     <div className="flex-1 flex flex-col lg:overflow-hidden">
                         {/* Desktop: Card wrapper with internal scroll */}
                         <Card noPadding className="hidden lg:flex flex-1 overflow-hidden flex-col border bg-white dark:bg-gray-800 shadow-md rounded-2xl">
@@ -549,14 +934,8 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                 <table className="w-full text-left border-collapse">
                                     <thead className={`${bgSecondary} ${textSecondary} sticky top-0 z-10`}>
                                         <tr>
-                                            <th className={`p-4 font-bold border-b ${borderColor} text-xs uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('siteName')}>
-                                                <div className="flex items-center">站点 <SortIcon columnKey="siteName" /></div>
-                                            </th>
                                             <th className={`p-4 font-bold border-b ${borderColor} text-xs cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('name')}>
                                                 <div className="flex items-center">资源标题 <SortIcon columnKey="name" /></div>
-                                            </th>
-                                            <th className={`p-4 font-bold border-b ${borderColor} text-xs text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('size')}>
-                                                <div className="flex items-center justify-end">大小 <SortIcon columnKey="size" /></div>
                                             </th>
                                             <th className={`p-4 font-bold border-b ${borderColor} text-xs text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('seeders')}>
                                                 <div className="flex items-center justify-end">做种/下载 <SortIcon columnKey="seeders" /></div>
@@ -564,62 +943,129 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                             <th className={`p-4 font-bold border-b ${borderColor} text-xs text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('date')}>
                                                 <div className="flex items-center justify-center">发布时间 <SortIcon columnKey="date" /></div>
                                             </th>
-                                            {hotResourcesEnabled && searchMode === 'recent' && (
-                                                <th className={`p-4 font-bold border-b ${borderColor} text-xs text-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors`} onClick={() => requestSort('hotScore')}>
-                                                    <div className="flex items-center justify-center">🔥 热度 <SortIcon columnKey="hotScore" /></div>
-                                                </th>
-                                            )}
+
                                             <th className={`p-4 font-bold border-b ${borderColor} text-xs text-right pr-6`}>操作</th>
                                         </tr>
                                     </thead>
                                     <tbody className={`divide-y ${darkMode ? 'divide-gray-700/50' : 'divide-gray-100'}`}>
                                         {sortedResults.map((item, index) => (
                                             <tr key={index} className={`${darkMode ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50/50'} transition-colors group`}>
-                                                <td className="p-4 align-middle">
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <span className={`${darkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100'} border px-2 py-1 rounded text-xs font-bold uppercase tracking-tight w-fit flex items-center gap-1.5`}>
-                                                            {item.siteUrl && (
-                                                                <div className="flex items-center gap-1 relative">
-                                                                    <span className="text-[10px]">🌐</span>
-                                                                    <img
-                                                                        src={item.siteIcon || (item.siteUrl ? `${item.siteUrl.replace(/\/$/, '')}/favicon.ico` : '')}
-                                                                        alt=""
-                                                                        className="w-3.5 h-3.5 object-contain absolute inset-0 m-auto opacity-0 transition-opacity duration-300"
-                                                                        onLoad={(e) => {
-                                                                            e.target.style.opacity = '1';
-                                                                            if (e.target.previousSibling) e.target.previousSibling.style.display = 'none';
-                                                                        }}
-                                                                        onError={(e) => e.target.style.display = 'none'}
-                                                                    />
-                                                                </div>
-                                                            )}
-                                                            {item.siteName}
-                                                        </span>
-                                                        {item.category && (
-                                                            <span className={`${getCategoryColor(item.category, darkMode)} px-2 py-0.5 rounded text-[10px] font-bold w-fit`}>
-                                                                {getCategoryIcon(item.category)} {item.category}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </td>
                                                 <td className="p-4 py-5 max-w-xs md:max-w-sm lg:max-w-md align-middle">
-                                                    <div className="flex flex-col space-y-1.5">
-                                                        <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} group-hover:text-blue-500 font-bold text-xs leading-snug line-clamp-2 transition-colors`} title={item.name}>
-                                                            {item.name}
-                                                        </a>
-                                                        <div className="flex items-center gap-3 flex-wrap">
-                                                            {item.subtitle && <span className={`${textSecondary} text-xs line-clamp-1 opacity-80`} title={item.subtitle}>{item.subtitle}</span>}
-                                                            <div className="flex gap-1.5 flex-shrink-0">
-                                                                {item.isHot && <span className="px-1.5 py-0.5 text-[10px] rounded bg-orange-500/10 text-orange-500 font-bold">🔥热门</span>}
-                                                                {item.isNew && <span className="px-1.5 py-0.5 text-[10px] rounded bg-green-500/10 text-green-500 font-bold">✨新</span>}
+                                                    <div className="flex gap-3">
+                                                        {/* Poster - Fixed width/height container to prevent layout shift */}
+                                                        <div
+                                                            className="w-20 h-28 bg-gray-200 dark:bg-gray-700 rounded shadow-md flex-shrink-0 flex items-center justify-center relative overflow-hidden cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all"
+                                                            onClick={() => item.posterUrl && setPosterPreview({ url: item.posterUrl, name: item.name })}
+                                                        >
+                                                            <span className="text-gray-400 dark:text-gray-500 text-[10px] font-bold uppercase tracking-wider">Poster</span>
+                                                            {item.posterUrl && (
+                                                                <img
+                                                                    src={item.posterUrl}
+                                                                    alt={item.name}
+                                                                    className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
+                                                                    onLoad={(e) => e.target.style.opacity = '1'}
+                                                                    onError={(e) => e.target.style.display = 'none'}
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <div className="flex flex-col space-y-1 flex-1 min-w-0">
+                                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                                <span className={`${darkMode ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-blue-50 text-blue-600 border-blue-100'} border px-2 py-1 rounded text-xs font-bold uppercase tracking-tight w-fit flex items-center gap-1.5 whitespace-nowrap`}>
+                                                                    {item.siteUrl && (
+                                                                        <div className="flex items-center gap-1 relative">
+                                                                            <span className="text-[10px]">🌐</span>
+                                                                            <img
+                                                                                src={item.siteIcon || (item.siteUrl ? `${item.siteUrl.replace(/\/$/, '')}/favicon.ico` : '')}
+                                                                                alt=""
+                                                                                className="w-3.5 h-3.5 object-contain absolute inset-0 m-auto opacity-0 transition-opacity duration-300"
+                                                                                onLoad={(e) => {
+                                                                                    e.target.style.opacity = '1';
+                                                                                    if (e.target.previousSibling) e.target.previousSibling.style.display = 'none';
+                                                                                }}
+                                                                                onError={(e) => e.target.style.display = 'none'}
+                                                                            />
+                                                                        </div>
+                                                                    )}
+                                                                    {item.siteName}
+                                                                </span>
+                                                                {item.category && (
+                                                                    <span className={`${getCategoryColor(item.category, darkMode)} px-2 py-0.5 rounded text-[10px] font-bold w-fit`}>
+                                                                        {getCategoryIcon(item.category)} {item.category}
+                                                                    </span>
+                                                                )}
+                                                                {/* Labels from M-Team API (4K, HDR, etc.) */}
+                                                                {item.labels && item.labels.map((label, idx) => (
+                                                                    <span key={idx} className={`${getLabelColor(label, darkMode)} px-1.5 py-0.5 rounded text-[9px] font-medium uppercase`}>
+                                                                        {label}
+                                                                    </span>
+                                                                ))}
                                                                 {item.isFree && <span className="px-1.5 py-0.5 text-[10px] rounded bg-blue-500/10 text-blue-500 font-bold">🎁{item.freeType || '免费'}</span>}
+                                                                {item.promotionTimeLeft && <PromotionTimeCapsule timeLeft={item.promotionTimeLeft} size="sm" />}
+
+                                                                {/* Ratings from M-Team API moved to the end of Row 1 */}
+                                                                {item.doubanRating && (
+                                                                    <span className="bg-green-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">
+                                                                        豆 {item.doubanRating}
+                                                                    </span>
+                                                                )}
+                                                                {item.imdbRating && (
+                                                                    <span className="bg-yellow-400 text-gray-900 px-2 py-0.5 rounded text-[10px] font-bold">
+                                                                        IMDB {item.imdbRating}
+                                                                    </span>
+                                                                )}
+                                                                {item.tmdbRating && (
+                                                                    <span className="bg-blue-500 text-white px-2 py-0.5 rounded text-[10px] font-bold">
+                                                                        TMDB {item.tmdbRating}
+                                                                    </span>
+                                                                )}
+                                                                {item.isNew && <span className="px-1.5 py-0.5 text-[10px] rounded bg-green-500/10 text-green-500 font-bold">✨新</span>}
+                                                            </div>
+                                                            <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} group-hover:text-blue-500 font-bold text-sm leading-snug line-clamp-2 transition-colors`} title={item.name}>
+                                                                {item.name}
+                                                            </a>
+                                                            {item.subtitle && <span className={`${textSecondary} text-[11px] line-clamp-1 opacity-70`} title={item.subtitle}>{item.subtitle}</span>}
+
+                                                            {/* Footer row: Size, Identified Category, Hot Score, Risk Labels */}
+                                                            <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                                                                <span className={`${darkMode ? 'bg-gray-700/50 text-gray-300' : 'bg-gray-100 text-gray-600'} px-2 py-0.5 rounded text-[10px] font-bold font-mono border border-transparent`}>
+                                                                    💾 {item.size}
+                                                                </span>
+                                                                {/* Multi-path identification Category - Only show if category management is enabled */}
+                                                                {enableCategoryManagement && (() => {
+                                                                    const suggestOptions = {
+                                                                        match_by_category: matchByCategory,
+                                                                        match_by_keyword: matchByKeyword,
+                                                                        category_map: categoryMap,
+                                                                        create_series_subfolder: createSeriesSubfolder
+                                                                    };
+                                                                    const suggested = suggestPathByTorrentName(item, downloadPaths, suggestOptions);
+                                                                    if (suggested && suggested.name && suggested.name !== '下载器默认') {
+                                                                        return (
+                                                                            <span className={`${darkMode ? 'bg-teal-500/20 text-teal-400' : 'bg-teal-50 text-teal-700'} px-2 py-0.5 rounded text-[10px] font-bold border border-teal-500/20`}>
+                                                                                🎯 {suggested.name}识别
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                    return null;
+                                                                })()}
+
+                                                                {(viewMode === 'hot-resources' || hotResourcesEnabled) && item.hotScore !== undefined && (
+                                                                    <>
+                                                                        <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap ${getHotScoreColor(item.hotScore)} bg-gray-100 dark:bg-gray-700`}>
+                                                                            🔥{item.hotScore}分
+                                                                        </span>
+                                                                        {item.riskLabel && (
+                                                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${getRiskLabelStyle(item.riskLevel, darkMode)}`}>
+                                                                                {item.riskLabel}
+                                                                            </span>
+                                                                        )}
+                                                                    </>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="p-4 text-right align-middle">
-                                                    <span className={`text-[11px] font-mono font-bold ${textPrimary}`}>{item.size}</span>
-                                                </td>
+
                                                 <td className="p-4 text-right align-middle">
                                                     <div className="flex flex-col items-end font-mono">
                                                         <span className="text-green-500 text-[11px] font-bold">↑ {item.seeders}</span>
@@ -629,25 +1075,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                                                 <td className={`p-4 ${textSecondary} text-[10px] font-mono text-center align-middle whitespace-nowrap`}>
                                                     {item.date}
                                                 </td>
-                                                {hotResourcesEnabled && searchMode === 'recent' && (
-                                                    <td className="p-4 text-center align-middle">
-                                                        {item.hotScore !== undefined && (
-                                                            <div className="flex flex-col items-center gap-1">
-                                                                <div className="flex items-baseline justify-center">
-                                                                    <span className={`text-lg font-bold leading-none ${getHotScoreColor(item.hotScore)}`}>
-                                                                        {item.hotScore}
-                                                                    </span>
-                                                                    <span className="text-[9px] text-gray-500 ml-0.5">分</span>
-                                                                </div>
-                                                                {item.riskLabel && (
-                                                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border whitespace-nowrap ${getRiskLabelStyle(item.riskLevel, darkMode)}`}>
-                                                                        {item.riskLabel}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                )}
+
                                                 <td className="p-4 text-right pr-6 align-middle">
                                                     <div className="flex items-center justify-end gap-1.5">
                                                         <Button
@@ -680,77 +1108,158 @@ const SearchPage = ({ searchState, setSearchState }) => {
                         {/* Mobile Card View - Outside Card, no internal scroll */}
                         <div className="lg:hidden space-y-2">
                             {sortedResults.map((item, index) => (
-                                <div key={index} className={`${darkMode ? 'bg-gray-800/50' : 'bg-white'} rounded-lg p-3`}>
-                                    <div className="flex justify-between items-start mb-1 gap-2">
-                                        <div className="flex gap-1 flex-wrap flex-1 min-w-0">
-                                            <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap flex items-center gap-1`}>
-                                                {item.siteUrl && (
-                                                    <div className="flex items-center gap-1 relative">
-                                                        <span className="text-[10px]">🌐</span>
-                                                        <img
-                                                            src={item.siteIcon || (item.siteUrl ? `${item.siteUrl.replace(/\/$/, '')}/favicon.ico` : '')}
-                                                            alt=""
-                                                            className="w-3 h-3 object-contain absolute inset-0 m-auto opacity-0 transition-opacity duration-300"
-                                                            onLoad={(e) => {
-                                                                e.target.style.opacity = '1';
-                                                                if (e.target.previousSibling) e.target.previousSibling.style.display = 'none';
-                                                            }}
-                                                            onError={(e) => e.target.style.display = 'none'}
-                                                        />
-                                                    </div>
-                                                )}
-                                                {item.siteName}
-                                            </span>
-                                            {item.category && (
-                                                <span className={`${getCategoryColor(item.category, darkMode)} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap`}>
-                                                    {getCategoryIcon(item.category)} {item.category}
-                                                </span>
+                                <div key={index} className="relative overflow-hidden rounded-lg group">
+                                    {/* Action Buttons Revealed on Swipe - Fixed at right behind the card */}
+                                    <div className={`absolute right-0 top-0 bottom-0 flex items-stretch z-0 transition-opacity duration-200 ${swipedLinkId === item.link ? 'opacity-100' : 'opacity-0 invisible pointer-events-none'}`}>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                downloadTorrentFile(item);
+                                            }}
+                                            disabled={!item.torrentUrl}
+                                            className="bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-4 flex items-center justify-center transition-colors active:bg-gray-300 dark:active:bg-gray-600"
+                                            title="下载种子文件"
+                                        >
+                                            <span className="text-xl">📥</span>
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDownloadClick(item);
+                                            }}
+                                            disabled={!item.torrentUrl}
+                                            className="bg-blue-500 text-white px-6 font-bold flex items-center justify-center transition-colors active:bg-blue-600"
+                                        >
+                                            {downloading === item.link ? (
+                                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                            ) : (
+                                                "下载"
                                             )}
-                                            {item.isFree && <span className="px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[9px] font-medium whitespace-nowrap">🎁{item.freeType || '免费'}</span>}
-                                            {hotResourcesEnabled && searchMode === 'recent' && item.hotScore !== undefined && (
-                                                <>
-                                                    <span className={`font-bold px-1.5 py-0.5 rounded text-[9px] whitespace-nowrap ${getHotScoreColor(item.hotScore)} bg-gray-100 dark:bg-gray-700`}>
-                                                        🔥{item.hotScore}
+                                        </button>
+                                    </div>
+
+                                    {/* Swipeable Content Card */}
+                                    <div
+                                        className={`relative z-10 ${darkMode ? 'bg-gray-800' : 'bg-white'} p-3 flex gap-3 transition-transform duration-300 transform ${swipedLinkId === item.link ? '-translate-x-[140px]' : 'translate-x-0'}`}
+                                        onTouchStart={handleTouchStart}
+                                        onTouchEnd={(e) => handleTouchEnd(e, item.link)}
+                                        onClick={() => swipedLinkId === item.link && setSwipedLinkId(null)}
+                                    >
+                                        {/* Poster - Fixed width/height container */}
+                                        <div
+                                            className="w-16 h-24 bg-gray-200 dark:bg-gray-700 rounded shadow-sm flex-shrink-0 flex items-center justify-center relative overflow-hidden cursor-pointer active:ring-2 active:ring-blue-500 transition-all"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (item.posterUrl) setPosterPreview({ url: item.posterUrl, name: item.name });
+                                            }}
+                                        >
+                                            <span className="text-gray-400 dark:text-gray-500 text-[8px] font-bold uppercase tracking-wider">Poster</span>
+                                            {item.posterUrl && (
+                                                <img
+                                                    src={item.posterUrl}
+                                                    alt={item.name}
+                                                    className="absolute inset-0 w-full h-full object-cover transition-opacity duration-300"
+                                                    onLoad={(e) => e.target.style.opacity = '1'}
+                                                    onError={(e) => e.target.style.display = 'none'}
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-start mb-1 gap-2">
+                                                <div className="flex gap-1 flex-wrap flex-1 min-w-0">
+                                                    <span className={`${darkMode ? 'bg-gray-700 text-gray-300' : 'bg-gray-200 text-gray-700'} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap flex items-center gap-1`}>
+                                                        {item.siteUrl && (
+                                                            <div className="flex items-center gap-1 relative">
+                                                                <span className="text-[10px]">🌐</span>
+                                                                <img
+                                                                    src={item.siteIcon || (item.siteUrl ? `${item.siteUrl.replace(/\/$/, '')}/favicon.ico` : '')}
+                                                                    alt=""
+                                                                    className="w-3 h-3 object-contain absolute inset-0 m-auto opacity-0 transition-opacity duration-300"
+                                                                    onLoad={(e) => {
+                                                                        e.target.style.opacity = '1';
+                                                                        if (e.target.previousSibling) e.target.previousSibling.style.display = 'none';
+                                                                    }}
+                                                                    onError={(e) => e.target.style.display = 'none'}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                        {item.siteName}
                                                     </span>
-                                                    {item.riskLabel && (
-                                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border whitespace-nowrap ${getRiskLabelStyle(item.riskLevel, darkMode)}`}>
-                                                            {item.riskLabel}
+                                                    {item.category && (
+                                                        <span className={`${getCategoryColor(item.category, darkMode)} px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap`}>
+                                                            {getCategoryIcon(item.category)} {item.category}
                                                         </span>
                                                     )}
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} font-bold text-xs line-clamp-2 mb-1 leading-tight block`}>
-                                        {item.name}
-                                    </a>
-                                    <div className="flex items-center justify-between text-[10px] mb-2">
-                                        <div className="flex gap-2 items-center flex-wrap">
-                                            <span className={textSecondary}>{item.size}</span>
-                                            <span className="text-green-500 font-bold">↑{item.seeders}</span>
-                                            <span className="text-red-400">↓{item.leechers}</span>
-                                            {item.date && <span className={`${textSecondary} opacity-70`}>📅{item.date}</span>}
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <Button
-                                                size="xs"
-                                                variant="secondary"
-                                                className="py-1 px-2 text-[10px]"
-                                                onClick={() => downloadTorrentFile(item)}
-                                                disabled={!item.torrentUrl}
-                                                title="下载种子"
-                                            >
-                                                📥
-                                            </Button>
-                                            <Button
-                                                size="xs"
-                                                className="py-1 px-2 text-[10px]"
-                                                onClick={() => handleDownloadClick(item)}
-                                                loading={downloading === item.link}
-                                                disabled={!item.torrentUrl}
-                                            >
-                                                下载
-                                            </Button>
+                                                    {item.labels && item.labels.map((label, idx) => (
+                                                        <span key={idx} className={`${getLabelColor(label, darkMode)} px-1 py-0.5 rounded text-[8px] font-medium uppercase`}>
+                                                            {label}
+                                                        </span>
+                                                    ))}
+                                                    {item.isFree && <span className="px-1 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[9px] font-medium whitespace-nowrap">🎁{item.freeType || '免费'}</span>}
+
+                                                    {item.doubanRating && (
+                                                        <span className="bg-green-600 text-white px-1.5 py-0.5 rounded text-[9px] font-bold">
+                                                            豆 {item.doubanRating}
+                                                        </span>
+                                                    )}
+                                                    {item.imdbRating && (
+                                                        <span className="bg-yellow-400 text-gray-900 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                                                            IMDB {item.imdbRating}
+                                                        </span>
+                                                    )}
+                                                    {item.tmdbRating && (
+                                                        <span className="bg-blue-500 text-white px-1.5 py-0.5 rounded text-[9px] font-bold">
+                                                            TMDB {item.tmdbRating}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <a href={item.link} target="_blank" rel="noopener noreferrer" className={`${textPrimary} font-bold text-xs line-clamp-2 mb-1 leading-tight block`}>
+                                                {item.name}
+                                            </a>
+                                            {item.subtitle && <span className={`${textSecondary} text-[10px] line-clamp-1 opacity-70 mb-1`} title={item.subtitle}>{item.subtitle}</span>}
+
+                                            <div className="flex items-center gap-1 flex-wrap mb-1.5">
+                                                {item.promotionTimeLeft && <PromotionTimeCapsule timeLeft={item.promotionTimeLeft} size="xs" />}
+                                                {/* Category identification - Only show if category management is enabled */}
+                                                {enableCategoryManagement && (() => {
+                                                    const suggestOptions = {
+                                                        match_by_category: matchByCategory,
+                                                        match_by_keyword: matchByKeyword,
+                                                        category_map: categoryMap,
+                                                        create_series_subfolder: createSeriesSubfolder
+                                                    };
+                                                    const suggested = suggestPathByTorrentName(item, downloadPaths, suggestOptions);
+                                                    if (suggested && suggested.name && suggested.name !== '下载器默认') {
+                                                        return (
+                                                            <span className={`${darkMode ? 'bg-teal-500/20 text-teal-400' : 'bg-teal-50 text-teal-700'} px-1 py-0.5 rounded text-[8px] font-bold border border-teal-500/20`}>
+                                                                🎯 {suggested.name}识别
+                                                            </span>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
+                                                {(viewMode === 'hot-resources' || hotResourcesEnabled) && item.hotScore !== undefined && (
+                                                    <>
+                                                        <span className={`font-bold px-1 py-0.5 rounded text-[8px] whitespace-nowrap ${getHotScoreColor(item.hotScore)} bg-gray-100 dark:bg-gray-700`}>
+                                                            🔥{item.hotScore}分
+                                                        </span>
+                                                        {item.riskLabel && (
+                                                            <span className={`px-1 py-0.5 rounded text-[8px] font-bold whitespace-nowrap ${getRiskLabelStyle(item.riskLevel, darkMode)}`}>
+                                                                {item.riskLabel}
+                                                            </span>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center justify-between text-[10px]">
+                                                <div className="flex gap-2 items-center flex-wrap">
+                                                    <span className={textSecondary}>{item.size}</span>
+                                                    <span className="text-green-500 font-bold">↑{item.seeders}</span>
+                                                    <span className="text-red-400">↓{item.leechers}</span>
+                                                    {item.date && <span className={`${textSecondary} opacity-70`}>📅{item.date}</span>}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -758,7 +1267,7 @@ const SearchPage = ({ searchState, setSearchState }) => {
                         </div>
 
                         <div className={`mt-2 py-2 ${textSecondary} text-[10px] text-center lg:text-right`}>
-                            共找到 {results.length} 个结果
+                            共找到 {viewMode === 'search' ? results.length : hotResources.length} 个结果
                         </div>
                     </div>
                 ) : searched ? (
@@ -922,7 +1431,38 @@ const SearchPage = ({ searchState, setSearchState }) => {
                     </div>
                 </div>
             </Modal>
-        </div>
+
+            {/* Poster Preview Modal */}
+            {posterPreview && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                    onClick={() => setPosterPreview(null)}
+                >
+                    <div className="relative max-w-4xl max-h-[90vh] w-full">
+                        {/* Close button */}
+                        <button
+                            className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors"
+                            onClick={() => setPosterPreview(null)}
+                        >
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                        {/* Poster image */}
+                        <img
+                            src={posterPreview.url}
+                            alt={posterPreview.name}
+                            className="w-full h-auto max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                        {/* Title */}
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 rounded-b-lg">
+                            <p className="text-white text-sm font-medium line-clamp-2">{posterPreview.name}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div >
     );
 };
 

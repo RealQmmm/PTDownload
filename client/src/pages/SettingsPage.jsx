@@ -114,6 +114,9 @@ const SettingsPage = () => {
     const [showCategoryManagement, setShowCategoryManagement] = useState(false);
     const [showAutoCleanup, setShowAutoCleanup] = useState(false);
     const [showThresholdHint, setShowThresholdHint] = useState(false);
+    const [showSearchMode, setShowSearchMode] = useState(false);
+    const [showReceiverSettings, setShowReceiverSettings] = useState(false);
+    const [showUserManagement, setShowUserManagement] = useState(false);
 
     // Handle subTab permission redirection
     useEffect(() => {
@@ -249,16 +252,20 @@ const SettingsPage = () => {
                     mteam_api_host: mteamApiHost,
                     dashboard_active_interval: dashboardActiveInterval,
                     dashboard_idle_interval: dashboardIdleInterval,
+                    hot_resources_enable_search_integration: hotResourcesSettings.enableSearchIntegration ? 'true' : 'false',
                     ...logSettings,
                     ...securitySettings,
                     ...tmdbSettings
                 })
             });
+            const data = await res.json();
             if (res.ok) {
+                setMessage({ type: 'success', text: '通用设置保存成功' });
                 setSiteName(tempSiteName);
-                setMessage({ type: 'success', text: '设置已保存' });
+                setHotResourcesEnabled(hotResourcesSettings.enableSearchIntegration);
+                setTimeout(() => setMessage(null), 3000);
             } else {
-                setMessage({ type: 'error', text: '保存失败' });
+                setMessage({ type: 'error', text: data.error || '保存失败' });
             }
         } catch (err) {
             setMessage({ type: 'error', text: '保存出错' });
@@ -318,6 +325,102 @@ const SettingsPage = () => {
             }
         } catch (err) {
             setMessage({ type: 'error', text: '保存出错' });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const subscribePWA = async () => {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+
+        if (!('serviceWorker' in navigator)) {
+            if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                setMessage({ type: 'error', text: '错误：PWA 推送必须在 HTTPS 安全环境下运行。检测到您正在使用 HTTP 访问，iOS 会禁用 Service Worker。' });
+            } else {
+                setMessage({ type: 'error', text: '您的浏览器不支持 Service Worker，请检查是否处于隐私模式或浏览器版本过低' });
+            }
+            return;
+        }
+
+        if (!('PushManager' in window)) {
+            if (isIOS && !isStandalone) {
+                setMessage({ type: 'error', text: 'iOS 用户请先点击分享按钮“添加到主屏幕”，然后从桌面打开应用再进行设置' });
+            } else if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+                setMessage({ type: 'error', text: '推送通知需要 HTTPS 环境，请检查您的访问方式' });
+            } else {
+                setMessage({ type: 'error', text: '您的浏览器不支持 PushManager，无法启用推送。如果您使用的是 iOS，请确保系统版本 ≥ 16.4' });
+            }
+            return;
+        }
+
+        try {
+            setSaving(true);
+            const registration = await navigator.serviceWorker.ready;
+
+            // Get public key from server
+            const vapidRes = await authenticatedFetch('/api/notifications/vapid-key');
+            const { publicKey } = await vapidRes.json();
+
+            const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(publicKey)
+            });
+
+            // Save to server
+            // Use a better device name detection if possible, or just user agent
+            const deviceName = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ?
+                (navigator.userAgent.match(/\(([^)]+)\)/)?.[1]?.split(';')[0] || 'Mobile Device') :
+                'Browser';
+
+            const res = await authenticatedFetch('/api/notifications/subscribe', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    subscription,
+                    deviceName
+                })
+            });
+
+            if (res.ok) {
+                setMessage({ type: 'success', text: 'PWA 订阅成功' });
+            } else {
+                setMessage({ type: 'error', text: '订阅保存失败' });
+            }
+        } catch (err) {
+            console.error('PWA Subscription failed:', err);
+            setMessage({ type: 'error', text: '订阅失败: ' + err.message });
+        } finally {
+            setSaving(false);
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
+    const urlBase64ToUint8Array = (base64String) => {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    };
+
+    const handleTestPWANotify = async () => {
+        setSaving(true);
+        setMessage(null);
+        try {
+            const res = await authenticatedFetch('/api/notifications/test', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                setMessage({ type: 'success', text: data.message });
+            } else {
+                setMessage({ type: 'error', text: data.message || '发送失败' });
+            }
+        } catch (err) {
+            setMessage({ type: 'error', text: '请求失败' });
         } finally {
             setSaving(false);
             setTimeout(() => setMessage(null), 3000);
@@ -991,14 +1094,27 @@ const SettingsPage = () => {
                         )}
 
                         <Card className="space-y-6">
-                            <div className="max-w-md">
-                                <Input
-                                    label="站点名称"
-                                    value={tempSiteName}
-                                    onChange={(e) => setTempSiteName(e.target.value)}
-                                    placeholder="PT Manager"
-                                />
-                                <p className={`text-[10px] ${textSecondary} mt-1`}>侧边栏顶部显示的名称</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <Input
+                                        label="站点名称"
+                                        value={tempSiteName}
+                                        onChange={(e) => setTempSiteName(e.target.value)}
+                                        placeholder="PT Manager"
+                                    />
+                                    <p className={`text-[10px] ${textSecondary} mt-1`}>侧边栏顶部和页面标题显示的名称</p>
+                                </div>
+                                <div>
+                                    <Input
+                                        label="登录限流 (次/分钟)"
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        value={securitySettings?.security_login_limit || '5'}
+                                        onChange={(e) => setSecuritySettings({ ...securitySettings, security_login_limit: e.target.value })}
+                                    />
+                                    <p className={`text-[10px] ${textSecondary} mt-1`}>防止账户被恶意破解的登录保护机制</p>
+                                </div>
                             </div>
 
                             <hr className={borderColor} />
@@ -1137,75 +1253,97 @@ const SettingsPage = () => {
                                 )}
                             </div>
 
+
                             <hr className={borderColor} />
 
                             <div>
-                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>安全设置</h3>
-                                <div className="max-w-xs">
-                                    <Input
-                                        label="登录限流 (次/分钟)"
-                                        type="number"
-                                        min="1"
-                                        max="100"
-                                        value={securitySettings?.security_login_limit || '5'}
-                                        onChange={(e) => setSecuritySettings({ ...securitySettings, security_login_limit: e.target.value })}
-                                    />
+                                <div
+                                    className="flex items-center justify-between cursor-pointer group"
+                                    onClick={() => setShowSearchMode(!showSearchMode)}
+                                >
+                                    <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                        <span className="mr-2">🔍</span> 搜索模式
+                                    </h3>
+                                    <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                        {showSearchMode ? '收起配置 ▴' : '展开配置 ▾'}
+                                    </button>
                                 </div>
-                            </div>
 
-                            <hr className={borderColor} />
+                                {showSearchMode ? (
+                                    <div className="space-y-4 mt-4 animate-in slide-in-from-top-2 duration-200">
+                                        <div>
+                                            <Input
+                                                label="搜索结果最大页数 (1-10)"
+                                                type="number"
+                                                min="1"
+                                                max="10"
+                                                value={searchLimit}
+                                                onChange={(e) => setSearchLimit(e.target.value)}
+                                                disabled={searchMode === 'rss'}
+                                                className={searchMode === 'rss' ? 'opacity-50 cursor-not-allowed' : ''}
+                                            />
+                                            {searchMode === 'rss' && <p className="text-xs text-yellow-500 mt-1">RSS 模式下不支持分页限制</p>}
+                                        </div>
 
-                            <div>
-                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider mb-4`}>搜索模式</h3>
-                                <div className="space-y-4">
-                                    <div>
-                                        <Input
-                                            label="搜索结果最大页数 (1-10)"
-                                            type="number"
-                                            min="1"
-                                            max="10"
-                                            value={searchLimit}
-                                            onChange={(e) => setSearchLimit(e.target.value)}
-                                            disabled={searchMode === 'rss'}
-                                            className={searchMode === 'rss' ? 'opacity-50 cursor-not-allowed' : ''}
-                                        />
-                                        {searchMode === 'rss' && <p className="text-xs text-yellow-500 mt-1">RSS 模式下不支持分页限制</p>}
-                                    </div>
+                                        <hr className={`${borderColor} opacity-50`} />
 
-                                    <div>
-                                        <label className={`block text-xs font-bold ${textSecondary} mb-2`}>搜索模式</label>
-                                        <div className="flex space-x-4">
-                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'browse' ? activeSelectionClass : borderColor} transition-colors flex-1`}>
-                                                <input
-                                                    type="radio"
-                                                    name="search_mode"
-                                                    value="browse"
-                                                    checked={searchMode === 'browse'}
-                                                    onChange={(e) => setSearchMode(e.target.value)}
-                                                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                                                />
-                                                <div>
-                                                    <div className={`font-medium ${textPrimary}`}>网页解析 (默认)</div>
-                                                    <div className="text-xs text-gray-500">模拟浏览器访问搜索页面解析结果</div>
-                                                </div>
-                                            </label>
-                                            <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'rss' ? activeSelectionClass : borderColor} transition-colors flex-1`}>
-                                                <input
-                                                    type="radio"
-                                                    name="search_mode"
-                                                    value="rss"
-                                                    checked={searchMode === 'rss'}
-                                                    onChange={(e) => setSearchMode(e.target.value)}
-                                                    className="w-4 h-4 text-blue-600 focus:ring-blue-500"
-                                                />
-                                                <div>
-                                                    <div className={`font-medium ${textPrimary}`}>RSS 订阅源</div>
-                                                    <div className="text-xs text-gray-500">使用 RSS 接口搜索，兼容性更好</div>
-                                                </div>
-                                            </label>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex-1 mr-4">
+                                                <p className={`text-sm font-medium ${textPrimary}`}>显示资源评分</p>
+                                                <p className={`text-xs ${textSecondary}`}>开启后对搜索结果进行智能评分，并显示得分与风险标签</p>
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                checked={hotResourcesSettings.enableSearchIntegration}
+                                                onChange={(e) => setHotResourcesSettings(prev => ({ ...prev, enableSearchIntegration: e.target.checked }))}
+                                                className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500 cursor-pointer"
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className={`block text-xs font-bold ${textSecondary} mb-2`}>搜索模式</label>
+                                            <div className="flex space-x-4">
+                                                <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'browse' ? activeSelectionClass : borderColor} transition-colors flex-1`}>
+                                                    <input
+                                                        type="radio"
+                                                        name="search_mode"
+                                                        value="browse"
+                                                        checked={searchMode === 'browse'}
+                                                        onChange={(e) => setSearchMode(e.target.value)}
+                                                        className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    <div>
+                                                        <div className={`font-medium ${textPrimary}`}>网页解析 (默认)</div>
+                                                        <div className="text-xs text-gray-500">模拟浏览器访问搜索页面解析结果</div>
+                                                    </div>
+                                                </label>
+                                                <label className={`flex items-center space-x-2 cursor-pointer p-3 rounded-lg border ${searchMode === 'rss' ? activeSelectionClass : borderColor} transition-colors flex-1`}>
+                                                    <input
+                                                        type="radio"
+                                                        name="search_mode"
+                                                        value="rss"
+                                                        checked={searchMode === 'rss'}
+                                                        onChange={(e) => setSearchMode(e.target.value)}
+                                                        className="w-4 h-4 text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    <div>
+                                                        <div className={`font-medium ${textPrimary}`}>RSS 订阅源</div>
+                                                        <div className="text-xs text-gray-500">使用 RSS 接口搜索，兼容性更好</div>
+                                                    </div>
+                                                </label>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                            最大页数: {searchLimit}
+                                        </div>
+                                        <div className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-600'}`}>
+                                            模式: {searchMode === 'rss' ? 'RSS 订阅' : '网页解析'}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <hr className={borderColor} />
@@ -1316,7 +1454,17 @@ const SettingsPage = () => {
 
                             <div className="space-y-4">
                                 <div className="flex justify-between items-center mb-2">
-                                    <label className={`block text-xs font-bold ${textSecondary} uppercase tracking-wider`}>通知接收端 ({notifySettings.notification_receivers.length})</label>
+                                    <div
+                                        className="flex items-center space-x-2 cursor-pointer group flex-1"
+                                        onClick={() => setShowReceiverSettings(!showReceiverSettings)}
+                                    >
+                                        <label className={`block text-xs font-bold ${textSecondary} uppercase tracking-wider cursor-pointer`}>
+                                            通知接收端 ({notifySettings.notification_receivers.length})
+                                        </label>
+                                        <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} transition-colors`}>
+                                            {showReceiverSettings ? '收起配置 ▴' : '展开配置 ▾'}
+                                        </button>
+                                    </div>
                                     <Button
                                         size="xs"
                                         onClick={() => {
@@ -1332,94 +1480,162 @@ const SettingsPage = () => {
                                                 ...notifySettings,
                                                 notification_receivers: [...notifySettings.notification_receivers, newReceiver]
                                             });
+                                            setShowReceiverSettings(true);
                                         }}
                                     >
                                         + 添加接收端
                                     </Button>
                                 </div>
 
-                                <div className="space-y-4">
-                                    {notifySettings.notification_receivers.map((receiver, index) => (
-                                        <div key={receiver.id} className={`p-4 rounded-lg border ${borderColor} ${darkMode ? 'bg-gray-800/30' : 'bg-gray-50'}`}>
-                                            {/* 第一行：类型、备注、URL */}
-                                            <div className="flex flex-col lg:flex-row gap-2 mb-3">
-                                                {/* 类型选择 */}
-                                                <Select
-                                                    value={receiver.type}
-                                                    onChange={(e) => {
-                                                        const updated = [...notifySettings.notification_receivers];
-                                                        updated[index].type = e.target.value;
-                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                    }}
-                                                    containerClassName="w-full lg:w-32 flex-shrink-0"
-                                                >
-                                                    <option value="bark">Bark</option>
-                                                    <option value="webhook">Webhook</option>
-                                                </Select>
-
-                                                {/* 备注名称 */}
-                                                <Input
-                                                    value={receiver.name}
-                                                    onChange={(e) => {
-                                                        const updated = [...notifySettings.notification_receivers];
-                                                        updated[index].name = e.target.value;
-                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                    }}
-                                                    placeholder="备注名称"
-                                                    containerClassName="w-full lg:w-48 flex-shrink-0"
-                                                />
-
-                                                {/* URL */}
-                                                <Input
-                                                    value={receiver.url}
-                                                    onChange={(e) => {
-                                                        const updated = [...notifySettings.notification_receivers];
-                                                        updated[index].url = e.target.value;
-                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                    }}
-                                                    placeholder={receiver.type === 'bark' ? "https://api.day.app/Key" : "https://example.com/api"}
-                                                    containerClassName="flex-1 min-w-0"
-                                                />
-
-                                                {/* 删除按钮 */}
-                                                <Button
-                                                    variant="danger"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        const updated = notifySettings.notification_receivers.filter((_, i) => i !== index);
-                                                        setNotifySettings({ ...notifySettings, notification_receivers: updated });
-                                                    }}
-                                                    className="flex-shrink-0"
-                                                >
-                                                    🗑️
-                                                </Button>
-                                            </div>
-
-                                            {/* 第二行：Webhook Method（仅 Webhook 类型显示） */}
-                                            {receiver.type === 'webhook' && (
-                                                <div className="flex items-center space-x-2">
-                                                    <span className={`text-xs ${textSecondary} w-16`}>Method:</span>
+                                {showReceiverSettings ? (
+                                    <div className="space-y-4 animate-in slide-in-from-top-2 duration-200">
+                                        {notifySettings.notification_receivers.map((receiver, index) => (
+                                            <div key={receiver.id} className={`p-4 rounded-lg border ${borderColor} ${darkMode ? 'bg-gray-800/30' : 'bg-gray-50'}`}>
+                                                {/* 第一行：类型、备注、URL */}
+                                                <div className="flex flex-col lg:flex-row gap-2 mb-3">
+                                                    {/* 类型选择 */}
                                                     <Select
-                                                        value={receiver.method || 'GET'}
+                                                        value={receiver.type}
                                                         onChange={(e) => {
                                                             const updated = [...notifySettings.notification_receivers];
-                                                            updated[index].method = e.target.value;
+                                                            updated[index].type = e.target.value;
                                                             setNotifySettings({ ...notifySettings, notification_receivers: updated });
                                                         }}
-                                                        className="w-24"
+                                                        containerClassName="w-full lg:w-32 flex-shrink-0"
                                                     >
-                                                        <option value="GET">GET</option>
-                                                        <option value="POST">POST</option>
+                                                        <option value="bark">Bark</option>
+                                                        <option value="webhook">Webhook</option>
                                                     </Select>
+
+                                                    {/* 备注名称 */}
+                                                    <Input
+                                                        value={receiver.name}
+                                                        onChange={(e) => {
+                                                            const updated = [...notifySettings.notification_receivers];
+                                                            updated[index].name = e.target.value;
+                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                        }}
+                                                        placeholder="备注名称"
+                                                        containerClassName="w-full lg:w-48 flex-shrink-0"
+                                                    />
+
+                                                    {/* URL */}
+                                                    <Input
+                                                        value={receiver.url}
+                                                        onChange={(e) => {
+                                                            const updated = [...notifySettings.notification_receivers];
+                                                            updated[index].url = e.target.value;
+                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                        }}
+                                                        placeholder={receiver.type === 'bark' ? "https://api.day.app/Key" : "https://example.com/api"}
+                                                        containerClassName="flex-1 min-w-0"
+                                                    />
+
+                                                    {/* 删除按钮 */}
+                                                    <Button
+                                                        variant="danger"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const updated = notifySettings.notification_receivers.filter((_, i) => i !== index);
+                                                            setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                        }}
+                                                        className="flex-shrink-0"
+                                                    >
+                                                        🗑️
+                                                    </Button>
                                                 </div>
-                                            )}
+
+                                                {/* 第二行：Webhook Method（仅 Webhook 类型显示） */}
+                                                {receiver.type === 'webhook' && (
+                                                    <div className="flex items-center space-x-2">
+                                                        <span className={`text-xs ${textSecondary} w-16`}>Method:</span>
+                                                        <Select
+                                                            value={receiver.method || 'GET'}
+                                                            onChange={(e) => {
+                                                                const updated = [...notifySettings.notification_receivers];
+                                                                updated[index].method = e.target.value;
+                                                                setNotifySettings({ ...notifySettings, notification_receivers: updated });
+                                                            }}
+                                                            className="w-24"
+                                                        >
+                                                            <option value="GET">GET</option>
+                                                            <option value="POST">POST</option>
+                                                        </Select>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                        {notifySettings.notification_receivers.length === 0 && (
+                                            <div className={`text-center py-8 text-xs ${textSecondary} border border-dashed ${borderColor} rounded-lg`}>
+                                                暂无通知接收端，请点击上方“添加”按钮。
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 flex items-center gap-2 flex-wrap">
+                                        {notifySettings.notification_receivers.length > 0 ? (
+                                            notifySettings.notification_receivers.map(r => (
+                                                <div key={r.id} className={`px-2 py-1 rounded text-[10px] font-mono ${darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                                                    [{r.type.toUpperCase()}] {r.name}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className={`text-[10px] ${textSecondary}`}>未配置接收端</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            <hr className={borderColor} />
+
+                            <div className="space-y-4">
+                                <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
+                                    <span className="mr-2">📱</span> PWA 手机原生通知
+                                </h3>
+                                <div className={`p-4 rounded-lg ${darkMode ? 'bg-indigo-500/10' : 'bg-indigo-50'} border ${darkMode ? 'border-indigo-500/20' : 'border-indigo-200'}`}>
+                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                        <div className="space-y-1">
+                                            <p className={`text-xs ${textPrimary} font-bold flex items-center gap-2`}>
+                                                浏览器原生推送 (Web Push)
+                                                {/iPhone|iPad|iPod/.test(navigator.userAgent) && !window.navigator.standalone && (
+                                                    <span className="bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded text-[10px] animate-pulse">推荐使用 PWA</span>
+                                                )}
+                                            </p>
+                                            <p className={`text-[11px] ${textSecondary} leading-relaxed max-w-xl`}>
+                                                无需 Bark 或 Webhook，直接在手机浏览器或 PWA 模式下接收系统推送。
+                                                {window.location.protocol !== 'https:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && (
+                                                    <span className="text-red-500 font-bold block mt-1">
+                                                        ⚠️ 警告：当前正在通过 HTTP 访问，iOS 会禁用 Service Worker。必须使用 HTTPS 才能启用推送。
+                                                    </span>
+                                                )}
+                                                {/iPhone|iPad|iPod/.test(navigator.userAgent) ? (
+                                                    <span className="text-amber-500/80 font-medium block mt-1">
+                                                        iOS 提示：请点击 Safari 底部分享按钮“添加到主屏幕”，然后从桌面打开以启用推送。
+                                                    </span>
+                                                ) : (
+                                                    "iOS 用户需先“添加到主屏幕”后开启。"
+                                                )}
+                                            </p>
                                         </div>
-                                    ))}
-                                    {notifySettings.notification_receivers.length === 0 && (
-                                        <div className={`text-center py-8 text-xs ${textSecondary} border border-dashed ${borderColor} rounded-lg`}>
-                                            暂无通知接收端，请点击上方“添加”按钮。
+                                        <div className="flex gap-2 shrink-0">
+                                            <Button
+                                                size="sm"
+                                                variant="secondary"
+                                                onClick={handleTestPWANotify}
+                                                disabled={saving}
+                                            >
+                                                测试推送
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                onClick={subscribePWA}
+                                                disabled={saving}
+                                                className="bg-indigo-600 hover:bg-indigo-700 text-white border-none"
+                                            >
+                                                🔔 立即订阅
+                                            </Button>
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
                             </div>
 
@@ -1766,110 +1982,130 @@ const SettingsPage = () => {
                         {/* User Management - Admin Only */}
                         {currentUser?.role === 'admin' && (
                             <Card className="space-y-4">
-                                <div className="flex items-center justify-between">
+                                <div
+                                    className="flex items-center justify-between cursor-pointer group"
+                                    onClick={() => setShowUserManagement(!showUserManagement)}
+                                >
                                     <h3 className={`text-sm font-bold ${textPrimary} uppercase tracking-wider flex items-center`}>
                                         <span className="mr-2">👥</span> 用户管理
                                     </h3>
-                                    <Button size="sm" onClick={() => setShowAddUserModal(true)}>
-                                        + 添加用户
-                                    </Button>
+                                    <div className="flex items-center gap-3">
+                                        <button className={`text-xs ${darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'} flex items-center transition-colors`}>
+                                            {showUserManagement ? '收起配置 ▴' : '展开配置 ▾'}
+                                        </button>
+                                        <Button
+                                            size="sm"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setShowAddUserModal(true);
+                                            }}
+                                        >
+                                            + 添加用户
+                                        </Button>
+                                    </div>
                                 </div>
 
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className={`border-b ${borderColor}`}>
-                                                <th className={`text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>用户名</th>
-                                                <th className={`text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>角色</th>
-                                                <th className={`hidden sm:table-cell text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>创建时间</th>
-                                                <th className={`text-right py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>操作</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {users.map(user => (
-                                                <tr key={user.id} className={`border-b ${borderColor} ${darkMode ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50'}`}>
-                                                    <td className={`py-3 px-2 ${textPrimary} whitespace-nowrap md:whitespace-normal`}>
-                                                        <div className="flex items-center space-x-2">
-                                                            <div className={`w-8 h-8 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center text-xs shrink-0`}>
-                                                                {user.username.charAt(0).toUpperCase()}
-                                                            </div>
-                                                            <span className="truncate max-w-[100px] sm:max-w-none">{user.username}</span>
-                                                            {user.id === me?.id && (
-                                                                <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 shrink-0">当前</span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-3 px-2">
-                                                        <div className="flex flex-col space-y-1">
-                                                            <span className={`px-2 py-0.5 rounded text-xs w-fit ${user.role === 'admin'
-                                                                ? 'bg-purple-500/20 text-purple-400'
-                                                                : 'bg-gray-500/20 text-gray-400'
-                                                                }`}>
-                                                                {user.role === 'admin' ? '管理员' : '普通用户'}
-                                                            </span>
-                                                            {user.enabled === 0 && (
-                                                                <span className="px-2 py-0.5 rounded text-[10px] w-fit bg-rose-500/20 text-rose-500">
-                                                                    已禁用
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                    <td className={`hidden sm:table-cell py-3 px-2 ${textSecondary} text-xs whitespace-nowrap`}>
-                                                        {(() => {
-                                                            if (!user.created_at) return '-';
-                                                            const date = new Date(user.created_at);
-                                                            return isNaN(date.getTime()) ? user.created_at : date.toLocaleString();
-                                                        })()}
-                                                    </td>
-                                                    <td className="py-3 px-2 text-right whitespace-nowrap">
-                                                        {user.id !== currentUser?.id && (
-                                                            <div className="flex items-center justify-end space-x-2">
-                                                                <button
-                                                                    onClick={() => handleOpenPermissions(user)}
-                                                                    className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-blue-900/30 hover:bg-blue-900/50' : 'bg-blue-100 hover:bg-blue-200'} text-blue-500`}
-                                                                    disabled={saving}
-                                                                >
-                                                                    权限
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleToggleRole(user.id, user.role)}
-                                                                    className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'} ${textSecondary}`}
-                                                                    disabled={saving}
-                                                                >
-                                                                    {user.role === 'admin' ? '降为用户' : '升为管理员'}
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleToggleUserStatus(user.id, user.enabled)}
-                                                                    className={`text-xs px-2 py-1 rounded ${user.enabled === 1 ? 'bg-orange-900/10 text-orange-500 hover:bg-orange-900/20' : 'bg-emerald-900/10 text-emerald-500 hover:bg-emerald-900/20'}`}
-                                                                    disabled={saving || user.id === me?.id}
-                                                                >
-                                                                    {user.enabled === 1 ? '禁用' : '启用'}
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setSelectedUser(user);
-                                                                        setShowResetPasswordModal(true);
-                                                                    }}
-                                                                    className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-yellow-900/30 hover:bg-yellow-900/50' : 'bg-yellow-100 hover:bg-yellow-200'} text-yellow-500`}
-                                                                    disabled={saving}
-                                                                >
-                                                                    重置密码
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleDeleteUser(user.id, user.username)}
-                                                                    className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-red-900/30 hover:bg-red-900/50' : 'bg-red-100 hover:bg-red-200'} text-red-500`}
-                                                                    disabled={saving}
-                                                                >
-                                                                    删除
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </td>
+                                {showUserManagement ? (
+                                    <div className="overflow-x-auto animate-in slide-in-from-top-2 duration-200">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className={`border-b ${borderColor}`}>
+                                                    <th className={`text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>用户名</th>
+                                                    <th className={`text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>角色</th>
+                                                    <th className={`hidden sm:table-cell text-left py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>创建时间</th>
+                                                    <th className={`text-right py-2 px-2 ${textSecondary} font-medium whitespace-nowrap`}>操作</th>
                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                            </thead>
+                                            <tbody>
+                                                {users.map(user => (
+                                                    <tr key={user.id} className={`border-b ${borderColor} ${darkMode ? 'hover:bg-gray-700/30' : 'hover:bg-gray-50'}`}>
+                                                        <td className={`py-3 px-2 ${textPrimary} whitespace-nowrap md:whitespace-normal`}>
+                                                            <div className="flex items-center space-x-2">
+                                                                <div className={`w-8 h-8 rounded-full ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} flex items-center justify-center text-xs shrink-0`}>
+                                                                    {user.username.charAt(0).toUpperCase()}
+                                                                </div>
+                                                                <span className="truncate max-w-[100px] sm:max-w-none">{user.username}</span>
+                                                                {user.id === me?.id && (
+                                                                    <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 shrink-0">当前</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-2">
+                                                            <div className="flex flex-col space-y-1">
+                                                                <span className={`px-2 py-0.5 rounded text-xs w-fit ${user.role === 'admin'
+                                                                    ? 'bg-purple-500/20 text-purple-400'
+                                                                    : 'bg-gray-500/20 text-gray-400'
+                                                                    }`}>
+                                                                    {user.role === 'admin' ? '管理员' : '普通用户'}
+                                                                </span>
+                                                                {user.enabled === 0 && (
+                                                                    <span className="px-2 py-0.5 rounded text-[10px] w-fit bg-rose-500/20 text-rose-500">
+                                                                        已禁用
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className={`hidden sm:table-cell py-3 px-2 ${textSecondary} text-xs whitespace-nowrap`}>
+                                                            {(() => {
+                                                                if (!user.created_at) return '-';
+                                                                const date = new Date(user.created_at);
+                                                                return isNaN(date.getTime()) ? user.created_at : date.toLocaleString();
+                                                            })()}
+                                                        </td>
+                                                        <td className="py-3 px-2 text-right whitespace-nowrap">
+                                                            {user.id !== currentUser?.id && (
+                                                                <div className="flex items-center justify-end space-x-2">
+                                                                    <button
+                                                                        onClick={() => handleOpenPermissions(user)}
+                                                                        className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-blue-900/30 hover:bg-blue-900/50' : 'bg-blue-100 hover:bg-blue-200'} text-blue-500`}
+                                                                        disabled={saving}
+                                                                    >
+                                                                        权限
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleToggleRole(user.id, user.role)}
+                                                                        className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'} ${textSecondary}`}
+                                                                        disabled={saving}
+                                                                    >
+                                                                        {user.role === 'admin' ? '降为用户' : '升为管理员'}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleToggleUserStatus(user.id, user.enabled)}
+                                                                        className={`text-xs px-2 py-1 rounded ${user.enabled === 1 ? 'bg-orange-900/10 text-orange-500 hover:bg-orange-900/20' : 'bg-emerald-900/10 text-emerald-500 hover:bg-emerald-900/20'}`}
+                                                                        disabled={saving || user.id === me?.id}
+                                                                    >
+                                                                        {user.enabled === 1 ? '禁用' : '启用'}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setSelectedUser(user);
+                                                                            setShowResetPasswordModal(true);
+                                                                        }}
+                                                                        className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-yellow-900/30 hover:bg-yellow-900/50' : 'bg-yellow-100 hover:bg-yellow-200'} text-yellow-500`}
+                                                                        disabled={saving}
+                                                                    >
+                                                                        重置密码
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDeleteUser(user.id, user.username)}
+                                                                        className={`text-xs px-2 py-1 rounded ${darkMode ? 'bg-red-900/30 hover:bg-red-900/50' : 'bg-red-100 hover:bg-red-200'} text-red-500`}
+                                                                        disabled={saving}
+                                                                    >
+                                                                        删除
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 text-xs text-gray-400">
+                                        共有 {users.length} 名注册用户
+                                    </div>
+                                )}
                             </Card>
                         )}
 
@@ -2422,18 +2658,7 @@ const SettingsPage = () => {
                                         onChange={(e) => setHotResourcesSettings(prev => ({ ...prev, checkInterval: e.target.value }))}
                                         placeholder="建议 10-60 分钟"
                                     />
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex-1 mr-4">
-                                            <p className={`text-sm font-medium ${textPrimary}`}>启用搜索集成</p>
-                                            <p className={`text-xs ${textSecondary}`}>在资源搜索页面无关键词搜索时，自动计算热门分数并过滤</p>
-                                        </div>
-                                        <input
-                                            type="checkbox"
-                                            checked={hotResourcesSettings.enableSearchIntegration}
-                                            onChange={(e) => setHotResourcesSettings(prev => ({ ...prev, enableSearchIntegration: e.target.checked }))}
-                                            className="w-4 h-4 text-primary-500 rounded focus:ring-primary-500"
-                                        />
-                                    </div>
+
                                     <div className="flex items-center justify-between">
                                         <div className="flex-1 mr-4">
                                             <p className={`text-sm font-medium ${textPrimary}`}>自动开启下载</p>
