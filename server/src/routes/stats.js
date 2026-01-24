@@ -198,7 +198,7 @@ router.get('/dashboard', async (req, res) => {
 
         // Get hash-to-site mapping from task history (more accurate for RSS/Series tasks)
         const hashToSiteQuery = db.prepare(`
-            SELECT th.item_hash, s.name as site_name, s.url as site_url, s.site_icon
+            SELECT th.item_hash, th.item_link, s.name as site_name, s.url as site_url, s.site_icon
             FROM task_history th
             LEFT JOIN tasks t ON th.task_id = t.id
             LEFT JOIN sites s ON (t.site_id = s.id OR th.site_id = s.id)
@@ -206,7 +206,7 @@ router.get('/dashboard', async (req, res) => {
         `).all();
         const hashToSiteMap = {};
         hashToSiteQuery.forEach(row => {
-            hashToSiteMap[row.item_hash] = { name: row.site_name, url: row.site_url, icon: row.site_icon };
+            hashToSiteMap[row.item_hash] = { name: row.site_name, url: row.site_url, icon: row.site_icon, link: row.item_link };
         });
 
         // Update torrents with site name
@@ -234,6 +234,7 @@ router.get('/dashboard', async (req, res) => {
                     torrent.siteName = siteInfo.name;
                     torrent.siteUrl = siteInfo.url;
                     torrent.siteIcon = siteInfo.icon;
+                    torrent.itemLink = siteInfo.link; // Add resource link
                 } else {
                     torrent.siteName = '未知站点';
                 }

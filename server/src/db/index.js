@@ -599,6 +599,12 @@ function createTables() {
     console.log('[Migration] Added check_interval column to series_subscriptions table');
   } catch (e) { /* Column might already exist */ }
 
+  // Migration for Item Link (2026-01-24)
+  try {
+    db.prepare("ALTER TABLE task_history ADD COLUMN item_link TEXT").run();
+    console.log('[Migration] Added item_link column to task_history table');
+  } catch (e) { /* Column might already exist */ }
+
   // Performance Indexes (2026-01-17)
   const performanceIndexes = [
     { name: 'idx_task_history_hash', sql: 'CREATE INDEX IF NOT EXISTS idx_task_history_hash ON task_history(item_hash)' },

@@ -103,7 +103,7 @@ class RSSService {
 
     async _shouldSkipTask(task, db) {
         try {
-            const subscription = db.prepare('SELECT id, check_interval FROM series_subscriptions WHERE task_id = ?').get(task.id);
+            const subscription = db.prepare('SELECT id, name, check_interval FROM series_subscriptions WHERE task_id = ?').get(task.id);
             if (subscription && subscription.check_interval > 0) {
                 // Get the latest episode download time for this subscription
                 const lastEp = db.prepare('SELECT download_time FROM series_episodes WHERE subscription_id = ? ORDER BY download_time DESC LIMIT 1').get(subscription.id);
@@ -117,16 +117,23 @@ class RSSService {
                     const downloadDate = new Date(lastDownload.getFullYear(), lastDownload.getMonth(), lastDownload.getDate());
 
                     const diffDays = Math.floor((nowDate - downloadDate) / (1000 * 60 * 60 * 24));
-                    const skipDays = subscription.check_interval - 1;
 
-                    if (diffDays < skipDays) {
+                    // BUG FIX: 直接比较 diffDays 和 check_interval
+                    // 例如：7天周期，只有当 diffDays >= 7 时才执行
+                    if (diffDays < subscription.check_interval) {
+                        const nextDate = new Date(downloadDate.getTime() + subscription.check_interval * 24 * 60 * 60 * 1000);
+                        console.log(`[RSS-周期控制] 跳过任务 "${subscription.name}": 设置了 ${subscription.check_interval} 天抓取周期，上次下载距今 ${diffDays} 天，将在 ${nextDate.toLocaleDateString()} 恢复抓取`);
                         return {
                             skip: true,
                             interval: subscription.check_interval,
                             diffDays,
-                            nextDate: new Date(downloadDate.getTime() + skipDays * 24 * 60 * 60 * 1000)
+                            nextDate
                         };
+                    } else {
+                        console.log(`[RSS-周期控制] 任务 "${subscription.name}" 已到抓取周期 (${subscription.check_interval} 天)，上次下载距今 ${diffDays} 天，开始执行`);
                     }
+                } else {
+                    console.log(`[RSS-周期控制] 任务 "${subscription.name}" 设置了 ${subscription.check_interval} 天周期，但尚无下载记录，正常执行`);
                 }
             }
         } catch (err) {
@@ -411,8 +418,8 @@ class RSSService {
                             // === STEP 1: PRE-RECORD to task_history BEFORE submitting to downloader ===
                             // This prevents race condition with statsService scanning and marking as "manual download"
                             const timeUtils = require('../utils/timeUtils');
-                            const preRecordResult = db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, item_hash, download_time, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
-                                .run(task.id, item.guid, item.title, item.size, torrentHash, timeUtils.getLocalISOString(), task.user_id);
+                            const preRecordResult = db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, item_hash, item_link, download_time, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+                                .run(task.id, item.guid, item.title, item.size, torrentHash, item.link, timeUtils.getLocalISOString(), task.user_id);
                             const preRecordId = preRecordResult.lastInsertRowid;
 
                             if (enableLogs) console.log(`[RSS] Pre-recorded to task_history (ID: ${preRecordId}): ${item.title}`);
@@ -795,8 +802,8 @@ class RSSService {
         if (!targetClient) throw new Error('No available download client');
 
         // Pre-record History
-        const preRecordResult = db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, item_hash, download_time, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
-            .run(task.id, item.guid, item.title, item.size, null, timeUtils.getLocalISOString(), task.user_id);
+        const preRecordResult = db.prepare('INSERT INTO task_history (task_id, item_guid, item_title, item_size, item_hash, item_link, download_time, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+            .run(task.id, item.guid, item.title, item.size, null, item.link, timeUtils.getLocalISOString(), task.user_id);
         const preRecordId = preRecordResult.lastInsertRowid;
 
         // Notify

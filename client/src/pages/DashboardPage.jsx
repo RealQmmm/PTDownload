@@ -542,9 +542,21 @@ const DashboardPage = ({ setActiveTab }) => {
                                             <tr key={task.hash || idx} className="group hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors">
                                                 <td className="py-3 pr-2 max-w-[220px]">
                                                     <div className="flex flex-col">
-                                                        <p className={`text-sm font-medium ${textPrimary} line-clamp-2 leading-snug group-hover:text-blue-500 transition-colors overflow-hidden`} title={task.name || 'Unknown'}>
-                                                            {task.name || 'Unknown'}
-                                                        </p>
+                                                        {task.itemLink ? (
+                                                            <a
+                                                                href={task.itemLink}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className={`text-sm font-medium ${textPrimary} line-clamp-2 leading-snug hover:text-blue-500 transition-colors overflow-hidden cursor-pointer`}
+                                                                title={task.name || 'Unknown'}
+                                                            >
+                                                                {task.name || 'Unknown'}
+                                                            </a>
+                                                        ) : (
+                                                            <p className={`text-sm font-medium ${textPrimary} line-clamp-2 leading-snug group-hover:text-blue-500 transition-colors overflow-hidden`} title={task.name || 'Unknown'}>
+                                                                {task.name || 'Unknown'}
+                                                            </p>
+                                                        )}
                                                         <div className="flex items-center mt-1 text-[10px] text-gray-400 font-mono opacity-80">
                                                             <span>大小: {formatBytes(task.size || 0)}</span>
                                                             {task.state === 'downloading' && (
@@ -627,9 +639,21 @@ const DashboardPage = ({ setActiveTab }) => {
                         {todayDownloads.length > 0 ? (
                             todayDownloads.map((item, idx) => (
                                 <div key={idx} className="relative pl-4 border-l-2 border-blue-500/30 py-1.5">
-                                    <p className={`text-xs font-medium ${textPrimary} line-clamp-2 leading-snug mb-1.5`} title={item.item_title || 'Unknown'}>
-                                        {item.item_title || 'Unknown'}
-                                    </p>
+                                    {item.item_link ? (
+                                        <a
+                                            href={item.item_link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className={`text-xs font-medium ${textPrimary} line-clamp-2 leading-snug mb-1.5 hover:text-blue-500 transition-colors cursor-pointer`}
+                                            title={item.item_title || 'Unknown'}
+                                        >
+                                            {item.item_title || 'Unknown'}
+                                        </a>
+                                    ) : (
+                                        <p className={`text-xs font-medium ${textPrimary} line-clamp-2 leading-snug mb-1.5`} title={item.item_title || 'Unknown'}>
+                                            {item.item_title || 'Unknown'}
+                                        </p>
+                                    )}
                                     <div className="flex justify-between items-center text-[10px] text-gray-500">
                                         <div className="flex items-center gap-1.5 truncate max-w-[70%]">
                                             <span className="bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded uppercase tracking-tighter truncate">

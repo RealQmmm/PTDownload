@@ -18,7 +18,8 @@ async function fetchTorrentData(site, torrentUrl) {
         // M-Team V2: Use API to generate download token
         try {
             const urlObj = new URL(torrentUrl);
-            const torrentId = urlObj.searchParams.get('id');
+            // Support both regular download links (id=xxx) and RSS links (tid=xxx)
+            let torrentId = urlObj.searchParams.get('id') || urlObj.searchParams.get('tid');
 
             if (!torrentId) {
                 // If the link is already an API link but missing ID, or something else...

@@ -150,8 +150,8 @@ router.post('/', async (req, res) => {
                     // For manual downloads, task_id is NULL
                     // site_id helps dashboard match the site for manual downloads
                     const finalSiteId = siteId || matchedSite?.id || null;
-                    db.prepare('INSERT INTO task_history (task_id, site_id, item_guid, item_title, item_size, download_time, item_hash, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-                        .run(null, finalSiteId, torrentUrl, title, sizeBytes, timeUtils.getLocalISOString(), torrentHash, req.user.id);
+                    db.prepare('INSERT INTO task_history (task_id, site_id, item_guid, item_title, item_size, item_link, download_time, item_hash, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                        .run(null, finalSiteId, torrentUrl, title, sizeBytes, torrentUrl, timeUtils.getLocalISOString(), torrentHash, req.user.id);
 
                     // Send notification
                     const notificationService = require('../services/notificationService');

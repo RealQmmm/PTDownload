@@ -24,7 +24,8 @@ class EpisodeTracker {
         }
 
         const downloadedEpisodes = new Set();
-        const targetSeason = candidateInfo.season !== null ? candidateInfo.season : 1;
+        // BUG FIX: 如果标题中没有 season 信息，使用订阅的 season 而不是默认为 1
+        const targetSeason = candidateInfo.season !== null ? candidateInfo.season : (subscription?.season || 1);
 
         // === Source 1: Query series_episodes table (most reliable) ===
         if (subscription) {

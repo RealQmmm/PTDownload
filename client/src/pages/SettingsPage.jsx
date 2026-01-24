@@ -2346,7 +2346,7 @@ const SettingsPage = () => {
                             </div>
                         )}
 
-                        {/* 0. 默认下载路径和自动创建剧集子文件夹 (并排显示) */}
+                        {/* 0. 默认下载路径和自动创建剧集父文件夹 (并排显示) */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             {/* 默认下载路径 */}
                             <Card>
@@ -2375,12 +2375,12 @@ const SettingsPage = () => {
                                 </div>
                             </Card>
 
-                            {/* 自动创建剧集子文件夹 */}
+                            {/* 自动创建剧集父文件夹 */}
                             <Card>
                                 <div className="flex items-start justify-between">
                                     <div className="flex-1 mr-4">
                                         <h3 className={`text-base font-bold ${textPrimary} mb-1 flex items-center`}>
-                                            <span className="mr-2">📁</span> 自动创建剧集子文件夹
+                                            <span className="mr-2">📁</span> 自动创建剧集父文件夹
                                         </h3>
                                         <p className={`text-xs ${textSecondary}`}>
                                             检测到种子名称包含季数标识（如 S01, Season 1）时，自动创建父文件夹来组织集数。适用于剧集、综艺等多集内容
@@ -2635,7 +2635,7 @@ const SettingsPage = () => {
                                 <div>
                                     <h3 className={`text-lg font-bold ${textPrimary}`}>🔥 热门资源检测</h3>
                                     <p className={`text-sm ${textSecondary}`}>
-                                        系统将定期通过站点的 RSS 订阅链接自动发现高热度资源。
+                                        系统将定期搜索站点发现高热度资源。
                                     </p>
                                 </div>
                                 <button
