@@ -97,9 +97,9 @@ class SeriesService {
 
         db.prepare(`
             UPDATE series_subscriptions 
-            SET name = ?, alias = ?, season = ?, quality = ?, smart_regex = ?, rss_source_id = ?, total_episodes = ?, smart_switch = ?, check_interval = ?
+            SET name = ?, alias = ?, season = ?, quality = ?, smart_regex = ?, rss_source_id = ?, total_episodes = ?, smart_switch = ?
             WHERE id = ?
-        `).run(name, alias || null, season, quality, smartRegex, rss_source_id, totalEpisodes, smartSwitchVal, data.check_interval || 0, id);
+        `).run(name, alias || null, season, quality, smartRegex, rss_source_id, totalEpisodes, smartSwitchVal, id);
 
         // 4. Update associated task configuration
         const filterConfig = {
@@ -116,22 +116,6 @@ class SeriesService {
 
         let sql = 'UPDATE tasks SET filter_config = ?';
         let params = [JSON.stringify(filterConfig)];
-
-        // Optimize cron frequency based on check_interval (same logic as createSubscription)
-        const checkInterval = data.check_interval || 0;
-        let cronExpression = '*/30 * * * *'; // Default: every 30 minutes
-        if (checkInterval >= 7) {
-            cronExpression = '0 */2 * * *'; // Every 2 hours
-        } else if (checkInterval >= 3) {
-            cronExpression = '0 * * * *'; // Every hour
-        }
-
-        // Update cron if check_interval changed
-        if (checkInterval !== existing.check_interval) {
-            sql += ', cron = ?';
-            params.push(cronExpression);
-            console.log(`[Series] 追剧周期从 ${existing.check_interval} 天变更为 ${checkInterval} 天，更新 cron 为: ${cronExpression}`);
-        }
 
         // If Smart Switch is ON, change task type and URL
         if (smartSwitchVal === 1) {
@@ -160,16 +144,6 @@ class SeriesService {
 
         db.prepare(sql).run(...params);
 
-        // If cron changed, reschedule the task
-        if (checkInterval !== existing.check_interval) {
-            const schedulerService = require('./schedulerService');
-            const updatedTask = db.prepare('SELECT * FROM tasks WHERE id = ?').get(existing.task_id);
-            if (updatedTask && updatedTask.enabled) {
-                schedulerService.scheduleTask(updatedTask);
-                console.log(`[Series] 已重新调度任务 ID ${existing.task_id} 以应用新的 cron 频率`);
-            }
-        }
-
         return { id, ...data, smart_regex: smartRegex, smart_switch: smartSwitchVal };
     }
 
@@ -180,7 +154,7 @@ class SeriesService {
      * 3. Save Subscription
      */
     async createSubscription(data, userId = null) {
-        const { name, season, quality, rss_source_id, save_path, client_id, category = 'Series', check_interval = 0 } = data;
+        const { name, season, quality, rss_source_id, save_path, client_id, category = 'Series' } = data;
 
         // Auto-fetch metadata
         let metadata = null;
@@ -254,28 +228,10 @@ class SeriesService {
             console.log(`[Series] Auto-created subfolder: ${folderName}`)
         }
 
-
-
-
-        // Optimize cron frequency based on check_interval
-        // - check_interval >= 7 days: check every 2 hours (0 */2 * * *)
-        // - check_interval >= 3 days: check every hour (0 * * * *)
-        // - check_interval < 3 days or 0: check every 30 minutes (*/30 * * * *)
-        let cronExpression = '*/30 * * * *'; // Default: every 30 minutes
-        if (check_interval >= 7) {
-            cronExpression = '0 */2 * * *'; // Every 2 hours
-            console.log(`[Series] 追剧周期 >= 7天，优化 cron 为每2小时检查: ${cronExpression}`);
-        } else if (check_interval >= 3) {
-            cronExpression = '0 * * * *'; // Every hour
-            console.log(`[Series] 追剧周期 >= 3天，优化 cron 为每小时检查: ${cronExpression}`);
-        } else {
-            console.log(`[Series] 追剧周期 < 3天，保持默认每30分钟检查: ${cronExpression}`);
-        }
-
         const taskId = taskService.createTask({
             name: `[追剧] ${name} ${season ? 'S' + season : ''} `,
             type: smartSwitchVal === 1 ? 'smart_rss' : 'rss',
-            cron: cronExpression,
+            cron: '*/30 * * * *',
             site_id: finalSiteId,
             rss_url: finalRssUrl,
             filter_config: JSON.stringify(filterConfig),
@@ -288,8 +244,8 @@ class SeriesService {
 
         // 3. Save Subscription with Metadata
         const info = this._getDB().prepare(`
-            INSERT INTO series_subscriptions(name, alias, season, quality, smart_regex, rss_source_id, task_id, poster_path, tmdb_id, overview, vote_average, total_episodes, user_id, smart_switch, check_interval)
-            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO series_subscriptions(name, alias, season, quality, smart_regex, rss_source_id, task_id, poster_path, tmdb_id, overview, vote_average, total_episodes, user_id, smart_switch)
+            VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             name,
             metadata ? metadata.original_name : null, // Save alias
@@ -300,8 +256,7 @@ class SeriesService {
             metadata ? metadata.vote_average : 0,
             totalEpisodes,
             userId,
-            smartSwitchVal,
-            check_interval
+            smartSwitchVal
         );
 
         return info.lastInsertRowid;

@@ -63,8 +63,7 @@ const SeriesPage = () => {
         rss_source_id: '',
         client_id: '',
         saved_path: '/downloads/series',
-        smart_switch: false,
-        check_interval: 0
+        smart_switch: false
     });
     const [clients, setClients] = useState([]);
     const [editId, setEditId] = useState(null);
@@ -229,8 +228,7 @@ const SeriesPage = () => {
             rss_source_id: sub.rss_source_id || '',
             client_id: sub.client_id || '',
             saved_path: '/downloads/series', // Keep default or fetch if needed
-            smart_switch: sub.smart_switch === 1,
-            check_interval: sub.check_interval || 0
+            smart_switch: sub.smart_switch === 1
         });
         setEditId(sub.id);
         setShowModal(true);
@@ -238,7 +236,7 @@ const SeriesPage = () => {
 
     const openCreateModal = () => {
         const defClient = clients.find(c => c.is_default) || clients[0];
-        setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', client_id: defClient?.id || '', saved_path: '/downloads/series', smart_switch: false, check_interval: 0 });
+        setFormData({ name: '', alias: '', season: '', quality: '', rss_source_id: rssSources[0]?.id || '', client_id: defClient?.id || '', saved_path: '/downloads/series', smart_switch: false });
         setEditId(null);
         setShowModal(true);
     };
@@ -323,9 +321,6 @@ const SeriesPage = () => {
                                 <div className="mt-auto flex justify-between items-center text-[10px]">
                                     <div className="flex flex-col gap-0.5">
                                         <span className={textSecondary}>追剧来源: {sub.smart_switch === 1 ? '跨站智能聚合' : (sub.site_name || '未知')}</span>
-                                        {sub.check_interval > 0 && (
-                                            <span className="text-blue-500 font-bold">抓取周期: {sub.check_interval} 天</span>
-                                        )}
                                     </div>
                                     <div className="space-x-2 whitespace-nowrap">
                                         <button
@@ -508,35 +503,20 @@ const SeriesPage = () => {
                             </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Select
-                                label="下载器"
-                                required
-                                value={formData.client_id}
-                                onChange={e => setFormData({ ...formData, client_id: e.target.value })}
-                                className="text-base sm:text-sm"
-                            >
-                                <option value="">请选择下载器</option>
-                                {clients.map(c => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.name || c.type}
-                                    </option>
-                                ))}
-                            </Select>
-
-                            <div>
-                                <Input
-                                    label="抓取周期 (天)"
-                                    type="number"
-                                    min="0"
-                                    value={formData.check_interval}
-                                    onChange={e => setFormData({ ...formData, check_interval: parseInt(e.target.value) || 0 })}
-                                    placeholder="例如: 7 (对于周播剧)"
-                                    className="text-base sm:text-sm"
-                                />
-                                <p className={`text-[10px] ${textSecondary} mt-1`}>0 代表遵循全局设置。若设为 7 天，下载后前 6 天将跳过，第 7 天恢复高频抓取。</p>
-                            </div>
-                        </div>
+                        <Select
+                            label="下载器"
+                            required
+                            value={formData.client_id}
+                            onChange={e => setFormData({ ...formData, client_id: e.target.value })}
+                            className="text-base sm:text-sm"
+                        >
+                            <option value="">请选择下载器</option>
+                            {clients.map(c => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name || c.type}
+                                </option>
+                            ))}
+                        </Select>
                     </div>
                 </form>
             </Modal>

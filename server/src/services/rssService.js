@@ -101,58 +101,11 @@ class RSSService {
         console.log(`[RSS Cache] Cleared ${size} cache entries`);
     }
 
-    async _shouldSkipTask(task, db) {
-        try {
-            const subscription = db.prepare('SELECT id, name, check_interval FROM series_subscriptions WHERE task_id = ?').get(task.id);
-            if (subscription && subscription.check_interval > 0) {
-                // Get the latest episode download time for this subscription
-                const lastEp = db.prepare('SELECT download_time FROM series_episodes WHERE subscription_id = ? ORDER BY download_time DESC LIMIT 1').get(subscription.id);
-
-                if (lastEp) {
-                    const now = new Date();
-                    const lastDownload = new Date(lastEp.download_time);
-
-                    // Use date strings to calculate calendar day difference
-                    const nowDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                    const downloadDate = new Date(lastDownload.getFullYear(), lastDownload.getMonth(), lastDownload.getDate());
-
-                    const diffDays = Math.floor((nowDate - downloadDate) / (1000 * 60 * 60 * 24));
-
-                    // BUG FIX: 直接比较 diffDays 和 check_interval
-                    // 例如：7天周期，只有当 diffDays >= 7 时才执行
-                    if (diffDays < subscription.check_interval) {
-                        const nextDate = new Date(downloadDate.getTime() + subscription.check_interval * 24 * 60 * 60 * 1000);
-                        console.log(`[RSS-周期控制] 跳过任务 "${subscription.name}": 设置了 ${subscription.check_interval} 天抓取周期，上次下载距今 ${diffDays} 天，将在 ${nextDate.toLocaleDateString()} 恢复抓取`);
-                        return {
-                            skip: true,
-                            interval: subscription.check_interval,
-                            diffDays,
-                            nextDate
-                        };
-                    } else {
-                        console.log(`[RSS-周期控制] 任务 "${subscription.name}" 已到抓取周期 (${subscription.check_interval} 天)，上次下载距今 ${diffDays} 天，开始执行`);
-                    }
-                } else {
-                    console.log(`[RSS-周期控制] 任务 "${subscription.name}" 设置了 ${subscription.check_interval} 天周期，但尚无下载记录，正常执行`);
-                }
-            }
-        } catch (err) {
-            console.error(`[RSS] Failed to check skip interval for task ${task.id}:`, err.message);
-        }
-        return { skip: false };
-    }
-
     async executeTask(task) {
         const db = getDB();
         const enableLogs = appConfig.isLogsEnabled();
 
         if (enableLogs) console.log(`[RSS] Executing task: ${task.name}`);
-
-        const skipInfo = await this._shouldSkipTask(task, db);
-        if (skipInfo.skip) {
-            if (enableLogs) console.log(`[RSS] Skipping task ${task.name}: check_interval ${skipInfo.interval} days. Last download was ${skipInfo.diffDays} days ago. Wait until ${skipInfo.nextDate.toLocaleDateString()}`);
-            return;
-        }
 
         try {
             // 1. Get site info for cookies
@@ -541,12 +494,6 @@ class RSSService {
         const enableLogs = appConfig.isLogsEnabled();
 
         if (enableLogs) console.log(`[RSS-Smart] Executing smart task: ${task.name}`);
-
-        const skipInfo = await this._shouldSkipTask(task, db);
-        if (skipInfo.skip) {
-            if (enableLogs) console.log(`[RSS-Smart] Skipping task ${task.name}: check_interval ${skipInfo.interval} days. Last download was ${skipInfo.diffDays} days ago. Wait until ${skipInfo.nextDate.toLocaleDateString()}`);
-            return;
-        }
 
         try {
             // 1. Get ALL enabled RSS sources from enabled sites
