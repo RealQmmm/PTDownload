@@ -199,6 +199,8 @@ const DashboardPage = ({ setActiveTab }) => {
     const [todayDownloads, setTodayDownloads] = useState([]);
     const [loading, setLoading] = useState(true);
     const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
+    const [deleteConfirm, setDeleteConfirm] = useState(null);
+    const [operatingTask, setOperatingTask] = useState(null);
     // Configurable polling intervals (in seconds)
     const [pollingSettings, setPollingSettings] = useState({
         activeInterval: 10,  // Default: 10 seconds when active
@@ -243,6 +245,7 @@ const DashboardPage = ({ setActiveTab }) => {
                             client.torrents.forEach(torrent => {
                                 allTorrents.push({
                                     ...torrent,
+                                    clientId: client.clientId,
                                     clientName: client.clientName || 'Unknown',
                                     clientType: client.clientType || 'Unknown'
                                 });
@@ -330,7 +333,81 @@ const DashboardPage = ({ setActiveTab }) => {
             clearTimeout(restartTimer);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [allTorrents.length, pollingSettings]); // Re-run when torrent count or polling settings change
+    }, [allTorrents.length, pollingSettings]);
+
+    const handlePauseTorrent = async (task) => {
+        if (operatingTask) return;
+        setOperatingTask(task.hash);
+        try {
+            const res = await authenticatedFetch('/api/torrents/pause', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clientId: task.clientId, hash: task.hash })
+            });
+            const data = await res.json();
+            if (data.success) {
+                await fetchTorrentData();
+            } else {
+                alert(data.message || '暂停失败');
+            }
+        } catch (err) {
+            console.error('Pause torrent error:', err);
+            alert('暂停失败: ' + err.message);
+        } finally {
+            setOperatingTask(null);
+        }
+    };
+
+    const handleResumeTorrent = async (task) => {
+        if (operatingTask) return;
+        setOperatingTask(task.hash);
+        try {
+            const res = await authenticatedFetch('/api/torrents/resume', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clientId: task.clientId, hash: task.hash })
+            });
+            const data = await res.json();
+            if (data.success) {
+                await fetchTorrentData();
+            } else {
+                alert(data.message || '恢复失败');
+            }
+        } catch (err) {
+            console.error('Resume torrent error:', err);
+            alert('恢复失败: ' + err.message);
+        } finally {
+            setOperatingTask(null);
+        }
+    };
+
+    const handleDeleteTorrent = async (deleteFiles = true) => {
+        if (!deleteConfirm || operatingTask) return;
+        setOperatingTask(deleteConfirm.hash);
+        try {
+            const res = await authenticatedFetch('/api/torrents/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    clientId: deleteConfirm.clientId,
+                    hash: deleteConfirm.hash,
+                    deleteFiles
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                await fetchTorrentData();
+                setDeleteConfirm(null);
+            } else {
+                alert(data.message || '删除失败');
+            }
+        } catch (err) {
+            console.error('Delete torrent error:', err);
+            alert('删除失败: ' + err.message);
+        } finally {
+            setOperatingTask(null);
+        }
+    };
 
     // Only show loading on initial fetch when we have no data
     if (loading && allTorrents.length === 0 && historyData.length === 0) {
@@ -535,6 +612,9 @@ const DashboardPage = ({ setActiveTab }) => {
                                             >
                                                 <div className="flex items-center justify-end">客户端 <SortIcon columnKey="clientType" /></div>
                                             </th>
+                                            <th className="pb-3 pl-2 text-center font-bold whitespace-nowrap">
+                                                操作
+                                            </th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
@@ -607,6 +687,44 @@ const DashboardPage = ({ setActiveTab }) => {
                                                     <span className={`inline-block px-1.5 py-0.5 border border-gray-600/30 rounded text-gray-400 text-[9px] uppercase font-mono whitespace-nowrap`}>
                                                         {task.clientName || task.clientType || 'N/A'}
                                                     </span>
+                                                </td>
+                                                <td className="py-3 pl-2">
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        {(task.state === 'downloading' || task.state === 'seeding' || task.state === 'queued') && (
+                                                            <button
+                                                                onClick={() => handlePauseTorrent(task)}
+                                                                disabled={operatingTask === task.hash}
+                                                                className={`p-1.5 rounded transition-colors ${operatingTask === task.hash ? 'opacity-50 cursor-not-allowed' : 'hover:bg-yellow-500/10'}`}
+                                                                title="暂停"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                                </svg>
+                                                            </button>
+                                                        )}
+                                                        {(task.state === 'stopped' || task.state === 'paused' || task.state === 'pausedUP') && (
+                                                            <button
+                                                                onClick={() => handleResumeTorrent(task)}
+                                                                disabled={operatingTask === task.hash}
+                                                                className={`p-1.5 rounded transition-colors ${operatingTask === task.hash ? 'opacity-50 cursor-not-allowed' : 'hover:bg-green-500/10'}`}
+                                                                title="恢复"
+                                                            >
+                                                                <svg className="w-3.5 h-3.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                                                                </svg>
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={() => setDeleteConfirm({ hash: task.hash, name: task.name, clientId: task.clientId })}
+                                                            disabled={operatingTask === task.hash}
+                                                            className={`p-1.5 rounded transition-colors ${operatingTask === task.hash ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-500/10'}`}
+                                                            title="删除"
+                                                        >
+                                                            <svg className="w-3.5 h-3.5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                            </svg>
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
@@ -682,6 +800,49 @@ const DashboardPage = ({ setActiveTab }) => {
                     </div>
                 </Card>
             </div>
+
+            {deleteConfirm && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setDeleteConfirm(null)}>
+                    <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl`} onClick={(e) => e.stopPropagation()}>
+                        <h3 className={`text-lg font-bold ${textPrimary} mb-4`}>确认删除任务</h3>
+                        <p className={`${textSecondary} text-sm mb-2`}>确定要删除以下任务吗?</p>
+                        <p className={`${textPrimary} text-sm font-medium mb-6 line-clamp-2`}>{deleteConfirm.name}</p>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => handleDeleteTorrent(false)}
+                                disabled={operatingTask}
+                                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${operatingTask
+                                        ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed opacity-50'
+                                        : 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                    }`}
+                            >
+                                仅删除任务
+                            </button>
+                            <button
+                                onClick={() => handleDeleteTorrent(true)}
+                                disabled={operatingTask}
+                                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${operatingTask
+                                        ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed opacity-50'
+                                        : 'bg-red-500 hover:bg-red-600 text-white'
+                                    }`}
+                            >
+                                删除任务和文件
+                            </button>
+                        </div>
+                        <button
+                            onClick={() => setDeleteConfirm(null)}
+                            disabled={operatingTask}
+                            className={`w-full mt-3 px-4 py-2 rounded-lg font-medium transition-colors ${operatingTask
+                                    ? 'cursor-not-allowed opacity-50'
+                                    : `${darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'} ${textPrimary}`
+                                }`}
+                        >
+                            取消
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

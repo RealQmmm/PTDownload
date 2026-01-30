@@ -650,6 +650,144 @@ class DownloaderService {
             return { success: false, message: err.message };
         }
     }
+
+    // Pause torrent
+    async pauseTorrent(client, hash) {
+        const { type, host, port, username, password } = client;
+        const baseUrl = `http://${host}:${port}`;
+
+        try {
+            if (type === 'qBittorrent') {
+                const loginRes = await axios.post(
+                    `${baseUrl}/api/v2/auth/login`,
+                    `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000 }
+                );
+                const cookie = loginRes.headers['set-cookie'];
+
+                await axios.post(
+                    `${baseUrl}/api/v2/torrents/pause`,
+                    `hashes=${hash}`,
+                    {
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'Cookie': cookie
+                        },
+                        timeout: 5000
+                    }
+                );
+                return { success: true, message: '已暂停任务' };
+            }
+
+            if (type === 'Transmission') {
+                const rpcUrl = `${baseUrl}/transmission/rpc`;
+                const auth = Buffer.from(`${username}:${password}`).toString('base64');
+                const headers = { 'Authorization': `Basic ${auth}` };
+                let sessionId = '';
+                try {
+                    await axios.get(rpcUrl, { headers, timeout: 5000 });
+                } catch (err) {
+                    if (err.response && err.response.status === 409) {
+                        sessionId = err.response.headers['x-transmission-session-id'];
+                    } else {
+                        throw err;
+                    }
+                }
+
+                await axios.post(
+                    rpcUrl,
+                    {
+                        method: 'torrent-stop',
+                        arguments: { ids: [hash] }
+                    },
+                    {
+                        headers: { ...headers, 'X-Transmission-Session-Id': sessionId },
+                        timeout: 5000
+                    }
+                );
+                return { success: true, message: '已暂停任务' };
+            }
+
+            if (type === 'Mock') {
+                console.log(`[Mock] Pausing torrent ${hash}`);
+                return { success: true, message: '已暂停任务' };
+            }
+
+            return { success: false, message: '不支持的客户端类型' };
+        } catch (err) {
+            console.error(`Pause torrent failed:`, err.message);
+            return { success: false, message: `暂停失败: ${err.message}` };
+        }
+    }
+
+    // Resume torrent
+    async resumeTorrent(client, hash) {
+        const { type, host, port, username, password } = client;
+        const baseUrl = `http://${host}:${port}`;
+
+        try {
+            if (type === 'qBittorrent') {
+                const loginRes = await axios.post(
+                    `${baseUrl}/api/v2/auth/login`,
+                    `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+                    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 5000 }
+                );
+                const cookie = loginRes.headers['set-cookie'];
+
+                await axios.post(
+                    `${baseUrl}/api/v2/torrents/resume`,
+                    `hashes=${hash}`,
+                    {
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'Cookie': cookie
+                        },
+                        timeout: 5000
+                    }
+                );
+                return { success: true, message: '已恢复任务' };
+            }
+
+            if (type === 'Transmission') {
+                const rpcUrl = `${baseUrl}/transmission/rpc`;
+                const auth = Buffer.from(`${username}:${password}`).toString('base64');
+                const headers = { 'Authorization': `Basic ${auth}` };
+                let sessionId = '';
+                try {
+                    await axios.get(rpcUrl, { headers, timeout: 5000 });
+                } catch (err) {
+                    if (err.response && err.response.status === 409) {
+                        sessionId = err.response.headers['x-transmission-session-id'];
+                    } else {
+                        throw err;
+                    }
+                }
+
+                await axios.post(
+                    rpcUrl,
+                    {
+                        method: 'torrent-start',
+                        arguments: { ids: [hash] }
+                    },
+                    {
+                        headers: { ...headers, 'X-Transmission-Session-Id': sessionId },
+                        timeout: 5000
+                    }
+                );
+                return { success: true, message: '已恢复任务' };
+            }
+
+            if (type === 'Mock') {
+                console.log(`[Mock] Resuming torrent ${hash}`);
+                return { success: true, message: '已恢复任务' };
+            }
+
+            return { success: false, message: '不支持的客户端类型' };
+        } catch (err) {
+            console.error(`Resume torrent failed:`, err.message);
+            return { success: false, message: `恢复失败: ${err.message}` };
+        }
+    }
 }
 
 module.exports = new DownloaderService();
